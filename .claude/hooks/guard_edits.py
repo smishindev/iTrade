@@ -12,6 +12,7 @@ Blocks:
 from __future__ import annotations
 
 from _common import (
+    ACCOUNT_ID,
     BROKER_CODE,
     CSHARP_BROKER_CODE,
     CSHARP_BROKER_DIRS,
@@ -55,6 +56,11 @@ def main() -> None:
     text = new_content(tool_input)
     if SECRET_ASSIGNMENT.search(text):
         deny("This looks like a hard-coded credential. Read it from an environment variable instead.")
+    if ACCOUNT_ID.search(text):
+        deny(
+            "This looks like a real IBKR account number. Use a placeholder (DU0000000 / U0000000) "
+            "in code, fixtures and docs; the real one lives only in local config/user-secrets."
+        )
 
     if rel.endswith(".py") and BROKER_CODE.search(text):
         deny(

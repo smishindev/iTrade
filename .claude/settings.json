@@ -12,24 +12,41 @@
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(python tools/roadmap.py:*)",
-      "PowerShell(python tools/roadmap.py:*)",
+      "Bash(dotnet --info)",
+      "Bash(dotnet --list-sdks)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet format:*)",
+      "Bash(dotnet restore:*)",
       "PowerShell(uv run pytest:*)",
       "PowerShell(uv run ruff:*)",
       "PowerShell(uv run itrade:*)",
       "PowerShell(uv sync:*)",
       "PowerShell(git status:*)",
       "PowerShell(git diff:*)",
-      "PowerShell(git log:*)"
+      "PowerShell(git log:*)",
+      "PowerShell(git show:*)",
+      "PowerShell(python tools/roadmap.py:*)",
+      "PowerShell(dotnet --info)",
+      "PowerShell(dotnet --list-sdks)",
+      "PowerShell(dotnet build:*)",
+      "PowerShell(dotnet test:*)",
+      "PowerShell(dotnet format:*)",
+      "PowerShell(dotnet restore:*)"
     ],
     "ask": [
       "Bash(uv add:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet run:*)",
       "Bash(git push:*)",
       "PowerShell(uv add:*)",
+      "PowerShell(dotnet add:*)",
+      "PowerShell(dotnet run:*)",
       "PowerShell(git push:*)"
     ],
     "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
       "Read(./secrets/**)",
       "Edit(./config/project.toml)",
       "Bash(git push --force:*)",
@@ -37,6 +54,10 @@
       "PowerShell(git push --force:*)",
       "PowerShell(git reset --hard:*)"
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "python \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline.py\""
   },
   "hooks": {
     "SessionStart": [
@@ -79,8 +100,8 @@
           {
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit.py\"",
-            "timeout": 90,
-            "statusMessage": "ruff + look-ahead check"
+            "timeout": 150,
+            "statusMessage": "format + look-ahead check"
           }
         ]
       }
@@ -91,8 +112,8 @@
           {
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop_gate.py\"",
-            "timeout": 600,
-            "statusMessage": "Quality gate: ruff + pytest"
+            "timeout": 900,
+            "statusMessage": "Quality gate: lint, tests, build"
           }
         ]
       }

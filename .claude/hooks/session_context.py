@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from _common import context, current_phase, project_dir, read_input
 
@@ -39,7 +40,31 @@ def main() -> None:
             lines.append(f"Curated data: {len(data)} series, last bar between {lasts[0]} and {lasts[-1]}.")
     else:
         lines.append("No curated data yet — run `uv run itrade ingest`.")
+
+    lines += roadmap_lines(root)
     context("SessionStart", "\n".join(lines))
+
+
+def roadmap_lines(root) -> list[str]:
+    """Progress of the current phase and the next available tasks (from tools/roadmap.py)."""
+    try:
+        sys.path.insert(0, str(root / "tools"))
+        import roadmap
+
+        tasks = roadmap.load()
+        phase = roadmap.current_phase()
+        in_phase = [t for t in tasks if t.phase == phase and t.status != "-"]
+        done = sum(t.status == "x" for t in in_phase)
+        ready = roadmap.available(tasks)
+        out = [f"Roadmap: phase {phase} — {done}/{len(in_phase)} tasks done. Work task by task: /next-task."]
+        claude = [t for t in ready if t.who in ("🤖", "🤝")][:1]
+        owner = [t for t in ready if t.who == "👤"][:3]
+        out += [f"Next for Claude: {t.id} {t.title}" for t in claude]
+        if owner:
+            out.append("Waiting on owner: " + "; ".join(f"{t.id} {t.title}" for t in owner))
+        return out
+    except Exception as exc:  # the roadmap must never break session start
+        return [f"Roadmap unavailable: {exc}"]
 
 
 if __name__ == "__main__":

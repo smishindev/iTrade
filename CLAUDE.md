@@ -40,17 +40,21 @@ free data ingest, statistics. **Python never trades.**
 - Fee and tax numbers are assumptions: when changing them, add source + date in a comment.
 - Do not rewrite text files with Windows PowerShell `Get-Content`/`Set-Content` (it corrupts UTF-8); use Edit or Python.
 
-## Guardrails (enforced by `.claude/hooks/`)
+## Guardrails (enforced by `.claude/hooks/` and `.githooks/pre-commit`)
 - PreToolUse: blocks edits under `data/`, edits to `config/project.toml`, secret files, hard-coded credentials,
-  broker code in Python (always), IBKR API code in C# outside `src/ITrade.Broker.IBKR/` and
-  `spikes/ibkr-feasibility/`, live ports 4001/7496 before phase 8; blocks deleting raw data, reading `.env`, `pip install`.
-- PostToolUse: ruff format/fix on edited Python; flags look-ahead patterns in strategy code.
-- Stop: runs ruff + pytest when src/tests/config changed; a failure sends you back to fix it.
+  **real IBKR account numbers** (use `DU0000000`), broker code in Python (always), IBKR API code in C# outside
+  `src/ITrade.Broker.IBKR/` and `spikes/ibkr-feasibility/`, live ports 4001/7496 before phase 8;
+  blocks deleting raw data, reading `.env`, `pip install`.
+- PostToolUse: ruff format/fix + look-ahead flags on Python; `dotnet format whitespace` on C#.
+- Stop: ruff + pytest when src/tests/config/tools changed; `dotnet build` for changed spikes. A failure sends you back.
+- Status line shows phase, roadmap progress and the next task; SessionStart injects the same.
 - If a hook blocks you, do not work around it — explain to the user what it protects.
+- Spike/broker run logs go to `spikes/**/out/` (git-ignored); only anonymised fixtures are committed.
+  Local account numbers and ports live in `appsettings.Local.json` (git-ignored) or user-secrets.
 
 ## Slash commands, agents, skills
 Work goes task by task through `docs/roadmap/` (rules: `docs/roadmap/README.md`, helper `python tools/roadmap.py`):
 `/next-task` · `/task <ID>` · `/roadmap-status`. Commit messages start with the task ID.
 `/gate-check [n]` (gate-keeper) · `/ingest [tickers]` (data-auditor) · `/cost <usd> <price> [ticker]` ·
 `/research-log <text>` · `/review-research` (quant-reviewer).
-Skills: `research-integrity`, `data-pipeline`, `cost-model`.
+Skills: `research-integrity` (strategy/backtest), `data-pipeline`, `cost-model`, `ibkr-api` (anything touching IBKR).

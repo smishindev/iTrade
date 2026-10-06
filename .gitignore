@@ -15,6 +15,16 @@ build/
 # Reports are generated
 /reports/
 
+# .NET build output and local config (account numbers, local ports live only here)
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+**/appsettings.Local.json
+# Spike run logs contain raw broker messages; only anonymised fixtures/ are committed
+spikes/**/out/
+
 # Secrets — broker credentials never live in the repo
 .env
 .env.*

@@ -1,52 +1,48 @@
 ---
 name: research-integrity
-description: Rules for any backtest, strategy, signal or performance-metric code in iTrade. Load before writing or changing anything under src/itrade/backtest, src/itrade/strategies or src/itrade/signals, before running a backtest, and before reporting any strategy result to the user.
+description: Rules for any backtest, strategy, signal, indicator or performance-metric work in iTrade (Python spike A in src/itrade/strategies and src/itrade/backtest, or the C# core in ITrade.Strategies / ITrade.Simulation). Load before writing or changing that code, before running a backtest, and before reporting any strategy result to the owner.
 ---
 
 # Research integrity
 
-A backtest that looks great is usually wrong. These rules exist to catch the four ways it
-happens: look-ahead, survivorship, missing costs, and multiple testing.
+A backtest that looks great is usually wrong. These rules catch the usual ways it happens:
+look-ahead, survivorship, missing costs, wrong fills, and multiple testing.
+The strategy spec is `docs/STRATEGY_ETF_PULLBACK_V1.md` (PLAN §5); it wins over this summary.
 
 ## Hard rules
 
-1. **No look-ahead.** A decision made at the close of day *t* trades at the **open or close of
-   day t+1**, never on day *t*. Signals use only rows `<= t`.
-   - Forbidden in signal code: `shift(-n)`, `bfill`, `rolling(center=True)`, full-sample
-     normalisation (z-scores, min/max over the whole series), fitting on the whole period.
-   - A post-edit hook flags these; silence it only with `# lookahead-ok: <reason>`.
-2. **Costs always on.** Every simulated fill goes through
-   `itrade.costs.estimate_trade_cost(...)` with the instrument's `half_spread_bps` from
-   `config/universe.toml`. A "zero-cost" run may exist only as a labelled diagnostic, never as a result.
-3. **Report in ILS, after tax.** Simulate on raw close + explicit dividends (never adj_close plus
-   dividends — double counting). Tax per Israeli rules via the tax engine (lots, USD gain × exit
-   rate, dividends with withholding, loss carry-forward). Report wealth "taxes paid" and "if
-   liquidated today". Include FX conversion cost on deposits.
-4. **Always beside both benchmarks.** (a) Buy-and-hold VT (SPY before 2008-06-26); (b) a static
-   portfolio with the strategy's average asset mix. Same engine, costs, tax, currency.
-   Beating VT by holding fewer stocks is not skill.
-5. **Out-of-sample is locked.** 2019-01-01 onward is the hold-out. Develop on data before it.
-   Run on the hold-out once per strategy, at the end, and say so in the research log.
-6. **Pre-register, then log every variant.** Write the hypothesis, parameters and success
-   criterion in `docs/research-log.md` *before* the first run (use `/research-log`). Stop
-   criterion: 20 variants without a pass → stop (docs/SCOPE.md). Once the hold-out has been
-   looked at and the strategy changed, it is no longer out-of-sample — say so.
-7. **Time-stamp availability, not just dates.** News, LLM scores and macro data are usable only
-   from the moment they were available (fetched / scored / published vintage — ALFRED, not FRED).
+1. **No look-ahead.** Decision after the close of session *t* using only bars ≤ *t*; execution at
+   the **open of t+1** (LOO entry, MOO exit). Stops act intraday from t+1 on; entry at the open
+   always comes before that day's low.
+   - Forbidden in signal code: `shift(-n)`, `bfill`, `rolling(center=True)`, whole-sample
+     normalisation or fitting. Hook flags these; silence only with `# lookahead-ok: <reason>`.
+   - Tests must prove: changing data after *t* does not change signals at *t*; a strategy that peeks is caught.
+2. **Realistic fills.** LOO fills only if open ≤ limit; stop gap → fill at the open; slippage on every fill;
+   whole vs fractional shares as configured — an unfillable size is a **skipped signal with a reason**.
+3. **Costs always on**, priced at the **real account size** (IBKR minimum commissions) via the cost model.
+   Report costs in R. A zero-cost run is a labelled diagnostic, never a result.
+4. **One account.** Limited, settled (T+1) cash; max positions and risk limits (PLAN §6); signals
+   compete in the pre-registered order.
+5. **Prices:** indicators on split-adjusted prices; dividends as separate cash events (25% US
+   withholding). Never adj_close plus dividends (double counting). No new entry when t+1 is an ex-date.
+6. **Universe by date.** An instrument joins only when it met the rules on that date (history, liquidity).
+   Document closed/merged ETFs that free data cannot include.
+7. **Periods are fixed:** development 2006–2016, validation 2017–2020, **final 2021-01 … 2026-09 runs
+   once** per hypothesis (the CLI enforces it). Once the final period was seen and rules changed, it is
+   no longer out-of-sample — say so.
+8. **Pre-register, then log every run.** Hypothesis, variants (max 20) and success criteria go into
+   `docs/research-log.md` before the first run; every run is logged, failures included.
 
-## Metrics to report (always all of them)
-Net CAGR (ILS, after tax) · benchmark CAGR · difference · max drawdown and its dates ·
-annualised volatility · Sharpe (rf = SHY) · turnover per year · cost drag %/yr · tax drag %/yr ·
-number of trades · worst calendar year.
+## What every result must show
+Number of trades · expectancy in R after costs with 90% bootstrap interval · win rate with Wilson
+interval · average win / loss in R · costs in R · max drawdown and its duration · worst losing streak ·
+share of executable signals and reasons for skipped ones · results by year, instrument and group ·
+**random-control percentile** (same filters, frequency, exits) · costs × 2 and neighbouring parameters ·
+a simple market reference (buy-and-hold of a broad ETF) for context.
 
-## Robustness checks before calling anything "good"
-- Costs × 2 still beats the benchmark?
-- Shift the rebalance day by ±5 trading days — similar result?
-- Each sub-period (2005–2010, 2011–2015, 2016–2018) — does it work in most, or only one?
-- Is the edge mostly one asset or one year? Then it is luck until shown otherwise.
+## Wording to the owner
+State uncertainty and sample size: "+0.12R per trade after costs on 2017–2020, 90% CI −0.02…+0.25,
+143 trades, 7 of 20 variants used, above 93% of random entries". Never "this makes X% a year",
+never "profitable" before the final period and live evidence.
 
-## Wording when reporting to the user
-State uncertainty. "Beat the benchmark by 1.2%/yr in-sample over 14 years, 3 of 3 sub-periods"
-— never "this strategy makes 12% a year". Mention how many variants were tried.
-
-After writing strategy/backtest code, ask the `quant-reviewer` agent to review it.
+After writing strategy/backtest code, run `/review-research` (agent `quant-reviewer`).

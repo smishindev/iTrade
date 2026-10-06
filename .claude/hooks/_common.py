@@ -83,10 +83,17 @@ def context(event: str, text: str) -> None:
 
 SECRET_ASSIGNMENT = re.compile(
     r"""(?ix)
-    \b(api[_-]?key|api[_-]?secret|secret[_-]?key|password|passwd|access[_-]?token|auth[_-]?token)
-    \s*[:=]\s*["'][^"'\s]{8,}["']
+    \b\w*(api[_-]?key|api[_-]?secret|secret|password|passwd|token)\w*
+    ["']?\s*[:=]\s*["']
+    (?!(?-i:[A-Z][A-Z0-9]*_[A-Z0-9_]*)["'])   # an env-var NAME such as "ITRADE_FLEX_TOKEN" is fine
+    (?![<$%{])                  # placeholders: "<your-token>", "${VAR}", "%VAR%"
+    [^"'\s]{8,}["']
     """
 )
+
+# IBKR account numbers: "U" (live) or "DU" (paper) followed by 6-9 digits. Fixtures and docs use
+# all-zero placeholders (DU0000000 / U0000000) instead of real numbers.
+ACCOUNT_ID = re.compile(r"\bD?U(?!0{6,9}\b)\d{6,9}\b")
 
 # C# code that touches the official IBKR TWS API (namespace IBApi).
 CSHARP_BROKER_CODE = re.compile(r"\busing\s+IBApi\b|\bIBApi\.|\bEClientSocket\b|\.placeOrder\s*\(")

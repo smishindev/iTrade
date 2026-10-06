@@ -19,7 +19,10 @@ Read `.claude/skills/data-pipeline/SKILL.md` first.
      (e.g. SPY, VT, VEA on 2008-10-13)? Cross-check with SQL across tickers.
    - **Vendor gap / bad tick** — isolated, not shared, reverses next day.
 4. Check provenance: `data/curated/manifest.json` has a raw snapshot and SHA-256 for every ticker.
-5. Check the benchmark coverage: VT from 2008-06-26, SPY before that; ILS=X covers the whole range.
+5. Check coverage for the strategy universe (`config/universes/`): each ETF's first bar vs its
+   inception date; dividends and splits present (ex-dates matter: no entries on t+1 ex-date);
+   ILS=X covers the whole range.
+6. If IBKR bars exist (phase 3+), compare the two sources and list days with |Δclose| > 0.5%.
 
 ## Output
 A markdown table ready to paste into `docs/data-notes.md`:

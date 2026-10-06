@@ -1,7 +1,8 @@
-"""PostToolUse for Write/Edit/MultiEdit on Python files.
+"""PostToolUse for Write/Edit/MultiEdit.
 
-1. ruff format + ruff check --fix on the edited file.
-2. Report remaining lint errors and look-ahead-bias smells back to Claude (non-blocking).
+Python: ruff format + ruff check --fix; report remaining lint errors and look-ahead smells.
+C#: `dotnet format whitespace` on the edited file (needs a .csproj above it).
+All feedback is non-blocking context for Claude.
 """
 
 from __future__ import annotations
@@ -31,12 +32,41 @@ def ruff_cmd(root: Path) -> list[str]:
     return ["uv", "run", "--quiet", "ruff"]
 
 
+def nearest_project(path: Path, root: Path) -> Path | None:
+    for folder in path.parents:
+        found = sorted(folder.glob("*.csproj"))
+        if found:
+            return found[0]
+        if folder == root:
+            return None
+    return None
+
+
+def format_csharp(file_path: str, root: Path) -> None:
+    path = Path(file_path).resolve()
+    project = nearest_project(path, root.resolve())
+    if project is None or not shutil.which("dotnet"):
+        return
+    result = subprocess.run(
+        ["dotnet", "format", "whitespace", str(project), "--include", str(path)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        context("PostToolUse", "dotnet format failed:\n" + (result.stdout + result.stderr)[-2000:])
+
+
 def main() -> None:
     payload = read_input()
     tool_input = payload.get("tool_input", {}) or {}
     file_path = tool_input.get("file_path") or ""
     root = project_dir(payload)
     rel = rel_path(file_path, root) if file_path else None
+    if rel and rel.endswith(".cs"):
+        format_csharp(file_path, root)
+        return
     if not rel or not rel.endswith(".py") or rel.startswith(".claude/"):
         return
 
