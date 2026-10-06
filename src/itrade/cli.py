@@ -15,7 +15,7 @@ from itrade.data.store import Store
 
 
 def market_today() -> date:
-    """Today's date in New York â€” the exchange's calendar, not the machine's (Israel)."""
+    """Today's date in New York — the exchange's calendar, not the machine's (Israel)."""
     return datetime.now(ZoneInfo("America/New_York")).date()
 
 

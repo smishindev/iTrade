@@ -154,8 +154,10 @@ def capital_gains_tax(
 ) -> dict[int, float]:
     """Tax due per calendar year on net realised gains (ILS), with optional loss carry-forward.
 
-    Simplification: taxes nominal ILS gains. Israeli law taxes *real* gains (inflation-
-    adjusted), so this slightly overstates tax in inflationary years — conservative.
+    Placeholder until the phase-2 tax engine: it taxes whatever gains it is given and knows
+    nothing about lots or the exempt FX component of USD securities. Feeding it nominal ILS
+    gains is NOT reliably conservative — it overstates tax when the shekel weakens and can
+    understate it when the shekel strengthens. See docs/GATES.md, gate 2.
     """
     tax: dict[int, float] = {}
     carried_loss = 0.0

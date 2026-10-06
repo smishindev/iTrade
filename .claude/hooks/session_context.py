@@ -7,13 +7,16 @@ import json
 from _common import context, current_phase, project_dir, read_input
 
 PHASES = {
-    0: "scope",
-    1: "data",
-    2: "backtester + costs",
-    3: "research",
-    4: "paper trading",
-    5: "small live",
-    6: "scale",
+    0: "decisions",
+    1: "validation spikes A (hypothesis, Python) + B (IBKR feasibility, C#)",
+    2: "foundation (.NET, PostgreSQL, React shell)",
+    3: "data in C#",
+    4: "strategy core + backtest in C#",
+    5: "UI",
+    6: "paper execution",
+    7: "hardening",
+    8: "live pilot",
+    9: "expansion",
 }
 
 
@@ -22,10 +25,11 @@ def main() -> None:
     phase = current_phase(root)
     lines = [
         f"iTrade project phase: {phase} ({PHASES.get(phase, '?')}). "
-        "Exit criteria: docs/GATES.md. Scope and stop rules: docs/SCOPE.md.",
+        "Master plan: docs/PLAN.md. Exit criteria: docs/GATES.md. Scope: docs/SCOPE.md.",
+        "Python never trades; IBKR API code only in src/ITrade.Broker.IBKR and spikes/ibkr-feasibility.",
     ]
-    if phase < 4:
-        lines.append("Broker/order-placement code is blocked by hooks until phase 4.")
+    if phase < 8:
+        lines.append("Live IB Gateway ports are blocked until the live pilot (phase 8).")
 
     manifest = root / "data" / "curated" / "manifest.json"
     if manifest.exists():

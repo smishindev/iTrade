@@ -18,14 +18,21 @@ happens: look-ahead, survivorship, missing costs, and multiple testing.
 2. **Costs always on.** Every simulated fill goes through
    `itrade.costs.estimate_trade_cost(...)` with the instrument's `half_spread_bps` from
    `config/universe.toml`. A "zero-cost" run may exist only as a labelled diagnostic, never as a result.
-3. **Report in ILS, after tax.** Convert USD equity with the `ILS=X` close of the same day;
-   apply `capital_gains_tax` per calendar year to realised gains; include FX conversion cost on deposits.
-4. **Always beside the benchmark.** Buy-and-hold VT (SPY before 2008-06-26), same costs, same tax,
-   same currency. Show the difference, not just the strategy.
+3. **Report in ILS, after tax.** Simulate on raw close + explicit dividends (never adj_close plus
+   dividends — double counting). Tax per Israeli rules via the tax engine (lots, USD gain × exit
+   rate, dividends with withholding, loss carry-forward). Report wealth "taxes paid" and "if
+   liquidated today". Include FX conversion cost on deposits.
+4. **Always beside both benchmarks.** (a) Buy-and-hold VT (SPY before 2008-06-26); (b) a static
+   portfolio with the strategy's average asset mix. Same engine, costs, tax, currency.
+   Beating VT by holding fewer stocks is not skill.
 5. **Out-of-sample is locked.** 2019-01-01 onward is the hold-out. Develop on data before it.
    Run on the hold-out once per strategy, at the end, and say so in the research log.
-6. **Log every variant.** Before running variant N+1, record variant N in `docs/research-log.md`
-   (use `/research-log`). Stop criterion: 20 variants without a pass → stop (docs/SCOPE.md).
+6. **Pre-register, then log every variant.** Write the hypothesis, parameters and success
+   criterion in `docs/research-log.md` *before* the first run (use `/research-log`). Stop
+   criterion: 20 variants without a pass → stop (docs/SCOPE.md). Once the hold-out has been
+   looked at and the strategy changed, it is no longer out-of-sample — say so.
+7. **Time-stamp availability, not just dates.** News, LLM scores and macro data are usable only
+   from the moment they were available (fetched / scored / published vintage — ALFRED, not FRED).
 
 ## Metrics to report (always all of them)
 Net CAGR (ILS, after tax) · benchmark CAGR · difference · max drawdown and its dates ·

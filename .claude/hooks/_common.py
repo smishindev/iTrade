@@ -88,7 +88,12 @@ SECRET_ASSIGNMENT = re.compile(
     """
 )
 
-# Libraries/calls that can move real money. Allowed only from phase 4 (paper trading) on.
+# C# code that touches the official IBKR TWS API (namespace IBApi).
+CSHARP_BROKER_CODE = re.compile(r"\busing\s+IBApi\b|\bIBApi\.|\bEClientSocket\b|\.placeOrder\s*\(")
+CSHARP_BROKER_DIRS = ("src/itrade.broker.ibkr/", "spikes/ibkr-feasibility/")  # lower-cased
+LIVE_PORT = re.compile(r"\b(4001|7496)\b")
+
+# Python libraries/calls that can move real money. Python never trades (docs/PLAN.md §2.5).
 BROKER_CODE = re.compile(
     r"""(?x)
     \b(import|from)\s+(ib_insync|ib_async|ibapi|alpaca|alpaca_trade_api|tinkoff|ccxt)\b

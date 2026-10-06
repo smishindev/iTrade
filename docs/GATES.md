@@ -1,49 +1,80 @@
-# Phase gates
+# Ворота этапов
 
-A phase is finished when **every** exit criterion has evidence. Run `/gate-check <phase>` in
-Claude Code; the `gate-keeper` agent checks each line and reports PASS / FAIL / NEEDS-OWNER.
-Only the owner moves `phase` in `config/project.toml`. Hooks block broker and order code
-while `phase < 4`.
+Этап закончен, когда **у каждого** критерия есть доказательство. Проверка — `/gate-check <номер>` в Claude Code:
+агент `gate-keeper` отмечает каждую строку как PASS / FAIL / NEEDS-OWNER. Номер этапа в
+`config/project.toml` меняет **только владелец**. Этапы и часы — [PLAN.md §12](PLAN.md).
 
-## Gate 0 — Scope
-- [ ] Owner has reviewed every ⚠ item in `docs/SCOPE.md` and accepted or changed it.
-- [ ] Stop criteria are written down **before** any strategy results exist.
+Этапы: 0 решения · 1 проверки A и B · 2 основа · 3 данные в C# · 4 ядро и бэктест в C# ·
+5 интерфейс · 6 paper-исполнение · 7 укрепление · 8 live-пилот · 9 расширение.
 
-## Gate 1 — Data (current)
-- [x] `uv run itrade ingest` downloads the whole universe and the USD/ILS rate.
-- [x] Raw snapshots are immutable and timestamped; curated files trace back to a raw snapshot by SHA-256.
-- [x] Quality checks: duplicates, ordering, missing values, non-positive prices, OHLC consistency,
-      negative/zero volume, missing/extra exchange sessions, return outliers, staleness, split events.
-- [x] Unit tests cover every quality check without network access.
-- [ ] Every remaining **warning** from `uv run itrade quality -v` has been reviewed and explained
-      in `docs/data-notes.md` (e.g. VWO 2008 split, USD/ILS OHLC noise).
+## G0 — Решения
+- [x] Профиль владельца: резидент, не репатриант, 10 000 ₪, цель — активная торговля через свою платформу.
+- [x] Стек выбран: React + TypeScript, C# / .NET 10, PostgreSQL, IBKR TWS API.
+- [ ] Владелец подтвердил PLAN.md, SCOPE.md и указал часы в неделю.
+- [ ] Подана заявка на счёт IBKR (cash account), доступен paper-счёт.
 
-## Gate 2 — Backtester and costs
-- [x] Cost model: commission with min/cap, US regulatory fees, spread, slippage, FX, Israeli CGT with carry-forward.
-- [x] `uv run itrade costs` prices any order and shows yearly drag by turnover.
-- [ ] Backtester trades on the **next** bar after the signal (no same-bar fills).
-- [ ] Every simulated trade goes through `itrade.costs.estimate_trade_cost`.
-- [ ] Results are reported in ILS, after tax, next to the benchmark.
-- [ ] Sanity tests: buy-and-hold SPY reproduces SPY's adjusted return within 0.1%/yr;
-      a zero-signal strategy loses exactly its costs; a strategy that knows the future is caught by a test.
-- [ ] Out-of-sample period (2019-01-01 onward) is locked: the code refuses to use it unless called in `final` mode.
+## G1 — Строим платформу или нет
+**Проверка A (гипотеза):**
+- [ ] `docs/STRATEGY_ETF_PULLBACK_V1.md`: формулы, набор, периоды, варианты, критерии — записаны до первого запуска.
+- [ ] Набор 20–25 ETF зафиксирован по правилам PLAN §5.1; все предупреждения данных объяснены в `docs/data-notes.md`.
+- [ ] Бэктест по модели PLAN §5.3: вход на открытии t+1, стоп с гэпами, издержки на реальном размере счёта, расчётные деньги.
+- [ ] Каждый запуск записан в `docs/research-log.md`; вариантов ≤ 20.
+- [ ] Случайный контроль (1 000 прогонов) посчитан.
+- [ ] Финальный период 2021–2026 запущен один раз; критерии PLAN §5.7 — выполнены / не выполнены (с цифрами).
+- [ ] `quant-reviewer`: нет заглядывания в будущее, смещения выживших, ошибок дивидендов и издержек.
 
-## Gate 3 — Research
-- [ ] Every variant tried is logged in `docs/research-log.md` (the multiple-testing ledger).
-- [ ] At most 20 variants. The best one passes the stop criterion 1 in SCOPE.md on out-of-sample data, run once.
-- [ ] Results survive costs × 2 and a ±1 month shift in the rebalance date.
-- [ ] `quant-reviewer` agent finds no look-ahead, survivorship or cost-omission issues.
-- **If this gate fails → stop, hold the benchmark. That is a success, not a failure.**
+**Проверка B (исполнимость в IBKR), результаты в `docs/spikes/ibkr-feasibility.md`:**
+- [ ] C# (официальный TWS API) подключается к paper-счёту через IB Gateway, переживает переподключение.
+- [ ] Contract details для набора: `conId`, шаг цены, биржа листинга, **поддержка дробных долей**.
+- [ ] Тип котировок, доступный через API (реальные / задержанные), и их стоимость.
+- [ ] Связка LMT/OPG + STP/GTC с `transmit` принята вечером и исполнена на открытии; стоп = фактический объём.
+- [ ] **Дробные доли со стопом:** работают / не работают.
+- [ ] MOO-продажа + стоп в OCA-группе: нет лишней продажи.
+- [ ] Восстановление состояния: `reqOpenOrders`, `reqCompletedOrders`, `reqExecutions`, поиск по `orderRef`.
+- [ ] Flex Web Service: Activity Statement получен программно.
+- [ ] Доля сигналов из проверки A, исполнимых при риске 0,25% с подтверждённой гранулярностью долей, ≥ 70%.
 
-## Gate 4 — Paper trading
-- [ ] Broker account opened; fees in `config/costs.toml` re-verified against the broker's current price list (date + source noted).
-- [ ] Credentials only in environment variables / OS keychain, never in the repo.
-- [ ] Hard limits outside the strategy: max order size, max position, daily loss stop, stale-data stop, kill switch.
-- [ ] Reconciliation: broker positions == local positions every run, or the run halts.
-- [ ] 8+ weeks of paper fills; measured slippage ≤ model assumption.
+**Решение владельца:** строим / меняем гипотезу / останавливаемся.
 
-## Gate 5 — Small live
-- [ ] 10–25% of capital for 3+ months; stop criterion 3 not triggered.
+## G2 — Основа
+- [ ] .NET-решение по PLAN §3.2, сборка и тесты проходят; архитектурные тесты закрепляют правила зависимостей.
+- [ ] PostgreSQL 18 в Docker, данные в `D:\ITradeData\pg`; EF-миграции в git; Testcontainers в интеграционных тестах.
+- [ ] Вход в приложение (один пользователь), только 127.0.0.1, HTTPS, антифорджери.
+- [ ] React-оболочка, отдаётся ASP.NET Core; TS-клиент генерируется из OpenAPI.
+- [ ] Claude Code: хуки `dotnet format` / `dotnet test`, агент `execution-reviewer`.
 
-## Gate 6 — Scale
-- [ ] Only with live evidence. Re-read SCOPE.md; update it before adding capital or complexity.
+## G3 — Данные в C#
+- [ ] Инструменты, история символов, наборы по датам, календарь NYSE, курсы Банка Израиля.
+- [ ] Импорт Parquet-снимков с проверкой SHA-256; дневные бары IBKR; сверка двух источников с отчётом расхождений.
+- [ ] Сплиты и дивиденды как отдельные события; ревизии вместо перезаписи.
+
+## G4 — C#-ядро воспроизводит проверку A
+- [ ] Индикаторы совпадают с Python-эталоном (допуск 1e-9); сделки совпадают один в один на тестовом периоде.
+- [ ] Research Runner воспроизводит результат проверки A; все запуски в `research_runs`.
+- [ ] Стратегия — чистая функция (архитектурный тест: нет часов, сети, БД).
+
+## G5 — Интерфейс
+- [ ] Шесть экранов PLAN §8; плашка PAPER/LIVE, счёт, время сверки на каждом торговом экране.
+- [ ] Принятие и отказ записываются с причиной; карточка показывает статистику версии с размером выборки.
+- [ ] Playwright: «одобрить идею → заявка ушла в paper».
+
+## G6 — Допуск к пилоту: техника
+- [ ] Машина состояний заявки PLAN §7.3; `Unknown` разрешается только сверкой.
+- [ ] Replay и fault-тесты из PLAN §11 проходят.
+- [ ] Сверка по API и Flex; расхождения → `ENTRIES_PAUSED`.
+- [ ] 8+ недель ежедневной работы на paper; все расхождения разобраны.
+
+## G7 — Допуск к live-пилоту
+- [ ] Бэкап + **проверенное восстановление**; после восстановления входы выключены до сверки.
+- [ ] Live-конфиг: `AllowedAccountId`, `ITRADE_LIVE`, подтверждение при старте, `MaxLiveExposureUsd`.
+- [ ] Комиссии в `config/costs.toml` перепроверены по тарифу IBKR (источник и дата).
+- [ ] Бухгалтер подтвердил метод налогового учёта и периодичность отчётов; налоговый экспорт работает.
+- [ ] `docs/RUNBOOK.md`: что делать при сбое, если приложение недоступно (действия в интерфейсе IBKR).
+- [ ] Бюджет потерь пилота утверждён владельцем.
+
+## G8 — Итоги пилота
+- [ ] Фактические издержки и исполнение сравнены с моделью; ожидаемый R с интервалом посчитан по живым сделкам.
+- [ ] Решение владельца: продолжать / увеличить капитал / остановить — с цифрами.
+
+## G9 — Расширение
+- [ ] Каждое расширение (акции, вторая стратегия, LLM, автоисполнение) — с доказательством пользы и проходом экономического фильтра.

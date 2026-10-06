@@ -1,59 +1,44 @@
-# iTrade — Scope (one page)
+# iTrade — границы проекта
 
-_Version 1 · 2026-10-06 · Items marked ⚠ were defaulted by Claude and need the owner's confirmation._
+_Версия 3 · 6 октября 2026 · Подробности — в [PLAN.md](PLAN.md). Пункты с ⚠ ждут вашего подтверждения._
 
-## The question
-Can a simple, rule-based strategy beat **buy-and-hold of a global index ETF (VT)** after
-commissions, spreads, slippage, FX conversion and Israeli tax, **measured in shekels**?
-If no strategy clears that bar, the answer is "hold the index" — a valid, money-saving result.
+## Цель
+Личная платформа активной торговли: находит идеи по формализованной стратегии, показывает основания,
+риск и издержки, исполняет **утверждённые вами** сделки через IBKR и измеряет результат после расходов и налога.
 
-## Money and who it serves
+## Владелец
 | | |
 |---|---|
-| Capital | 10,000 ILS (≈ $2,700). Own money only. |
-| Users | The owner only. No clients, no signals sold, no copy trading. |
-| Licensing | Trading your own account needs no Israel Securities Authority licence. Managing or advising **others** would — out of scope. |
-| Leverage / shorting / options / crypto | None. ⚠ |
+| Налоговый статус | Резидент Израиля, не репатриант: 25% с реального прироста капитала, зачёт убытков, перенос вперёд |
+| Капитал | 10 000 ₪ ≈ $3 280 (курс 3,05 на 06.10.2026), собственные деньги |
+| Пользователи | Только владелец. Без клиентов и чужих денег — лицензия не нужна |
+| Время | ⚠ часов в неделю — не указано (план считает 5 / 10 / 15) |
 
-Expectation check: a very good 10%/yr on 10,000 ILS is ~1,000 ILS before 25% tax. This project
-is about learning and validation; the money result is secondary.
+## Стек (решено)
+React 19 + TypeScript · C# / .NET 10 LTS + ASP.NET Core · PostgreSQL 18 · Parquet ·
+IBKR TWS API (C#) через IB Gateway. Python — только исследования и эталон для тестов, без права торговать.
 
-## Jurisdiction and tax (Israel — verify with a tax adviser, this is not tax advice)
-- 25% tax on realised **real** capital gains; losses offset gains in the same year and carry forward.
-- With a **foreign broker** you must report and pay yourself (annual report). An **Israeli broker**
-  usually withholds tax at source — simpler.
-- US-domiciled ETFs: 25% US withholding on dividends (credited in Israel). Irish-domiciled UCITS
-  ETFs: lower withholding inside the fund, and no US estate-tax exposure (irrelevant at this size).
-- Tax is part of the cost model: active strategies realise gains every year; buy-and-hold defers them.
+## Границы V1
+- Обычные американские ETF, только покупки, cash account, без плеча, шортов, опционов, крипты.
+- Удержание до 10 сессий; вход на открытии (LOO) по подтверждению; защитный стоп у брокера.
+- Локальное приложение на ПК владельца; без сервера; ПК нужен раз в торговый день на 10–20 минут.
+- Первая стратегия: `ETF_PULLBACK_V1`. Одна стратегия до G4.
+- Риск 0,25% на сделку, до 3 позиций, лимиты из PLAN §6.
 
-## Broker ⚠
-**Interactive Brokers (IBKR Pro)** as the default: open to Israeli residents, has an API,
-fractional shares, low minimums (~$0.35/order). Costs assumed in `config/costs.toml`.
-Alternative: an Israeli broker (tax handled for you, trade in ILS) — usually higher minimum
-fees and no public API. **No account is needed until phase 4.**
+## Правила, которые не нарушаются
+1. Сначала проверки A (гипотеза) и B (исполнимость в IBKR), платформа — только после G1.
+2. Одно C#-ядро стратегии для бэктеста и работы; Python не торгует.
+3. Ордера отправляет только `ExecutionService`; при неизвестном результате — сверка, а не повтор.
+4. Все идеи, решения и эксперименты записываются, включая отказы и неудачи.
+5. Варианты стратегии записываются заранее, не больше 20; финальный период (2021–2026) запускается один раз.
+6. Платные данные, сервер и LLM — только через экономический фильтр: польза > 2 × годовые расходы.
 
-## Instruments ⚠
-- **Research** on long-history US ETFs: SPY, VT, VEA, VWO, IEF, TLT, SHY, GLD + USD/ILS rate.
-- **Holding** (if we ever go live): likely the UCITS equivalents (e.g. VWRA, CSPX) — decided at phase 4.
-- Daily bars only. Rebalance **monthly or slower**; turnover target ≤ 4× per year.
+## Критерии остановки (записаны до результатов)
+1. Проверка A не проходит критерии PLAN §5.7 → гипотеза отклонена; не больше трёх гипотез, затем пересмотр проекта.
+2. Проверка B показывает, что при риске 0,25% исполнимо < 70% сигналов, и решения нет → пересмотр риска или набора.
+3. Live-пилот: потеряно больше бюджета пилота (⚠ предложено 500 ₪) или просадка ≥ 5% → стоп и разбор.
+4. Факт исполнения хуже модели более чем в 2 раза по издержкам → стоп и разбор.
 
-## Benchmarks every strategy must beat
-1. Buy-and-hold VT in ILS (SPY before 2008).
-2. Honest alternatives outside this project: an Israeli index fund (קרן מחקה), and an S&P 500
-   track in a keren hishtalmut — tax-exempt gains can beat any strategy here. Check these first.
-
-## Budget
-- Money: $0 (free data, local machine). Any paid data or server needs a scope update.
-- Time: ~4–6 hours/week ⚠. Time box: **3 months to the phase 3 decision**.
-
-## Stop criteria (decided in advance) ⚠
-Stop and just hold the index if any of these happens:
-1. **Phase 3:** no strategy beats the benchmark on the locked out-of-sample period
-   (2019-01-01 onward) by ≥ 1%/yr net of costs and tax, with max drawdown no worse than the benchmark.
-2. More than **20 strategy variants** tried without passing (1) — further search is curve-fitting.
-3. **Live:** drawdown > 15% below the benchmark, or real slippage > 2× the model, for 3 months.
-4. The 3-month time box runs out before phase 3 is complete.
-
-## Out of scope
-HFT and intraday, any client-facing feature, copy trading, leverage, paid data, cloud
-infrastructure, microservices, message queues. Revisit only after live evidence (phase 6).
+## Вне V1
+Торговля внутри дня, HFT, отдельные акции (нужны платные данные без смещения выживших),
+LLM-агент с правом торговать, автоматический выбор сделок, сервер и облако, мессенджеры, мобильное приложение.
