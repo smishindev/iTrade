@@ -11,6 +11,8 @@
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
+      "Bash(python tools/roadmap.py:*)",
+      "PowerShell(python tools/roadmap.py:*)",
       "PowerShell(uv run pytest:*)",
       "PowerShell(uv run ruff:*)",
       "PowerShell(uv run itrade:*)",

@@ -49,6 +49,8 @@ free data ingest, statistics. **Python never trades.**
 - If a hook blocks you, do not work around it — explain to the user what it protects.
 
 ## Slash commands, agents, skills
+Work goes task by task through `docs/roadmap/` (rules: `docs/roadmap/README.md`, helper `python tools/roadmap.py`):
+`/next-task` · `/task <ID>` · `/roadmap-status`. Commit messages start with the task ID.
 `/gate-check [n]` (gate-keeper) · `/ingest [tickers]` (data-auditor) · `/cost <usd> <price> [ticker]` ·
 `/research-log <text>` · `/review-research` (quant-reviewer).
 Skills: `research-integrity`, `data-pipeline`, `cost-model`.
