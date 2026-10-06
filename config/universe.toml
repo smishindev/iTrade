@@ -1,0 +1,67 @@
+# Research universe. Long-history US-listed ETFs are used for BACKTESTING only
+# (they go back to the 2000s). What you would actually HOLD may differ — see
+# docs/SCOPE.md ("Instruments"), e.g. Irish-domiciled UCITS equivalents.
+
+[project]
+base_currency = "ILS"          # what you measure wealth in
+trading_currency = "USD"       # what the instruments are priced in
+calendar = "XNYS"              # NYSE session calendar for gap checks
+start_date = "2005-01-01"
+
+[benchmark]
+# Every strategy must beat this, after costs and tax, in ILS terms.
+ticker = "VT"
+fallback_ticker = "SPY"        # VT starts 2008; SPY fills the earlier period
+
+[[instruments]]
+ticker = "SPY"
+name = "S&P 500"
+asset_class = "equity"
+half_spread_bps = 0.5
+
+[[instruments]]
+ticker = "VT"
+name = "Total World Stock"
+asset_class = "equity"
+half_spread_bps = 1.5
+
+[[instruments]]
+ticker = "VEA"
+name = "Developed ex-US"
+asset_class = "equity"
+half_spread_bps = 1.5
+
+[[instruments]]
+ticker = "VWO"
+name = "Emerging Markets"
+asset_class = "equity"
+half_spread_bps = 2.0
+
+[[instruments]]
+ticker = "IEF"
+name = "US Treasury 7-10y"
+asset_class = "bond"
+half_spread_bps = 1.0
+
+[[instruments]]
+ticker = "TLT"
+name = "US Treasury 20y+"
+asset_class = "bond"
+half_spread_bps = 1.0
+
+[[instruments]]
+ticker = "SHY"
+name = "US Treasury 1-3y (cash proxy)"
+asset_class = "cash"
+half_spread_bps = 1.0
+
+[[instruments]]
+ticker = "GLD"
+name = "Gold"
+asset_class = "commodity"
+half_spread_bps = 1.0
+
+# USD/ILS rate (ILS per 1 USD) — needed to measure everything in shekels.
+[[fx]]
+ticker = "ILS=X"
+pair = "USDILS"

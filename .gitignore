@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Market data is reproducible from `itrade ingest`; never commit it.
+# Leading slash = repo root only (src/itrade/data/ is code and must be tracked).
+/data/
+
+# Reports are generated
+/reports/
+
+# Secrets — broker credentials never live in the repo
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Claude Code personal overrides
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

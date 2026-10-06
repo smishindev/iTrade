@@ -1,0 +1,42 @@
+[project]
+name = "itrade"
+version = "0.1.0"
+description = "Personal systematic-investing research platform (own capital only)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "duckdb>=1.1",
+    "yfinance>=0.2.50",
+    "exchange-calendars>=4.5",
+]
+
+[project.scripts]
+itrade = "itrade.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/itrade"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PD", "DTZ"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["network: test needs internet access (deselect with -m 'not network')"]

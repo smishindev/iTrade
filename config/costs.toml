@@ -1,0 +1,27 @@
+# All-in friction model. Every number here is an ASSUMPTION to verify against
+# the broker's current fee page before going live (phase 4 gate).
+# Defaults model Interactive Brokers (IBKR Pro, tiered) for an Israeli resident.
+
+[commission]                     # US stocks/ETFs, per order
+per_share_usd = 0.0035
+min_per_order_usd = 0.35
+max_pct_of_value = 0.01          # IBKR caps commission at 1% of trade value
+passthrough_per_share_usd = 0.0005  # exchange + clearing fees, rough average
+
+[regulatory]                     # US sell-side fees (rates change; verify)
+sec_fee_per_million_usd = 27.80  # on sale proceeds
+finra_taf_per_share_usd = 0.000166
+finra_taf_max_usd = 8.30
+
+[fx]                             # converting ILS -> USD at the broker
+conversion_bps = 0.2             # IBKR ~0.2 bp of value
+min_per_conversion_usd = 2.00
+
+[execution]
+default_half_spread_bps = 2.0    # used when an instrument has no value in universe.toml
+slippage_bps = 2.0               # extra adverse move vs. signal price (daily-bar execution)
+
+[tax]                            # Israel, individual. Not tax advice — verify.
+capital_gains_rate = 0.25        # on realised real gains
+dividend_rate = 0.25             # US withholding under the treaty is credited against this
+loss_carryforward = true

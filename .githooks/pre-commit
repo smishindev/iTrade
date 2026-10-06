@@ -1,0 +1,18 @@
+#!/bin/sh
+# iTrade commit gate: lint, format, offline tests, and no data/secrets in the commit.
+# Enabled with: git config core.hooksPath .githooks
+set -e
+
+staged=$(git diff --cached --name-only)
+
+if echo "$staged" | grep -Eq '^data/|(^|/)\.env|\.pem$|\.key$'; then
+    echo "pre-commit: refusing to commit data/ or secret files:" >&2
+    echo "$staged" | grep -E '^data/|(^|/)\.env|\.pem$|\.key$' >&2
+    exit 1
+fi
+
+if echo "$staged" | grep -Eq '\.py$|^pyproject\.toml$|^config/'; then
+    uv run --quiet ruff format --check src tests
+    uv run --quiet ruff check src tests
+    uv run --quiet pytest -q -m "not network"
+fi

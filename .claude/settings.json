@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run itrade:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv tree:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "PowerShell(uv run pytest:*)",
+      "PowerShell(uv run ruff:*)",
+      "PowerShell(uv run itrade:*)",
+      "PowerShell(uv sync:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)"
+    ],
+    "ask": [
+      "Bash(uv add:*)",
+      "Bash(git push:*)",
+      "PowerShell(uv add:*)",
+      "PowerShell(git push:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Edit(./config/project.toml)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "PowerShell(git push --force:*)",
+      "PowerShell(git reset --hard:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_context.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_edits.py\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_shell.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit.py\"",
+            "timeout": 90,
+            "statusMessage": "ruff + look-ahead check"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop_gate.py\"",
+            "timeout": 600,
+            "statusMessage": "Quality gate: ruff + pytest"
+          }
+        ]
+      }
+    ]
+  }
+}

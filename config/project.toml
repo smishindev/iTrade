@@ -1,0 +1,4 @@
+# Current project phase. ONLY THE OWNER EDITS THIS FILE, after `/gate-check` passes.
+# Claude Code hooks block edits here, and block broker / order-placement code while phase < 4.
+# Phases: 0 scope, 1 data, 2 backtester + costs, 3 research, 4 paper trading, 5 small live, 6 scale.
+phase = 1
