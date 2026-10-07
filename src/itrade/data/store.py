@@ -47,6 +47,14 @@ class Store:
     def manifest_path(self) -> Path:
         return self.root / "curated" / "manifest.json"
 
+    @property
+    def derived_dir(self) -> Path:
+        """Tables computed from curated data (e.g. universe membership); rebuildable at any time."""
+        return self.root / "derived"
+
+    def read_all_bars(self, tickers: list[str]) -> dict[str, pd.DataFrame]:
+        return {t: self.read_bars(t) for t in tickers}
+
     def write_raw(self, source: str, ticker: str, df: pd.DataFrame) -> Path:
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
         folder = self.raw_dir / source / safe_name(ticker)

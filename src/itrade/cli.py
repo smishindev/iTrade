@@ -110,6 +110,37 @@ def cmd_costs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_membership(args: argparse.Namespace) -> int:
+    from itrade.backtest.universe import MembershipRules, members_by_year, membership
+    from itrade.config import load_strategy, strategy_version
+
+    params = load_strategy(args.strategy)
+    universe = load_named_universe(params["strategy"]["universe"])
+    rules = MembershipRules.from_strategy(params)
+    store = Store()
+    table = membership(store.read_all_bars(universe.tickers), rules)
+
+    out = store.derived_dir / "membership" / f"{universe_name(params)}.parquet"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    table.to_parquet(out, index=False)
+
+    print(f"Strategy {args.strategy} version {strategy_version(args.strategy)[:12]}")
+    print(
+        f"Rules: >= {rules.min_history_sessions} bars, "
+        f"ADV{rules.liquidity_window} >= ${rules.min_avg_dollar_volume_usd:,.0f}"
+    )
+    print(f"Written {out}\n")
+    report = members_by_year(table)
+    if args.since:
+        report = report[report["year"] >= args.since]
+    print(report.to_string(index=False))
+    return 0
+
+
+def universe_name(params: dict) -> str:
+    return params["strategy"]["universe"]
+
+
 def cmd_sql(args: argparse.Namespace) -> int:
     con = Store().connect()
     print(con.sql(args.query))
@@ -140,6 +171,11 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--ticker", help="use this instrument's half-spread from universe.toml")
     c.add_argument("--half-spread-bps", type=float)
     c.set_defaults(func=cmd_costs)
+
+    m = sub.add_parser("membership", help="universe membership by date for a strategy (spec §3)")
+    m.add_argument("--strategy", default="etf_pullback_v1")
+    m.add_argument("--since", type=int, default=2005, help="first year shown in the report")
+    m.set_defaults(func=cmd_membership)
 
     s = sub.add_parser("sql", help="query curated data with DuckDB (view: bars)")
     s.add_argument("query")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import tomllib
 from dataclasses import dataclass
@@ -91,6 +93,25 @@ def load_universe(raw: dict | None = None) -> Universe:
         benchmark_fallback=raw["benchmark"]["fallback_ticker"],
         instruments=tuple(instruments),
     )
+
+
+def load_strategy(name: str) -> dict:
+    """Parameters of a strategy: config/strategies/<name>.toml (e.g. etf_pullback_v1)."""
+    return load_toml(f"strategies/{name}.toml")
+
+
+def strategy_version(name: str) -> str:
+    """SHA-256 of canonical JSON {"strategy": params, "universe": candidates} (spec, header)."""
+    strategy = load_strategy(name)
+    universe = load_toml(f"universes/{strategy['strategy']['universe']}.toml")
+    canonical = json.dumps(
+        {"strategy": strategy, "universe": universe},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def load_named_universe(name: str, raw: dict | None = None) -> Universe:
