@@ -101,6 +101,19 @@ def split_events(bars: pd.DataFrame) -> pd.DataFrame:
     return ev.assign(date=pd.to_datetime(ev["date"])).reset_index(drop=True)
 
 
+def split_scale(bars: pd.DataFrame) -> pd.Series:
+    """S(d) = product of split ratios with ex-date > d (spec §1): raw price = adjusted x S(d).
+
+    This uses later split events only to undo the vendor's retroactive split adjustment, i.e. to
+    recover the price that actually traded on d — information that was known on d. It never
+    feeds a signal condition.
+    """
+    ratio = bars["splits"].fillna(0.0).replace(0.0, 1.0).to_numpy(dtype=float)
+    after = ratio[::-1].cumprod()[::-1]  # product over x >= d
+    scale = after / ratio  # exclude d itself -> product over x > d
+    return pd.Series(scale, index=bars.index)
+
+
 def next_session(sessions: pd.DatetimeIndex, t: pd.Timestamp) -> pd.Timestamp | None:
     """The first session strictly after t (sessions must be sorted)."""
     i = sessions.searchsorted(pd.Timestamp(t), side="right")

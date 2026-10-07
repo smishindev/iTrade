@@ -177,6 +177,49 @@ def cmd_calendar(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_signals(args: argparse.Namespace) -> int:
+    """Raw entry signals (before risk limits and portfolio state) for manual review."""
+    import pandas as pd
+
+    from itrade.backtest.inputs import load_inputs
+    from itrade.strategies.etf_pullback_v1 import entry_signals
+
+    inputs = load_inputs(args.strategy)
+    days = inputs.sessions[(inputs.sessions >= args.start) & (inputs.sessions <= args.end)]
+    rows = []
+    for t in days:
+        cands, skipped = entry_signals(t, inputs.prepared, set(), inputs.signal_params)
+        for rank, c in enumerate(cands, 1):
+            rows.append(
+                {
+                    "date": t.date(),
+                    "rank": rank,
+                    "ticker": c.ticker,
+                    "rsi": round(c.rsi, 2),
+                    "adv_musd": round(c.adv / 1e6, 1),
+                    "close": c.close_raw,
+                    "limit": c.limit,
+                    "stop": c.stop,
+                    "skip": "",
+                }
+            )
+        rows += [{"date": t.date(), "ticker": s.ticker, "skip": s.reason} for s in skipped]
+    table = pd.DataFrame(rows)
+    if "rank" in table:
+        table["rank"] = table["rank"].astype("Int64")
+    out = Store().derived_dir / "signals" / f"{args.strategy}_{args.start}_{args.end}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(out, index=False)
+    taken = table[table["skip"] == ""] if len(table) else table
+    print(
+        f"{len(days)} sessions, {len(taken)} entry signals, "
+        f"{len(table) - len(taken)} skipped -> {out}"
+    )
+    if len(table):
+        print(table["skip"].replace("", "signal").value_counts().to_string())
+    return 0
+
+
 def universe_name(params: dict) -> str:
     return params["strategy"]["universe"]
 
@@ -227,6 +270,12 @@ def build_parser() -> argparse.ArgumentParser:
     cal.add_argument("--start", default="2005-01-01")
     cal.add_argument("--end", default="2030-12-31")
     cal.set_defaults(func=cmd_calendar)
+
+    sg = sub.add_parser("signals", help="raw entry signals for manual review (no risk limits)")
+    sg.add_argument("--strategy", default="etf_pullback_v1")
+    sg.add_argument("--start", default="2010-01-01")
+    sg.add_argument("--end", default="2010-12-31")
+    sg.set_defaults(func=cmd_signals)
 
     s = sub.add_parser("sql", help="query curated data with DuckDB (view: bars)")
     s.add_argument("query")
