@@ -220,6 +220,58 @@ def cmd_signals(args: argparse.Namespace) -> int:
     return 0
 
 
+FINAL_FLAG = "i_understand_this_runs_once"
+
+
+def cmd_backtest(args: argparse.Namespace) -> int:
+    """Run a registered variant over a period, write the report, append the research ledger."""
+    import os
+    from pathlib import Path
+
+    from itrade.backtest.ledger import FinalAlreadyRun, LedgerRow, append, check_final_allowed
+    from itrade.backtest.report import fmt, write_report
+    from itrade.backtest.runner import random_control, run_variant
+    from itrade.config import project_root
+
+    ledger = project_root() / "docs" / "research-log.md"
+    if args.period == "final":
+        if not getattr(args, FINAL_FLAG):
+            print(
+                "The final period runs ONCE per hypothesis. Re-run with "
+                "--i-understand-this-runs-once after recording the choice (P1.A.29)."
+            )
+            return 2
+        try:
+            check_final_allowed(ledger)
+        except FinalAlreadyRun as exc:
+            print(f"REFUSED: {exc}")
+            return 3
+
+    run = run_variant(args.strategy, args.variant, args.period)
+    workers = args.workers or max(1, (os.cpu_count() or 2) - 2)
+    control = random_control(run, args.control, workers) if args.control else None
+    report = write_report(run, Store().root / "research", control)
+    s = report.summary
+    lo, hi = report.expectancy_ci
+    pct = report.control_percentile
+    number = append(ledger, LedgerRow(
+        date=str(market_today()), variant=run.variant + (" (diag)" if run.diagnostic else ""),
+        period=run.period, trades=s.trades,
+        expectancy=f"{fmt(s.expectancy_r)} ({fmt(lo)} … {fmt(hi)})",
+        win_rate=fmt(s.win_rate, True), max_dd=fmt(s.max_drawdown, True),
+        control=f"{pct:.1f}" if pct is not None else "—",
+        notes=f"run `{report.run_id}`, exec {fmt(s.executable_share, True)}, "
+              f"costs {fmt(s.costs_r)}R, v`{report.meta['strategy_version'][:8]}`",
+    ))  # fmt: skip
+    print(
+        f"ledger row #{number}: {run.variant} / {run.period}: {s.trades} trades, expectancy "
+        f"{fmt(s.expectancy_r)} R ({fmt(lo)} … {fmt(hi)}), control "
+        f"{f'{pct:.1f}' if pct is not None else 'not run'}"
+    )
+    print(f"report: {Path(report.directory) / 'report.md'}")
+    return 0
+
+
 def universe_name(params: dict) -> str:
     return params["strategy"]["universe"]
 
@@ -276,6 +328,15 @@ def build_parser() -> argparse.ArgumentParser:
     sg.add_argument("--start", default="2010-01-01")
     sg.add_argument("--end", default="2010-12-31")
     sg.set_defaults(func=cmd_signals)
+
+    bt = sub.add_parser("backtest", help="run a registered variant; report + research ledger")
+    bt.add_argument("--strategy", default="etf_pullback_v1")
+    bt.add_argument("--variant", default="base")
+    bt.add_argument("--period", choices=["development", "validation", "final"], required=True)
+    bt.add_argument("--control", type=int, default=0, help="random-control runs (spec §10)")
+    bt.add_argument("--workers", type=int, default=0, help="processes for the control")
+    bt.add_argument(f"--{FINAL_FLAG.replace('_', '-')}", dest=FINAL_FLAG, action="store_true")
+    bt.set_defaults(func=cmd_backtest)
 
     s = sub.add_parser("sql", help="query curated data with DuckDB (view: bars)")
     s.add_argument("query")
