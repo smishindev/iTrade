@@ -19,7 +19,8 @@ A и B идут параллельно: B ждёт счёт IBKR (этап 0), A
 
 ### A.1 Спецификация
 
-### [ ] P1.A.01 · 🤖 Спецификация `ETF_PULLBACK_V1` · 2 ч
+### [x] P1.A.01 · 🤖 Спецификация `ETF_PULLBACK_V1` · 2 ч
+> 7 октября 2026: `docs/STRATEGY_ETF_PULLBACK_V1.md` + `config/strategies/etf_pullback_v1.toml`, версия `0bd2d34b…`; 13 вариантов (10 кандидатов, 3 диагностики).
 **Цель:** правила записаны однозначно **до** любого запуска: две реализации (Python и C#) должны давать одно и то же.
 **Где:** `docs/STRATEGY_ETF_PULLBACK_V1.md`, `config/strategies/etf_pullback_v1.toml`.
 **Шаги:**

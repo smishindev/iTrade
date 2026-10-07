@@ -1,0 +1,115 @@
+# ETF_PULLBACK_V1 — every parameter of the strategy, risk policy, simulation and research protocol.
+# Specification: docs/STRATEGY_ETF_PULLBACK_V1.md. The strategy version is the SHA-256 of the
+# canonical JSON of this file (keys sorted, no whitespace) — any change here is a new version.
+# Written 2026-10-07, before any backtest run (pre-registration).
+
+[strategy]
+id = "ETF_PULLBACK_V1"
+universe = "etf_pullback_v1"              # config/universes/etf_pullback_v1.toml
+
+[indicators]
+trend_sma = 200                           # close > SMA(trend_sma)
+rsi_period = 2                            # Wilder RSI
+atr_period = 14                           # Wilder ATR
+exit_sma = 5                              # exit when close > SMA(exit_sma)
+liquidity_window = 20                     # sessions for average dollar volume
+
+[entry]
+rsi_max = 10.0                            # RSI(rsi_period) <= rsi_max
+limit_atr = 0.5                           # LOO limit = close + limit_atr * ATR
+skip_if_next_session_ex_dividend = true
+
+[exit]
+stop_atr = 2.0                            # stop = close(signal) - stop_atr * ATR(signal)
+max_hold_sessions = 10                    # entry session = 1; exit at next open after session 10
+
+[universe_rules]
+min_history_sessions = 756                # 3 years * 252 sessions of data before membership
+min_avg_dollar_volume_usd = 50_000_000
+
+[risk]
+initial_capital_usd = 3280                # 10,000 ILS at USD/ILS 3.05 (2026-10-06)
+risk_per_trade = 0.0025                   # 0.25% of equity = 1R budget
+max_open_positions = 3
+max_total_open_risk = 0.0075              # open positions + pending entries
+max_position_fraction = 0.20              # of equity, at the limit price
+max_invested_fraction = 0.60
+max_group_fraction = 0.30                 # instruments in the same correlation group
+max_order_notional_usd = 700
+max_cost_in_r = 0.15                      # skip if expected round-trip cost > 0.15 * planned risk
+share_granularity = "whole"               # "whole" | "fractional"
+fractional_step = 0.0001                  # used only when share_granularity = "fractional"
+tick_size = 0.01
+
+[simulation]
+fill_entry = "open"                       # LOO: filled at the open if open <= limit
+fill_exit = "open"                        # MOO: filled at the open
+fill_stop = "stop_or_gap_open"            # min(open, stop) if low <= stop
+dividend_withholding = 0.25
+settlement = [                            # US equity settlement cycle by trade date
+  { from = "1995-06-07", days = 3 },
+  { from = "2017-09-05", days = 2 },
+  { from = "2024-05-28", days = 1 },
+]
+
+[periods]
+development = { start = "2006-01-03", end = "2016-12-30" }
+validation  = { start = "2017-01-03", end = "2020-12-31" }
+final       = { start = "2021-01-04", end = "2026-09-30" }   # runs once
+
+[control]
+runs = 1000
+base_seed = 20261007
+
+[criteria]                                # all must hold on the final period (PLAN §5.7)
+min_expectancy_r = 0.10
+expectancy_ci_level = 0.90                # lower bound of this bootstrap interval must be > 0
+bootstrap_samples = 10000
+min_trades = 100
+min_control_percentile = 95
+max_drawdown = 0.05
+min_executable_signal_share = 0.70
+
+# Pre-registered variants (max 20 per hypothesis). Each overrides keys of the base above.
+# "diagnostic" variants are never eligible for the final run.
+[[variants]]
+name = "base"
+[[variants]]
+name = "rsi5"
+overrides = { "entry.rsi_max" = 5.0 }
+[[variants]]
+name = "rsi15"
+overrides = { "entry.rsi_max" = 15.0 }
+[[variants]]
+name = "sma150"
+overrides = { "indicators.trend_sma" = 150 }
+[[variants]]
+name = "sma250"
+overrides = { "indicators.trend_sma" = 250 }
+[[variants]]
+name = "exit_sma3"
+overrides = { "indicators.exit_sma" = 3 }
+[[variants]]
+name = "exit_sma10"
+overrides = { "indicators.exit_sma" = 10 }
+[[variants]]
+name = "hold5"
+overrides = { "exit.max_hold_sessions" = 5 }
+[[variants]]
+name = "hold15"
+overrides = { "exit.max_hold_sessions" = 15 }
+[[variants]]
+name = "fractional"
+overrides = { "risk.share_granularity" = "fractional" }
+[[variants]]
+name = "costs_x2"
+diagnostic = true
+overrides = { "costs.multiplier" = 2.0 }
+[[variants]]
+name = "skip_one_day_per_week"
+diagnostic = true
+overrides = { "operations.skip_weekday" = "Wednesday" }
+[[variants]]
+name = "no_stop"
+diagnostic = true
+overrides = { "exit.stop_atr" = 0.0 }

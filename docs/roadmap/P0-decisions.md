@@ -84,7 +84,8 @@ _Цель этапа: всё, что нужно до начала работы, 
 ### [x] P0.2.06 · 🤝 Установить и настроить IB Gateway · 1 ч · после: P0.2.04
 > 7 октября 2026: IB Gateway (Stable) установлен, вход в Free Trial («Simulated Trading») работает; API: порт 4002,
 > Read-Only ✓, только localhost ✓, Trusted IP 127.0.0.1 ✓. «Maintain and resubmit orders when connection is restored» = ✓
-> (по умолчанию) — решение по нему в P1.B.15. Lock and Exit → Auto restart — проверить владельцу.
+> (по умолчанию) — решение по нему в P1.B.15. Lock and Exit → **Auto restart в 09:25** (время ПК, Израиль) —
+> вне торговой сессии США и вне вечернего окна работы с программой.
 **Шаги:**
 1. С официального сайта IBKR скачайте **IB Gateway — Stable** для Windows и установите.
 2. Запустите, выберите **IB API** и режим **Paper Trading**, войдите логином paper-счёта.
