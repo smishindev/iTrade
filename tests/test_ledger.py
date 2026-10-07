@@ -59,3 +59,16 @@ def test_cli_final_needs_explicit_flag(capsys):
     assert args.i_understand_this_runs_once is True
     with pytest.raises(SystemExit):
         build_parser().parse_args(["backtest", "--period", "train"])
+
+
+def test_latest_run_id_per_variant_supersedes_earlier_rows(tmp_path):
+    from itrade.backtest.ledger import latest_run_ids
+
+    p = tmp_path / "log.md"
+    p.write_text(TEMPLATE, encoding="utf-8")
+    for variant, run_id in [("base", "a1"), ("no_stop (diag)", "b1"), ("no_stop (diag)", "b2")]:
+        append(
+            p, LedgerRow("d", variant, "validation", 1, "x", "x", "x", "x", f"run `{run_id}`, x")
+        )
+    append(p, LedgerRow("d", "base", "development", 1, "x", "x", "x", "x", "run `dev`, x"))
+    assert latest_run_ids(p, "validation") == {"base": "a1", "no_stop": "b2"}

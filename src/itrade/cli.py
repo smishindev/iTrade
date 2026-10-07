@@ -272,6 +272,23 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compare(args: argparse.Namespace) -> int:
+    """Markdown comparison of every variant run on a period (current strategy version only)."""
+    from itrade.backtest.compare import comparison_markdown, load_runs
+    from itrade.backtest.ledger import latest_run_ids
+    from itrade.config import load_strategy, project_root, strategy_version
+
+    params = load_strategy(args.strategy)
+    version = strategy_version(args.strategy)
+    latest = set(latest_run_ids(project_root() / "docs" / "research-log.md", args.period).values())
+    runs = load_runs(Store().root / "research", args.period, version, latest)
+    if runs.empty:
+        print(f"no {args.period} runs of strategy version {version[:8]}")
+        return 1
+    print(comparison_markdown(runs, params, args.period))
+    return 0
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     """Re-derive sampled trades from bars and the spec; charts + review.md next to the report.
     Does not touch the research ledger (the run itself is logged by `backtest`)."""
@@ -359,6 +376,11 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument(f"--{FINAL_FLAG.replace('_', '-')}", dest=FINAL_FLAG, action="store_true")
     bt.set_defaults(func=cmd_backtest)
 
+    cp = sub.add_parser("compare", help="variant comparison + pre-registered selection rule")
+    cp.add_argument("--strategy", default="etf_pullback_v1")
+    cp.add_argument("--period", choices=["development", "validation"], default="validation")
+    cp.set_defaults(func=cmd_compare)
+
     rv = sub.add_parser("review", help="re-check sampled trades against the spec + charts")
     rv.add_argument("--strategy", default="etf_pullback_v1")
     rv.add_argument("--variant", default="base")
@@ -374,6 +396,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # reports print → … ✓ on a cp1252 console
     return args.func(args)
 
 

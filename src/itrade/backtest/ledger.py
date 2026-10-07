@@ -41,6 +41,18 @@ def final_runs(path: Path) -> list[list[str]]:
     return [r for r in _rows(path.read_text(encoding="utf-8")) if len(r) > 3 and r[3] == "final"]
 
 
+RUN_ID = re.compile(r"run `([^`]+)`")
+
+
+def latest_run_ids(path: Path, period: str) -> dict[str, str]:
+    """variant -> run id of its latest ledger row on `period` (a re-run after a fix supersedes)."""
+    out: dict[str, str] = {}
+    for r in _rows(path.read_text(encoding="utf-8")):
+        if len(r) > 9 and r[3] == period and (m := RUN_ID.search(r[9])):
+            out[r[2].removesuffix(" (diag)")] = m.group(1)
+    return out
+
+
 class FinalAlreadyRun(RuntimeError):
     pass
 
