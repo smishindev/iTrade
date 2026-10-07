@@ -91,9 +91,9 @@ SECRET_ASSIGNMENT = re.compile(
     """
 )
 
-# IBKR account numbers: "U" (live) or "DU" (paper) followed by 6-9 digits. Fixtures and docs use
-# all-zero placeholders (DU0000000 / U0000000) instead of real numbers.
-ACCOUNT_ID = re.compile(r"\bD?U(?!0{6,9}\b)\d{6,9}\b")
+# IBKR account numbers: "U" (live) or "DU" (paper), optionally one more letter (free-trial accounts),
+# followed by 6-9 digits. Fixtures and docs use all-zero placeholders (DU0000000 / U0000000).
+ACCOUNT_ID = re.compile(r"\bD?U[A-Z]?(?!0{6,9}\b)\d{6,9}\b")
 
 # C# code that touches the official IBKR TWS API (namespace IBApi).
 CSHARP_BROKER_CODE = re.compile(r"\busing\s+IBApi\b|\bIBApi\.|\bEClientSocket\b|\.placeOrder\s*\(")

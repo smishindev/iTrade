@@ -11,9 +11,9 @@ if echo "$staged" | grep -Eq '^data/|(^|/)\.env|\.pem$|\.key$|appsettings\.Local
     exit 1
 fi
 
-# Real IBKR account numbers ("U" or "DU" followed by 6-9 digits) must never be committed;
+# Real IBKR account numbers ("U"/"DU", optional letter, then 6-9 digits) must never be committed;
 # all-zero placeholders are fine.
-if git diff --cached -U0 | grep -E '^\+' | grep -E '\bD?U[0-9]{6,9}\b' | grep -vqE '\bD?U0{6,9}\b'; then
+if git diff --cached -U0 | grep -E '^\+' | grep -E '\bD?U[A-Z]?[0-9]{6,9}\b' | grep -vqE '\bD?U[A-Z]?0{6,9}\b'; then
     echo "pre-commit: staged changes contain what looks like a real IBKR account number." >&2
     echo "Replace it with an all-zero placeholder (D)U0000000." >&2
     exit 1
