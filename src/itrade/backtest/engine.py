@@ -58,6 +58,27 @@ class PendingEntry:
     planned_risk: Decimal
 
 
+class FastFrame:
+    """Read-only, date-keyed view of a DataFrame with the two operations the simulation uses:
+    `d in frame.index` and `frame.loc[d][column]`. Same values, ~20x faster than pandas
+    row lookups in the day loop."""
+
+    __slots__ = ("loc",)
+
+    def __init__(self, rows: dict[pd.Timestamp, dict]):
+        self.loc = rows
+
+    @property
+    def index(self):  # dict keys: O(1) membership, picklable via `loc`
+        return self.loc.keys()
+
+    @classmethod
+    def of(cls, frame: pd.DataFrame | FastFrame) -> FastFrame:
+        if isinstance(frame, FastFrame):
+            return frame
+        return cls({pd.Timestamp(k): v for k, v in frame.to_dict("index").items()})
+
+
 @dataclass
 class BacktestResult:
     trades: pd.DataFrame
@@ -106,6 +127,8 @@ def run_backtest(
     st = _State(Account(initial_capital, sessions, rules))
     tickers = sorted(market)
     mult = options.cost_multiplier
+    market = {t: FastFrame.of(f) for t, f in market.items()}
+    prepared = {t: FastFrame.of(f) for t, f in prepared.items()}
 
     def cost(ticker: str, qty: Decimal, price: Decimal, side: str) -> Decimal:
         return order_cost(cost_cfg, qty, price, side, info[ticker].half_spread_bps, mult)
