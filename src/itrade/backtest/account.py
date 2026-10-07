@@ -147,7 +147,11 @@ class Account:
         if price <= ZERO or costs < ZERO:
             raise AccountError(f"{ticker}: invalid sell price={price} costs={costs}")
         proceeds = pos.qty * price - costs
-        settle_on = add_sessions(self.sessions, pd.Timestamp(d), settlement_days(self.rules, d))
+        try:
+            settle_on = add_sessions(self.sessions, pd.Timestamp(d), settlement_days(self.rules, d))
+        except ValueError:
+            # Settlement falls after the calendar ends: counted in equity, never spendable.
+            settle_on = pd.Timestamp.max
         self.unsettled.append((settle_on, proceeds))
         return Closed(pos, pd.Timestamp(d), price, costs, proceeds)
 
