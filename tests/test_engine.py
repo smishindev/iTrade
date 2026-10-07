@@ -90,9 +90,11 @@ def cost(qty, price, side):
     return order_cost(COSTS, D(qty), D(price), side, 2.0)
 
 
+OPENS_RT = [20.0, 20.10, 20.0, 20.0, 20.40, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+
+
 def test_one_round_trip_by_hand():
-    opens = [20.0, 20.10, 20.0, 20.0, 20.40, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
-    res = run(*scenario(opens=opens))
+    res = run(*scenario(opens=OPENS_RT))
     assert len(res.trades) == 1
     t = res.trades.iloc[0]
     # sized at q = 7 (budget $8.20 = 7 x $1.00 risk + round-trip costs; see test_risk)
@@ -159,3 +161,34 @@ def test_owner_absent_on_signal_day_means_no_order():
 def test_deterministic(_):
     a, b = run(*scenario()), run(*scenario())
     assert a.trades_hash() == b.trades_hash()
+
+
+def test_costs_x2_doubles_realised_costs_but_not_the_sizing_decision():
+    base = run(*scenario(opens=OPENS_RT)).trades.iloc[0]
+    x2 = run(*scenario(opens=OPENS_RT), options=RunOptions(cost_multiplier=2.0)).trades.iloc[0]
+    assert x2.qty == base.qty  # the cost gate and sizing use the cost model, as live would
+    for col in ("entry_costs", "exit_costs"):  # x2 applies before rounding to 1/100 cent
+        assert abs(x2[col] - 2 * base[col]) <= D("0.0001")
+    assert x2.r < base.r
+
+
+def test_no_stop_keeps_risk_unit_but_never_stops_out():
+    lows = [19.9, 19.0] + [19.9] * 10  # touches the 19.20 stop on the entry day
+    opens = [20.0, 20.10, 19.0] + [20.0] * 9  # and gaps below it the next day
+    res = run(
+        *scenario(opens=opens, lows=lows, exit_day=1), options=RunOptions(protective_stop=False)
+    )
+    t = res.trades.iloc[0]
+    assert t.stop == D("19.20") and t.qty == 7  # sized on the 2 ATR stop, as base
+    assert (t.exit_reason, t.exit_date, t.exit_price) == ("exit_sma", SESSIONS[2], D("19.0000"))
+    assert t.r < -1  # the loss the stop would have capped
+
+
+def test_registered_diagnostics_map_to_run_options():
+    from itrade.backtest.variants import apply_variant
+
+    params, options, diag = apply_variant(PARAMS, "no_stop")
+    assert diag and not options.protective_stop
+    assert params["exit"]["stop_atr"] == PARAMS["exit"]["stop_atr"]  # R unit unchanged
+    params, options, diag = apply_variant(PARAMS, "costs_x2")
+    assert diag and options.cost_multiplier == 2.0 and options.protective_stop

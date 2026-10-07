@@ -106,6 +106,9 @@ class _State:
     signals: int = 0
 
 
+ZERO_PRICE = Decimal(0)  # a "stop" no open price can reach (no_stop diagnostic)
+
+
 def run_backtest(
     market: Mapping[str, pd.DataFrame],
     prepared: Mapping[str, pd.DataFrame],
@@ -154,7 +157,8 @@ def run_backtest(
             b = bar(ticker, d)
             if b is None or ticker not in acct.positions:
                 continue  # no bar: the exit waits for the next session
-            fill = fill_open_exit(acct.positions[ticker].stop, b, reason)
+            stop = acct.positions[ticker].stop if options.protective_stop else ZERO_PRICE
+            fill = fill_open_exit(stop, b, reason)
             close_position(ticker, d, fill.price, fill.reason)
             del st.pending_exits[ticker]
         for pe in st.pending_entries:
@@ -175,7 +179,7 @@ def run_backtest(
         st.pending_entries = []
 
         # 2. Intraday stops (including positions opened at today's open).
-        for ticker in list(acct.positions):
+        for ticker in list(acct.positions) if options.protective_stop else []:
             b = bar(ticker, d)
             if b is None:
                 continue
@@ -222,7 +226,8 @@ def run_backtest(
         st.skipped += [_skip(s.date, s.ticker, s.reason) for s in skipped]
         for c in candidates:
             state = PortfolioState(equity, acct.available(), _exposures(st, info))
-            rt = cost_model_round_trip(cost_cfg, info[c.ticker].half_spread_bps, mult)
+            # Decisions price costs with the model; a cost multiplier hits realised fills only.
+            rt = cost_model_round_trip(cost_cfg, info[c.ticker].half_spread_bps)
             res = size_entry(
                 c.limit,
                 c.stop,

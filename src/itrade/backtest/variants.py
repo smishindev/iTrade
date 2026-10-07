@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
 class RunOptions:
     """Overrides that are not strategy parameters but simulation/operations settings."""
 
-    cost_multiplier: float = 1.0
+    cost_multiplier: float = 1.0  # realised costs only; sizing and the cost gate use the model
     skip_weekday: str | None = None  # e.g. "Wednesday": no decisions after that session's close
+    protective_stop: bool = True  # False: no stop order; the 2 ATR level stays the sizing/R unit
 
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
@@ -32,11 +33,15 @@ def apply_variant(params: dict, name: str) -> tuple[dict, RunOptions, bool]:
     for key, value in variant.get("overrides", {}).items():
         section, _, field = key.partition(".")
         if section == "costs" and field == "multiplier":
-            options = RunOptions(float(value), options.skip_weekday)
+            options = replace(options, cost_multiplier=float(value))
         elif section == "operations" and field == "skip_weekday":
             if value not in WEEKDAYS:
                 raise ValueError(f"skip_weekday must be one of {WEEKDAYS}")
-            options = RunOptions(options.cost_multiplier, value)
+            options = replace(options, skip_weekday=value)
+        elif key == "exit.stop_atr" and float(value) == 0.0:
+            # Registered as `stop_atr = 0` (no_stop). Read as "no protective stop order", not
+            # "stop at the close": sizing and R keep the base 2 ATR distance (spec §9).
+            options = replace(options, protective_stop=False)
         else:
             if section not in out or field not in out[section]:
                 raise KeyError(f"variant {name!r} overrides unknown key {key!r}")
