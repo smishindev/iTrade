@@ -272,6 +272,27 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    """Re-derive sampled trades from bars and the spec; charts + review.md next to the report.
+    Does not touch the research ledger (the run itself is logged by `backtest`)."""
+    from itrade.backtest.engine import market_frame
+    from itrade.backtest.report import provenance, review_sample
+    from itrade.backtest.review import write_review
+    from itrade.backtest.runner import run_variant
+
+    run = run_variant(args.strategy, args.variant, args.period)
+    trades = run.result.trades
+    sample = trades if args.n == 0 else review_sample(trades, args.n)
+    run_id = f"{run.variant}_{run.period}_{provenance(run)['trades_sha256'][:8]}"
+    out = Store().root / "research" / run_id / "review"
+    market = {t: market_frame(b) for t, b in run.inputs.bars.items()}
+    n, failed = write_review(
+        sample, market, run.inputs.prepared, run.inputs.sessions, run.inputs.signal_params, out
+    )
+    print(f"{n} trades reviewed, {failed} with a failed check: {out / 'review.md'}")
+    return 1 if failed else 0
+
+
 def universe_name(params: dict) -> str:
     return params["strategy"]["universe"]
 
@@ -337,6 +358,13 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--workers", type=int, default=0, help="processes for the control")
     bt.add_argument(f"--{FINAL_FLAG.replace('_', '-')}", dest=FINAL_FLAG, action="store_true")
     bt.set_defaults(func=cmd_backtest)
+
+    rv = sub.add_parser("review", help="re-check sampled trades against the spec + charts")
+    rv.add_argument("--strategy", default="etf_pullback_v1")
+    rv.add_argument("--variant", default="base")
+    rv.add_argument("--period", choices=["development", "validation"], default="development")
+    rv.add_argument("--n", type=int, default=20, help="trades to sample (0 = all)")
+    rv.set_defaults(func=cmd_review)
 
     s = sub.add_parser("sql", help="query curated data with DuckDB (view: bars)")
     s.add_argument("query")

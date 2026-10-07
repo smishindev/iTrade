@@ -57,3 +57,4 @@ three hypotheses before the project is reconsidered).
 
 | # | Date | Variant | Period | Trades | Exp. R (90% CI) | Win % | Max DD | Control pct | Notes |
 |---|------|---------|--------|--------|-----------------|-------|--------|-------------|-------|
+| 1 | 2026-10-07 | base | development | 668 | -0.155 (-0.216 … -0.097) | 54.2% | 10.8% | 49.7 | run `base_development_eaae0591`, exec 59.9%, costs 0.206R, v`843f5684` |
