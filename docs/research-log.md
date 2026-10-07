@@ -53,6 +53,17 @@ three hypotheses before the project is reconsidered).
 
 ---
 
+## Decision P1.A.29 (2026-10-07, owner): H1 rejected on validation — final period not run
+
+- Validation 2017–2020 (ledger #2–#17, report `docs/spikes/hypothesis-A-validation.md`): every one of the 14 variants
+  is negative after costs, upper 90% bound < 0 for all; base −0.177R (−0.270 … −0.081), 283 trades, random-control
+  percentile 35.9; gross (before costs) +0.015R — no edge even at zero cost. The selection rule gives `base`.
+- Review P1.A.28 (quant-reviewer): no bug or look-ahead that changes the sign.
+- **Decision:** H1 is rejected without the final run. The final period 2021-01-04 … 2026-09-30 stays **unseen** and is
+  kept for the next hypothesis. This departs from the protocol (one final run per hypothesis) only in the direction of
+  rejection; GATES G1 records it.
+- Hypotheses used: **1 of 3** (SCOPE, stop criteria).
+
 ## Ledger
 
 | # | Date | Variant | Period | Trades | Exp. R (90% CI) | Win % | Max DD | Control pct | Notes |
