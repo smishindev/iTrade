@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Spike B (roadmap P1.B): feasibility checks against IB Gateway (paper only).
+    The official IBKR TWS API C# client is referenced from its local installation, not copied
+    into this repo. Location: $(TwsApiDir) — environment variable TWS_API_DIR, default "D:\TWS API".
+    The version is pinned: the build fails if the installed API is a different version.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>ITrade.Spikes.Ibkr</RootNamespace>
+    <AssemblyName>ibkr-spike</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TwsApiDir Condition="'$(TwsApiDir)' == '' and '$(TWS_API_DIR)' != ''">$(TWS_API_DIR)</TwsApiDir>
+    <TwsApiDir Condition="'$(TwsApiDir)' == ''">D:\TWS API</TwsApiDir>
+    <TwsApiExpectedVersion>10.50.02</TwsApiExpectedVersion>
+    <TwsApiProject>$(TwsApiDir)\source\CSharpClient\client\CSharpAPI.csproj</TwsApiProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(TwsApiProject)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="appsettings.Local.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('appsettings.Local.json')" />
+  </ItemGroup>
+
+  <Target Name="CheckTwsApi" BeforeTargets="ResolveProjectReferences">
+    <Error Condition="!Exists('$(TwsApiProject)')"
+           Text="IBKR TWS API not found at '$(TwsApiDir)'. Install TWS API $(TwsApiExpectedVersion) (interactivebrokers.github.io) or set TWS_API_DIR." />
+    <ReadLinesFromFile File="$(TwsApiDir)\API_VersionNum.txt">
+      <Output TaskParameter="Lines" ItemName="TwsApiVersionLines" />
+    </ReadLinesFromFile>
+    <Error Condition="'@(TwsApiVersionLines)' != 'API_Version=$(TwsApiExpectedVersion)'"
+           Text="TWS API version mismatch: found '@(TwsApiVersionLines)', expected $(TwsApiExpectedVersion). Update TwsApiExpectedVersion deliberately and re-run spike B checks." />
+  </Target>
+
+</Project>
