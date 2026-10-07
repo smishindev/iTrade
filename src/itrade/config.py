@@ -28,6 +28,11 @@ def load_toml(name: str) -> dict:
         return tomllib.load(f)
 
 
+# Named universes are downloaded with their full history: membership rules count the bars that
+# exist in the snapshot (spec §3), so a later start date would delay membership artificially.
+FULL_HISTORY_START = "1990-01-01"
+
+
 @dataclass(frozen=True)
 class Instrument:
     ticker: str
@@ -35,6 +40,7 @@ class Instrument:
     asset_class: str
     half_spread_bps: float | None = None
     kind: str = "instrument"  # "instrument" | "fx"
+    group: str | None = None  # correlation group for portfolio limits
 
 
 @dataclass(frozen=True)
@@ -84,4 +90,29 @@ def load_universe(raw: dict | None = None) -> Universe:
         benchmark=raw["benchmark"]["ticker"],
         benchmark_fallback=raw["benchmark"]["fallback_ticker"],
         instruments=tuple(instruments),
+    )
+
+
+def load_named_universe(name: str, raw: dict | None = None) -> Universe:
+    """A strategy universe from config/universes/<name>.toml (e.g. etf_pullback_v1)."""
+    raw = raw if raw is not None else load_toml(f"universes/{name}.toml")
+    meta = raw["universe"]
+    instruments = tuple(
+        Instrument(
+            ticker=c["ticker"],
+            name=c.get("name", c["ticker"]),
+            asset_class=c.get("category", "unknown"),
+            half_spread_bps=c.get("half_spread_bps"),
+            group=c.get("group"),
+        )
+        for c in raw["candidates"]
+    )
+    return Universe(
+        base_currency="ILS",
+        trading_currency=meta.get("currency", "USD"),
+        calendar=meta.get("calendar", "XNYS"),
+        start_date=FULL_HISTORY_START,
+        benchmark="SPY",  # market reference of the strategy report (spec §7)
+        benchmark_fallback="SPY",
+        instruments=instruments,
     )

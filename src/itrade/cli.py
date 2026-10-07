@@ -7,7 +7,7 @@ import sys
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from itrade.config import load_universe
+from itrade.config import Universe, load_named_universe, load_universe
 from itrade.costs import CostConfig, annual_drag_pct, estimate_trade_cost, round_trip_bps
 from itrade.costs.model import BUY, SELL, fx_usd
 from itrade.data.quality import QualityReport, validate_bars
@@ -31,11 +31,17 @@ def _print_report(report: QualityReport, verbose: bool) -> None:
         print(f"         [{issue.severity}] {issue.check}: {issue.message}")
 
 
+def _universe(args: argparse.Namespace) -> Universe:
+    """--universe NAME → config/universes/NAME.toml; otherwise the default config/universe.toml."""
+    name = getattr(args, "universe", None)
+    return load_named_universe(name) if name else load_universe()
+
+
 def cmd_ingest(args: argparse.Namespace) -> int:
     from itrade.data.ingest import ingest
     from itrade.data.sources import get_source
 
-    universe = load_universe()
+    universe = _universe(args)
     results = ingest(
         universe,
         get_source(args.source),
@@ -57,7 +63,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 
 def cmd_quality(args: argparse.Namespace) -> int:
-    universe = load_universe()
+    universe = _universe(args)
     store = Store()
     print("Quality of curated data:")
     bad = 0
@@ -116,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ing = sub.add_parser("ingest", help="download daily bars, snapshot, validate, promote")
     ing.add_argument("tickers", nargs="*", help="default: whole universe")
+    ing.add_argument("--universe", help="config/universes/<NAME>.toml (full history)")
     ing.add_argument("--source", default="yfinance")
     ing.add_argument("--start", help="override config start_date (YYYY-MM-DD)")
     ing.add_argument("-v", "--verbose", action="store_true", help="show warnings too")
@@ -123,6 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     q = sub.add_parser("quality", help="re-run quality checks on curated data")
     q.add_argument("tickers", nargs="*")
+    q.add_argument("--universe", help="config/universes/<NAME>.toml")
     q.add_argument("-v", "--verbose", action="store_true")
     q.set_defaults(func=cmd_quality)
 

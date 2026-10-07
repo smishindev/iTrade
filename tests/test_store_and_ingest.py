@@ -64,6 +64,27 @@ def test_duckdb_view_over_curated(tmp_path, bars):
     assert n == len(bars)
 
 
+def test_named_universe_etf_pullback_v1():
+    from itrade.config import FULL_HISTORY_START, load_named_universe
+
+    u = load_named_universe("etf_pullback_v1")
+    assert len(u.tickers) == 29 and len(set(u.tickers)) == 29
+    assert u.calendar == "XNYS"
+    assert u.start_date == FULL_HISTORY_START  # full history: membership counts real bars
+    spy = u.get("SPY")
+    assert spy.group == "us_equity" and spy.half_spread_bps == 0.5
+    assert all(i.group and i.half_spread_bps for i in u.instruments)
+
+
+def test_cli_universe_flag_selects_named_universe():
+    from itrade.cli import _universe, build_parser
+
+    args = build_parser().parse_args(["quality", "--universe", "etf_pullback_v1"])
+    assert len(_universe(args).tickers) == 29
+    args = build_parser().parse_args(["quality"])
+    assert "ILS=X" in _universe(args).tickers  # default config/universe.toml
+
+
 def test_read_missing_ticker_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         Store(tmp_path).read_bars("NOPE")

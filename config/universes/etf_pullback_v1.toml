@@ -3,7 +3,9 @@
 # not by this list alone. Plain ETFs only: no leveraged, inverse or ETN products.
 #
 # Fields:
-#   inception       first trading date as remembered — VERIFY against the first bar in P1.A.04
+#   inception       issuer launch date (informational). Checked in P1.A.04 (2026-10-07): the first Yahoo
+#                   bar is 0–13 calendar days after it for every candidate, never before.
+#                   Membership uses the bars actually in the snapshot (spec §3), not this date.
 #   listing         primary exchange — VERIFY with IBKR contract details in P1.B.05 (OPG cut-off depends on it)
 #   group           correlation group for the 30% cap (spec §5.3 #5)
 #   half_spread_bps ASSUMPTION, deliberately conservative; calibrate with IBKR quotes in P1.B.06
