@@ -69,7 +69,7 @@ def test_rules_and_version_from_config():
     assert rules == MembershipRules(756, 50_000_000.0, 20)
     # Pinned on purpose: changing parameters or universe must be a conscious new version.
     assert strategy_version("etf_pullback_v1") == (
-        "f22dcf6f2de17fcfdd345820d6b71593218116c7ff4770cdec4098de0f3b6acf"
+        "843f5684df30daa673a77cc5d3e2c5da1bc9baba32ac72290a3aba465577eba9"
     )
 
 

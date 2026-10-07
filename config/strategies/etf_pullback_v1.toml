@@ -9,6 +9,7 @@ id = "ETF_PULLBACK_V1"
 universe = "etf_pullback_v1"              # config/universes/etf_pullback_v1.toml
 
 [indicators]
+price_series = "dividend_neutral"         # O*,H*,L*,C* = price x M_t (spec §1); "close" = raw split-adjusted
 trend_sma = 200                           # close > SMA(trend_sma)
 rsi_period = 2                            # Wilder RSI
 atr_period = 14                           # Wilder ATR
@@ -114,3 +115,7 @@ overrides = { "operations.skip_weekday" = "Wednesday" }
 name = "no_stop"
 diagnostic = true
 overrides = { "exit.stop_atr" = 0.0 }
+[[variants]]
+name = "raw_close_indicators"
+diagnostic = true
+overrides = { "indicators.price_series" = "close" }

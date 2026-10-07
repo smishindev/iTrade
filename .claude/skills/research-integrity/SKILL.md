@@ -23,8 +23,10 @@ The strategy spec is `docs/STRATEGY_ETF_PULLBACK_V1.md` (PLAN §5); it wins over
    Report costs in R. A zero-cost run is a labelled diagnostic, never a result.
 4. **One account.** Limited, settled (T+1) cash; max positions and risk limits (PLAN §6); signals
    compete in the pre-registered order.
-5. **Prices:** indicators on split-adjusted prices; dividends as separate cash events (25% US
-   withholding). Never adj_close plus dividends (double counting). No new entry when t+1 is an ex-date.
+5. **Prices:** indicators on the **dividend-neutral** series O*,H*,L*,C* = split-adjusted price × M_t,
+   where M_t accumulates only dividends with ex-date ≤ t (spec §1) — never Yahoo adj_close (it is
+   back-adjusted with future dividends). Fills, quantities and costs on raw prices; dividends as
+   separate cash events (25% US withholding). No new entry when t+1 is an ex-date.
 6. **Universe by date.** An instrument joins only when it met the rules on that date (history, liquidity).
    Document closed/merged ETFs that free data cannot include.
 7. **Periods are fixed:** development 2006–2016, validation 2017–2020, **final 2021-01 … 2026-09 runs
