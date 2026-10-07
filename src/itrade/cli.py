@@ -229,9 +229,9 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from itrade.backtest.ledger import FinalAlreadyRun, LedgerRow, append, check_final_allowed
-    from itrade.backtest.report import fmt, write_report
+    from itrade.backtest.report import fmt, git_commit, write_report
     from itrade.backtest.runner import random_control, run_variant
-    from itrade.config import project_root
+    from itrade.config import load_strategy, project_root
 
     ledger = project_root() / "docs" / "research-log.md"
     if args.period == "final":
@@ -246,6 +246,20 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         except FinalAlreadyRun as exc:
             print(f"REFUSED: {exc}")
             return 3
+        required = int(load_strategy(args.strategy)["control"]["runs"])
+        if args.control < required:
+            print(f"REFUSED: the final run needs its random control: --control {required}")
+            return 3
+        commit = git_commit()
+        if commit.endswith("+dirty") or commit == "unknown":
+            print(f"REFUSED: src/ or config/ has uncommitted changes ({commit}); commit first")
+            return 3
+        # Lock first: a crash after this row still counts as the one final run.
+        append(ledger, LedgerRow(
+            date=str(market_today()), variant=args.variant, period="final", trades=0,
+            expectancy="started", win_rate="—", max_dd="—", control="—",
+            notes=f"final run started at `{commit}`; result in the next row",
+        ))  # fmt: skip
 
     run = run_variant(args.strategy, args.variant, args.period)
     workers = args.workers or max(1, (os.cpu_count() or 2) - 2)

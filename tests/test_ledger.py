@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from itrade.backtest.ledger import (
@@ -72,3 +74,44 @@ def test_latest_run_id_per_variant_supersedes_earlier_rows(tmp_path):
         )
     append(p, LedgerRow("d", "base", "development", 1, "x", "x", "x", "x", "run `dev`, x"))
     assert latest_run_ids(p, "validation") == {"base": "a1", "no_stop": "b2"}
+
+
+@pytest.fixture
+def fake_project(tmp_path, monkeypatch):
+    import itrade.backtest.report as report
+    import itrade.backtest.runner as runner
+    import itrade.config as config
+
+    shutil.copytree(config.project_root() / "config", tmp_path / "config")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "research-log.md").write_text(TEMPLATE, encoding="utf-8")
+    monkeypatch.setattr(config, "project_root", lambda: tmp_path)
+    monkeypatch.setattr(report, "git_commit", lambda: "abc1234")
+
+    def crash(*args, **kwargs):
+        raise RuntimeError("simulated crash during the final run")
+
+    monkeypatch.setattr(runner, "run_variant", crash)
+    return tmp_path / "docs" / "research-log.md", report
+
+
+FINAL = ["backtest", "--period", "final", "--i-understand-this-runs-once"]
+
+
+def test_final_needs_its_control_and_a_clean_tree(fake_project, capsys):
+    ledger, report = fake_project
+    assert main(FINAL) == 3
+    assert "--control 1000" in capsys.readouterr().out
+    report.git_commit = lambda: "abc1234+dirty"
+    assert main([*FINAL, "--control", "1000"]) == 3
+    assert "uncommitted" in capsys.readouterr().out
+    assert final_runs(ledger) == []
+
+
+def test_final_is_locked_before_it_runs(fake_project, capsys):
+    ledger, _ = fake_project
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        main([*FINAL, "--control", "1000"])
+    assert len(final_runs(ledger)) == 1  # the lock row survived the crash
+    assert main([*FINAL, "--control", "1000"]) == 3
+    assert "REFUSED" in capsys.readouterr().out

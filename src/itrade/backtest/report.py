@@ -7,6 +7,7 @@ control (when run), a market reference, and 20 random trades for manual review.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
@@ -72,6 +73,7 @@ def provenance(run: Run) -> dict:
         "data_manifest_sha256": _sha(root / "data" / "curated" / "manifest.json"),
         "costs_sha256": _sha(root / "config" / "costs.toml"),
         "overrides_sha256": overrides_sha256(),
+        "run_options": dataclasses.asdict(run.options),  # not covered by the params hash
         "git": git_commit(),
         "trades_sha256": run.result.trades_hash(),
     }

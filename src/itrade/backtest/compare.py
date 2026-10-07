@@ -85,7 +85,16 @@ class Selection:
     reasons: list[str]
 
 
-def select(runs: pd.DataFrame, params: dict) -> Selection:
+def neighbours(variant: str, params: dict) -> list[str]:
+    """Spec §11 #4: base's neighbours are all candidates; a candidate's are its family members."""
+    fams = families(params).values()
+    if variant == "base":
+        return sorted({m for fam in fams for m in fam} - {"base"})
+    return sorted({m for fam in fams if variant in fam for m in fam} - {variant})
+
+
+def select(runs: pd.DataFrame, params: dict, fractional_confirmed: bool = False) -> Selection:
+    """`fractional_confirmed`: spike B (P1.B.10) accepted fractional shares with a stop."""
     if "base" not in runs.index:
         raise ValueError("base has not been run on this period")
     base = float(runs.loc["base", "expectancy_r"])
@@ -103,6 +112,8 @@ def select(runs: pd.DataFrame, params: dict) -> Selection:
             positive = not missing and all(runs.loc[m, "expectancy_r"] > 0 for m in others)
             beats = e >= base + SELECTION_MARGIN_R
             verdict = "selected" if beats and positive else "no"
+            if name == "fractional" and not fractional_confirmed:
+                verdict = "not eligible until P1.B.10 confirms fractional shares with a stop"
             reasons.append(
                 f"{name} ({key}): {e:+.3f}R vs base {base:+.3f}R, "
                 f"{'beats' if beats else 'does not beat'} by {SELECTION_MARGIN_R}R; "
@@ -117,8 +128,7 @@ def select(runs: pd.DataFrame, params: dict) -> Selection:
 def criteria_check(runs: pd.DataFrame, variant: str, params: dict) -> list[tuple[str, bool]]:
     """The final-period criteria (spec §11) evaluated on this period — information only."""
     c, r = params["criteria"], runs.loc[variant]
-    fam = next((m for m in families(params).values() if variant in m), [variant])
-    neighbours = [m for m in fam if m != variant and m in runs.index]
+    near = [m for m in neighbours(variant, params) if m in runs.index]
     out = [
         (f"expectancy >= +{c['min_expectancy_r']}R", r["expectancy_r"] >= c["min_expectancy_r"]),
         ("90% lower bound > 0", r["ci_low"] > 0),
@@ -134,8 +144,7 @@ def criteria_check(runs: pd.DataFrame, variant: str, params: dict) -> list[tuple
         ),
         (
             "most neighbours > 0",
-            bool(neighbours)
-            and sum(runs.loc[m, "expectancy_r"] > 0 for m in neighbours) > len(neighbours) / 2,
+            bool(near) and sum(runs.loc[m, "expectancy_r"] > 0 for m in near) > len(near) / 2,
         ),
         (
             f"executable >= {c['min_executable_signal_share']:.0%}",

@@ -84,3 +84,13 @@ def test_criteria_and_markdown(tmp_path):
     assert checks["control percentile >= 95"] is False
     md = comparison_markdown(runs, PARAMS, "validation")
     assert "| base | candidate | 150 | +0.120" in md and "Selection rule → `base`" in md
+
+
+def test_base_neighbours_are_all_candidates_and_fractional_waits_for_spike_b(tmp_path):
+    from itrade.backtest.compare import neighbours
+
+    assert len(neighbours("base", PARAMS)) == 9
+    assert neighbours("rsi5", PARAMS) == ["base", "rsi15"]
+    runs = runs_with(tmp_path, {"base": 0.10, "fractional": 0.30})
+    assert select(runs, PARAMS).variant == "base"
+    assert select(runs, PARAMS, fractional_confirmed=True).variant == "fractional"
