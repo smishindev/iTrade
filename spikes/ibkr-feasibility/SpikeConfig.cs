@@ -17,6 +17,7 @@ public sealed record SpikeConfig
     public string ExpectedAccountPrefix { get; init; } = "DU";
     public int ConnectTimeoutSeconds { get; init; } = 15;
     public string LogDirectory { get; init; } = "out";
+    public int MaxReconnectDelaySeconds { get; init; } = 60;
 
     public static SpikeConfig Load(string baseDirectory)
     {
@@ -65,6 +66,7 @@ public sealed record SpikeConfig
                 ExpectedAccountPrefix = overrides.ExpectedAccountPrefix ?? current.ExpectedAccountPrefix,
                 ConnectTimeoutSeconds = overrides.ConnectTimeoutSeconds ?? current.ConnectTimeoutSeconds,
                 LogDirectory = overrides.LogDirectory ?? current.LogDirectory,
+                MaxReconnectDelaySeconds = overrides.MaxReconnectDelaySeconds ?? current.MaxReconnectDelaySeconds,
             };
 
     private sealed record PartialConfig(
@@ -73,5 +75,6 @@ public sealed record SpikeConfig
         int? ClientId,
         string? ExpectedAccountPrefix,
         int? ConnectTimeoutSeconds,
-        string? LogDirectory);
+        string? LogDirectory,
+        int? MaxReconnectDelaySeconds);
 }

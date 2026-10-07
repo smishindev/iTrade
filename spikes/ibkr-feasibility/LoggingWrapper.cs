@@ -11,7 +11,8 @@ namespace ITrade.Spikes.Ibkr;
 public class LoggingWrapper : DispatchProxy
 {
     private MessageLog? _log;
-    private readonly Dictionary<string, Action<object?[]>> _handlers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<Action<object?[]>>> _handlers = new(StringComparer.Ordinal);
+    private readonly Lock _gate = new();
 
     public static (EWrapper Wrapper, LoggingWrapper Control) Create(MessageLog log)
     {
@@ -21,8 +22,31 @@ public class LoggingWrapper : DispatchProxy
         return (wrapper, control);
     }
 
-    /// <summary>Called on the reader thread after logging; keep handlers short.</summary>
-    public void On(string callback, Action<object?[]> handler) => _handlers[callback] = handler;
+    /// <summary>
+    /// Adds a handler (several per callback are allowed). Called on the reader thread after logging;
+    /// keep handlers short. Dispose the result to remove the handler.
+    /// </summary>
+    public IDisposable On(string callback, Action<object?[]> handler)
+    {
+        lock (_gate)
+        {
+            if (!_handlers.TryGetValue(callback, out var list))
+            {
+                list = [];
+                _handlers[callback] = list;
+            }
+
+            list.Add(handler);
+        }
+
+        return new Subscription(() =>
+        {
+            lock (_gate)
+            {
+                _handlers[callback].Remove(handler);
+            }
+        });
+    }
 
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
@@ -41,13 +65,36 @@ public class LoggingWrapper : DispatchProxy
 
         _log?.Write("in", targetMethod.Name, fields);
 
-        // Overloads (e.g. three error(...) variants) share one handler keyed by name + arity.
-        if (_handlers.TryGetValue($"{targetMethod.Name}/{args.Length}", out var handler)
-            || _handlers.TryGetValue(targetMethod.Name, out handler))
+        // Overloads (e.g. three error(...) variants) can be told apart by name + arity ("error/5").
+        Action<object?[]>[] handlers;
+        lock (_gate)
         {
-            handler(args);
+            handlers = [.. Get($"{targetMethod.Name}/{args.Length}"), .. Get(targetMethod.Name)];
+        }
+
+        foreach (var handler in handlers)
+        {
+            try
+            {
+                handler(args);
+            }
+            catch (Exception ex)
+            {
+                // A failing handler must not kill the reader thread.
+                _log?.Write("internal", "handlerException", [new("callback", targetMethod.Name), new("exception", ex.ToString())]);
+                Console.Error.WriteLine($"  handler for {targetMethod.Name} failed: {ex.Message}");
+            }
         }
 
         return null;
+    }
+
+    private List<Action<object?[]>> Get(string key) => _handlers.TryGetValue(key, out var list) ? list : [];
+
+    private sealed class Subscription(Action dispose) : IDisposable
+    {
+        private Action? _dispose = dispose;
+
+        public void Dispose() => Interlocked.Exchange(ref _dispose, null)?.Invoke();
     }
 }
