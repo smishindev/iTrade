@@ -26,9 +26,12 @@ class StrategyInputs:
     prepared: dict[str, pd.DataFrame]
 
 
-def load_inputs(strategy: str = "etf_pullback_v1", store: Store | None = None) -> StrategyInputs:
+def load_inputs(
+    strategy: str = "etf_pullback_v1", store: Store | None = None, params: dict | None = None
+) -> StrategyInputs:
+    """`params` overrides the strategy's TOML (used for registered variants)."""
     store = store or Store()
-    params = load_strategy(strategy)
+    params = params if params is not None else load_strategy(strategy)
     universe = load_named_universe(params["strategy"]["universe"])
     overrides = load_dividend_overrides()
     bars = {t: apply_dividend_overrides(store.read_bars(t), t, overrides) for t in universe.tickers}
