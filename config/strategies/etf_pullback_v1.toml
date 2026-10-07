@@ -1,6 +1,7 @@
 # ETF_PULLBACK_V1 — every parameter of the strategy, risk policy, simulation and research protocol.
 # Specification: docs/STRATEGY_ETF_PULLBACK_V1.md. The strategy version is the SHA-256 of the
-# canonical JSON of this file (keys sorted, no whitespace) — any change here is a new version.
+# canonical JSON of {"strategy": this file, "universe": config/universes/etf_pullback_v1.toml}
+# (keys sorted, no whitespace) — any change in either file is a new version.
 # Written 2026-10-07, before any backtest run (pre-registration).
 
 [strategy]

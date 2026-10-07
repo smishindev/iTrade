@@ -1,0 +1,282 @@
+# Candidate universe for ETF_PULLBACK_V1 (spec §3). Written 2026-10-07, before any backtest run.
+# Membership on a date is decided by the spec rules (>= 756 sessions of data, ADV20 >= $50M),
+# not by this list alone. Plain ETFs only: no leveraged, inverse or ETN products.
+#
+# Fields:
+#   inception       first trading date as remembered — VERIFY against the first bar in P1.A.04
+#   listing         primary exchange — VERIFY with IBKR contract details in P1.B.05 (OPG cut-off depends on it)
+#   group           correlation group for the 30% cap (spec §5.3 #5)
+#   half_spread_bps ASSUMPTION, deliberately conservative; calibrate with IBKR quotes in P1.B.06
+
+[universe]
+id = "etf_pullback_v1"
+calendar = "XNYS"
+currency = "USD"
+
+# --- US equity: broad market -------------------------------------------------------------------
+[[candidates]]
+ticker = "SPY"
+name = "SPDR S&P 500 ETF Trust"
+category = "us_broad"
+group = "us_equity"
+inception = "1993-01-22"
+listing = "ARCA"
+half_spread_bps = 0.5
+
+[[candidates]]
+ticker = "QQQ"
+name = "Invesco QQQ Trust (Nasdaq-100)"
+category = "us_broad"
+group = "us_equity"
+inception = "1999-03-10"
+listing = "NASDAQ"
+half_spread_bps = 0.5
+
+[[candidates]]
+ticker = "IWM"
+name = "iShares Russell 2000 ETF"
+category = "us_broad"
+group = "us_equity"
+inception = "2000-05-22"
+listing = "ARCA"
+half_spread_bps = 1.0
+
+# --- US equity: Select Sector SPDRs ------------------------------------------------------------
+[[candidates]]
+ticker = "XLK"
+name = "Technology Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.0
+
+[[candidates]]
+ticker = "XLF"
+name = "Financial Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLE"
+name = "Energy Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLV"
+name = "Health Care Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLI"
+name = "Industrial Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLY"
+name = "Consumer Discretionary Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLP"
+name = "Consumer Staples Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLU"
+name = "Utilities Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "XLB"
+name = "Materials Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "1998-12-16"
+listing = "ARCA"
+half_spread_bps = 2.0
+
+[[candidates]]
+ticker = "XLRE"
+name = "Real Estate Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "2015-10-07"
+listing = "ARCA"
+half_spread_bps = 3.0
+
+[[candidates]]
+ticker = "XLC"
+name = "Communication Services Select Sector SPDR"
+category = "us_sector"
+group = "us_equity"
+inception = "2018-06-18"
+listing = "ARCA"
+half_spread_bps = 2.0
+
+# --- International developed -------------------------------------------------------------------
+[[candidates]]
+ticker = "EFA"
+name = "iShares MSCI EAFE ETF"
+category = "intl_broad"
+group = "intl_developed"
+inception = "2001-08-14"
+listing = "ARCA"
+half_spread_bps = 1.0
+
+[[candidates]]
+ticker = "EWJ"
+name = "iShares MSCI Japan ETF"
+category = "country"
+group = "intl_developed"
+inception = "1996-03-12"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "EWG"
+name = "iShares MSCI Germany ETF"
+category = "country"
+group = "intl_developed"
+inception = "1996-03-12"
+listing = "ARCA"
+half_spread_bps = 2.0
+
+[[candidates]]
+ticker = "EWU"
+name = "iShares MSCI United Kingdom ETF"
+category = "country"
+group = "intl_developed"
+inception = "1996-03-12"
+listing = "ARCA"
+half_spread_bps = 3.0
+
+[[candidates]]
+ticker = "EWC"
+name = "iShares MSCI Canada ETF"
+category = "country"
+group = "intl_developed"
+inception = "1996-03-12"
+listing = "ARCA"
+half_spread_bps = 3.0
+
+[[candidates]]
+ticker = "EWA"
+name = "iShares MSCI Australia ETF"
+category = "country"
+group = "intl_developed"
+inception = "1996-03-12"
+listing = "ARCA"
+half_spread_bps = 3.0
+
+# --- Emerging markets ----------------------------------------------------------------------------
+[[candidates]]
+ticker = "EEM"
+name = "iShares MSCI Emerging Markets ETF"
+category = "intl_broad"
+group = "emerging"
+inception = "2003-04-07"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+[[candidates]]
+ticker = "EWZ"
+name = "iShares MSCI Brazil ETF"
+category = "country"
+group = "emerging"
+inception = "2000-07-10"
+listing = "ARCA"
+half_spread_bps = 2.0
+
+[[candidates]]
+ticker = "FXI"
+name = "iShares China Large-Cap ETF"
+category = "country"
+group = "emerging"
+inception = "2004-10-05"
+listing = "ARCA"
+half_spread_bps = 2.0
+
+[[candidates]]
+ticker = "INDA"
+name = "iShares MSCI India ETF"
+category = "country"
+group = "emerging"
+inception = "2012-02-02"
+listing = "BATS"
+half_spread_bps = 2.5
+
+[[candidates]]
+ticker = "EWY"
+name = "iShares MSCI South Korea ETF"
+category = "country"
+group = "emerging"
+inception = "2000-05-09"
+listing = "ARCA"
+half_spread_bps = 3.0
+
+# --- Global --------------------------------------------------------------------------------------
+[[candidates]]
+ticker = "VT"
+name = "Vanguard Total World Stock ETF"
+category = "global_broad"
+group = "global_equity"
+inception = "2008-06-24"
+listing = "ARCA"
+half_spread_bps = 1.5
+
+# --- Treasuries ----------------------------------------------------------------------------------
+[[candidates]]
+ticker = "TLT"
+name = "iShares 20+ Year Treasury Bond ETF"
+category = "bonds"
+group = "treasuries"
+inception = "2002-07-22"
+listing = "NASDAQ"
+half_spread_bps = 1.0
+
+[[candidates]]
+ticker = "IEF"
+name = "iShares 7-10 Year Treasury Bond ETF"
+category = "bonds"
+group = "treasuries"
+inception = "2002-07-22"
+listing = "NASDAQ"
+half_spread_bps = 1.0
+
+# --- Gold ----------------------------------------------------------------------------------------
+[[candidates]]
+ticker = "GLD"
+name = "SPDR Gold Shares"
+category = "commodity"
+group = "gold"
+inception = "2004-11-18"
+listing = "ARCA"
+half_spread_bps = 1.0
