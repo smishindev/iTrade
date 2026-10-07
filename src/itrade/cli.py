@@ -163,6 +163,20 @@ def cmd_dividends(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_calendar(args: argparse.Namespace) -> int:
+    from itrade.data.calendar import export_calendar, session_table
+
+    path = export_calendar(Store().root, args.calendar, args.start, args.end)
+    table = session_table(args.calendar, args.start, args.end)
+    per_year = table.groupby(table["session"].dt.year).size()
+    print(f"{args.calendar}: {len(table)} sessions {args.start} .. {args.end} -> {path}")
+    print(
+        f"early closes: {int(table['early_close'].sum())}; sessions per year: "
+        f"min {per_year.min()} max {per_year.max()}"
+    )
+    return 0
+
+
 def universe_name(params: dict) -> str:
     return params["strategy"]["universe"]
 
@@ -207,6 +221,12 @@ def build_parser() -> argparse.ArgumentParser:
     dv.add_argument("--universe", default="etf_pullback_v1")
     dv.add_argument("--since", type=int, default=2005)
     dv.set_defaults(func=cmd_dividends)
+
+    cal = sub.add_parser("calendar", help="export the exchange session calendar to Parquet")
+    cal.add_argument("--calendar", default="XNYS")
+    cal.add_argument("--start", default="2005-01-01")
+    cal.add_argument("--end", default="2030-12-31")
+    cal.set_defaults(func=cmd_calendar)
 
     s = sub.add_parser("sql", help="query curated data with DuckDB (view: bars)")
     s.add_argument("query")
