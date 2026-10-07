@@ -38,6 +38,7 @@ class SignalParams:
     limit_atr: float
     stop_atr: float
     tick_size: Decimal
+    max_hold_sessions: int = 10
 
     @classmethod
     def from_strategy(cls, params: dict) -> SignalParams:
@@ -53,6 +54,7 @@ class SignalParams:
             limit_atr=float(entry["limit_atr"]),
             stop_atr=float(exit_["stop_atr"]),
             tick_size=Decimal(str(params["risk"]["tick_size"])),
+            max_hold_sessions=int(exit_["max_hold_sessions"]),
         )
 
 
@@ -65,6 +67,14 @@ class EntryCandidate:
     close_raw: Decimal
     limit: Decimal  # raw (traded) price, floored to the tick
     stop: Decimal  # raw price, floored to the tick
+
+
+@dataclass(frozen=True)
+class ExitSignal:
+    date: pd.Timestamp  # decided after the close of this session; executes at the next open
+    ticker: str
+    reason: str  # "exit_sma" | "max_hold"
+    holding_sessions: int
 
 
 @dataclass(frozen=True)
@@ -187,3 +197,34 @@ def entry_signals(
         )
     candidates.sort(key=lambda c: (c.rsi, -c.adv, c.ticker))
     return candidates, skipped
+
+
+def holding_sessions(sessions: pd.DatetimeIndex, entry_date: pd.Timestamp, t: pd.Timestamp) -> int:
+    """§4.3: sessions held up to and including t; the entry session counts as 1."""
+    return int(sessions.get_loc(pd.Timestamp(t)) - sessions.get_loc(pd.Timestamp(entry_date))) + 1
+
+
+def exit_signal(
+    t: pd.Timestamp,
+    ticker: str,
+    entry_date: pd.Timestamp,
+    frame: pd.DataFrame,
+    sessions: pd.DatetimeIndex,
+    p: SignalParams,
+) -> ExitSignal | None:
+    """§4.3: after the close of t (t >= entry date) — close* above SMA(exit), else max holding.
+
+    A signal on the entry session itself is allowed: it executes at the next open, so the
+    position can only close on its entry day through the stop (handled by the simulator).
+    """
+    t = pd.Timestamp(t)
+    if t < pd.Timestamp(entry_date):
+        raise ValueError(f"{ticker}: exit check on {t.date()} before entry {entry_date}")
+    h = holding_sessions(sessions, entry_date, t)
+    if t in frame.index:
+        row = frame.loc[t]
+        if not np.isnan(row["sma_exit"]) and row["close_star"] > row["sma_exit"]:
+            return ExitSignal(t, ticker, "exit_sma", h)
+    if h >= p.max_hold_sessions:
+        return ExitSignal(t, ticker, "max_hold", h)
+    return None
