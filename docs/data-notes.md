@@ -55,7 +55,11 @@ USD/ILS (`ILS=X`) is not reliable enough for ILS results — see "Blocking for I
 
 | Ticker | Check | Dates | Reviewed | Explanation / action |
 |--------|-------|-------|----------|----------------------|
-| QQQ; TLT, SHY; VWO; INDA | dividends missing (manual) | QQQ ~2020-09-21; TLT/SHY ~2012-11-01; VWO ~2026-03-20; INDA irregular | 2026-10-07 | Probable missing ex-dividend rows in Yahoo. Effect: the "no entry if t+1 is ex-date" filter misses those days; ~0.1–0.25% of dividend cash not credited. Cross-check with issuer/IBKR in **P1.A.08**. Not blocking. |
+| QQQ | dividend missing → **corrected** | 2020-09-21 | 2026-10-07 | Missing in Yahoo; Nasdaq: **$0.38824**. Added via `config/corporate_actions.toml` (applied in code, data untouched). Screen `itrade dividends` now clean for QQQ. |
+| QQQ, TLT, IEF | reconciliation Yahoo vs Nasdaq | 2020 and 2023, all ex-dates | 2026-10-07 | **All ex-dates identical** except the QQQ row above; Yahoo amounts rounded to $0.001 (|Δ| < $0.0005, immaterial). TLT/IEF 2023-12-14 → 2024-02-01 (no January ex-date) is the real schedule (same at Nasdaq). |
+| TLT | dividend missing, **not corrected** | ~2012-11-01 | 2026-10-07 | Monthly payer; IEF has 2012-11-01. Nasdaq's 2012 TLT history is incomplete, so no second source — amount not invented. Effect: one missed ex-date filter, C* shows a ~0.2% unadjusted drop that day. Accepted. |
+| EWG, EWY, INDA | dividend gaps (screen) | EWG 2011–2014, 2025–2026; EWY 2012–2015; INDA 2022, 2024 | 2026-10-07 | Pattern of annual (EWG, EWY) or irregular (INDA) distributions; second source returned no data. Not corrected. Effect if a payment is missing: one ex-date filter and a small C* drop. Accepted. |
+| SHY, VWO | dividends missing (manual) | SHY ~2012-11-01; VWO ~2026-03-20 | 2026-10-07 | Default universe only — not traded by ETF_PULLBACK_V1. No action. |
 | EWC, EWG, EWZ, EWA, INDA, EWU … | large distributions (manual) | e.g. EWZ 2022-12-13 (6.9%), 2021-12-13 (6.5%), EWA 2008-12-23 (6.5%), INDA 2021-12-13 (5.9%); 117 ex-dates ≥ 2% overall | 2026-10-07 | Not a data error: `close` is not dividend-adjusted, so an ex-date appears as a price drop. **Strategy design question** (RSI(2) can fire on a mechanical ex-dividend drop) — recorded in the P1 inbox for a decision before pre-registration (P1.A.25). |
 
 ## Other observations

@@ -137,6 +137,32 @@ def cmd_membership(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dividends(args: argparse.Namespace) -> int:
+    """Screen every instrument of a universe for suspicious gaps between ex-dividend dates."""
+    from itrade.backtest.corporate_actions import (
+        apply_dividend_overrides,
+        ex_dividend_dates,
+        load_dividend_overrides,
+        suspicious_dividend_gaps,
+    )
+
+    universe = load_named_universe(args.universe)
+    overrides = load_dividend_overrides()
+    store = Store()
+    print(
+        f"Dividend gap screen for {args.universe} (overrides: {len(overrides)}), since {args.since}"
+    )
+    for ticker in universe.tickers:
+        bars = apply_dividend_overrides(store.read_bars(ticker), ticker, overrides)
+        ex = ex_dividend_dates(bars)
+        ex = ex[ex.year >= args.since]
+        gaps = suspicious_dividend_gaps(ex)
+        flagged = ", ".join(f"{a.date()}→{b.date()} ({d}d)" for a, b, d in gaps) or "-"
+        print(f"  {ticker:<6} ex-dates={len(ex):<4} suspicious: {flagged}")
+    print("\nSuspicious gaps are screening hints; judge each in docs/data-notes.md.")
+    return 0
+
+
 def universe_name(params: dict) -> str:
     return params["strategy"]["universe"]
 
@@ -176,6 +202,11 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--strategy", default="etf_pullback_v1")
     m.add_argument("--since", type=int, default=2005, help="first year shown in the report")
     m.set_defaults(func=cmd_membership)
+
+    dv = sub.add_parser("dividends", help="screen ex-dividend dates for suspicious gaps")
+    dv.add_argument("--universe", default="etf_pullback_v1")
+    dv.add_argument("--since", type=int, default=2005)
+    dv.set_defaults(func=cmd_dividends)
 
     s = sub.add_parser("sql", help="query curated data with DuckDB (view: bars)")
     s.add_argument("query")

@@ -1,0 +1,15 @@
+# Manual corporate-action corrections applied on top of vendor data (data files stay immutable).
+# Every entry needs a second source and the date it was checked. An entry that conflicts with a
+# different vendor value stops the instrument (spec §3, condition 3) instead of overwriting it.
+# The SHA-256 of this file is recorded with every backtest run (it is part of the data, not the strategy).
+
+[[dividends]]
+ticker = "QQQ"
+ex_date = "2020-09-21"
+amount = 0.38824
+source = "Nasdaq dividend history (api.nasdaq.com/api/quote/QQQ/dividends), checked 2026-10-07"
+reason = "Missing in Yahoo. Yahoo and Nasdaq ex-dates otherwise identical for QQQ/TLT/IEF in 2020 and 2023 (P1.A.08)."
+
+# Known but NOT corrected (no second source available — never invent amounts):
+#   TLT ex-date ~2012-11-01 (monthly payer; IEF has 2012-11-01 $0.145278). Nasdaq's 2012 TLT history is
+#   itself incomplete. Effect: one missed ex-date filter and ~0.2% of one month's dividend cash.
