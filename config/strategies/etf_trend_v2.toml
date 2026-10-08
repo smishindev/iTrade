@@ -7,6 +7,7 @@
 [strategy]
 id = "ETF_TREND_V2"
 universe = "etf_pullback_v1"              # same 29 ETFs and membership rules as H1
+research_log = "docs/research-log-H2.md"  # own ledger: the final lock is per hypothesis
 
 [indicators]
 price_series = "dividend_neutral"         # O*,H*,L*,C* = price x M_t (H1 spec §1)

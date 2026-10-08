@@ -7,7 +7,7 @@ Sizing and account limits are covered by test_risk / test_engine.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -149,7 +149,13 @@ def trade_svg(
     days = [d for d in sessions[i0 : i1 + 1] if d in market.index]
     bars = [_bar(market, d) for d in days]
     scale = [float(market.loc[d, "s"]) / float(prepared.loc[d, "m"]) for d in days]
-    sma5 = [prepared.loc[d, "sma_exit"] * k for d, k in zip(days, scale, strict=True)]
+    # H1: SMA(5) exit line; ETF_TREND_V2: the channel (prior high / low) instead
+    candidates = (("sma_exit", "#e90"), ("low_n", "#e90"), ("high_n", "#36c"))
+    lines = [(c, color) for c, color in candidates if c in prepared.columns]
+    extra = [
+        ([prepared.loc[d, c] * k for d, k in zip(days, scale, strict=True)], color)
+        for c, color in lines
+    ]
     sma200 = [prepared.loc[d, "sma_trend"] * k for d, k in zip(days, scale, strict=True)]
 
     levels = [float(trade["limit"]), float(trade["stop"])]
@@ -199,7 +205,8 @@ def trade_svg(
         )
         return f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="1.2"/>'
 
-    out.append(polyline(sma5, "#e90"))
+    for values, color in extra:
+        out.append(polyline(values, color))
     if in_range:
         out.append(polyline(sma200, "#888"))
     for v, color, label in ((levels[0], "#36c", "limit"), (levels[1], "#c33", "stop")):
@@ -215,7 +222,7 @@ def trade_svg(
         out.append(f'<circle cx="{x(i):.1f}" cy="{y(price):.1f}" r="4" fill="{color}"/>')
     out.append(
         f'<text x="{pl}" y="{h - 5}" fill="#555">{days[0].date()} … {days[-1].date()} · '
-        f"orange SMA5, grey SMA200 (traded-price scale)</text>"
+        f"orange SMA5 or channel low, blue channel high, grey SMA200</text>"
     )
     out.append("</svg>")
     return "\n".join(out)
@@ -228,14 +235,16 @@ def write_review(
     sessions: pd.DatetimeIndex,
     p: SignalParams,
     out: Path,
+    check: Callable[[Mapping], list[Check]] | None = None,
 ) -> tuple[int, int]:
-    """review.md + one SVG per trade. Returns (trades reviewed, trades with a failed check)."""
+    """review.md + one SVG per trade. Returns (trades reviewed, trades with a failed check).
+    `check(trade)` replaces the H1 checks (ETF_TREND_V2: review_trend.check_trend_trade)."""
     out.mkdir(parents=True, exist_ok=True)
     lines = ["# Trade review", "", "Auto-checks re-derive each trade from bars and the spec.", ""]
     failed = 0
     for n, (_, tr) in enumerate(trades.iterrows(), start=1):
         m, pr = market[tr["ticker"]], prepared[tr["ticker"]]
-        checks = check_trade(tr, m, pr, sessions, p)
+        checks = check(tr) if check else check_trade(tr, m, pr, sessions, p)
         bad = [c for c in checks if not c.ok]
         failed += bool(bad)
         svg = f"{n:02d}_{tr['ticker']}_{pd.Timestamp(tr['entry_date']).date()}.svg"

@@ -51,6 +51,39 @@ def buy_and_hold(
     return pd.DataFrame(rows)
 
 
+def equal_weight(
+    markets: dict[str, pd.DataFrame],
+    start: str | pd.Timestamp,
+    end: str | pd.Timestamp,
+    capital: float,
+) -> pd.DataFrame:
+    """ETF_TREND_V2 §5 reference: equal weights across the instruments trading on the first
+    session of each calendar year, rebalanced then, drifting in between; total return
+    (C_t + D_t) / C_{t-1} on split-adjusted vendor prices; no costs, no tax. `markets`:
+    outputs of engine.market_frame."""
+    s, e = pd.Timestamp(start), pd.Timestamp(end)
+    tr = {}
+    for t, m in markets.items():
+        c = m["close"]
+        tr[t] = ((c + m["dividends"].fillna(0.0)) / c.shift(1)).loc[s:e]  # past close only
+    returns = pd.DataFrame(tr).sort_index()
+    first_day = returns.index[0]
+    equity, rows = float(capital), []
+    for _, chunk in returns.groupby(returns.index.year):
+        d0 = chunk.index[0]
+        if d0 == first_day:  # bought at the first close: instruments with a bar that day
+            live = [c for c in chunk.columns if pd.notna(markets[c]["close"].get(d0))]
+        else:  # rebalanced at the previous close: instruments with a return on d0
+            live = [c for c in chunk.columns if pd.notna(chunk.loc[d0, c])]
+        value = pd.Series(equity / len(live), index=live)
+        for d, row in chunk[live].iterrows():
+            if d != first_day:
+                value = value * row.fillna(1.0)  # no bar that day: unchanged
+            rows.append({"date": d, "equity": float(value.sum())})
+        equity = float(value.sum())
+    return pd.DataFrame(rows)
+
+
 def annualised(equity: pd.Series, dates: pd.Series) -> float:
     """Compound annual growth over a finished period (reporting, not a trading decision)."""
     last, first = equity.iloc[-1], equity.iloc[0]  # lookahead-ok: whole-period summary

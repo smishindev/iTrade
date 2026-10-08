@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from itrade.backtest.benchmark import annualised, buy_and_hold
+from itrade.backtest.benchmark import annualised, buy_and_hold, equal_weight
 from itrade.backtest.control import ControlRun, percentile
 from itrade.backtest.corporate_actions import overrides_sha256
 from itrade.backtest.engine import market_frame
@@ -103,6 +103,10 @@ def write_report(
     capital = Decimal(str(params["risk"]["initial_capital_usd"]))
     ref = buy_and_hold(market_frame(run.inputs.bars[reference]), run.start, run.end, capital)
     ref_cagr = annualised(ref["equity"].astype(float), ref["date"])
+    ew = equal_weight(
+        {t: market_frame(b) for t, b in run.inputs.bars.items()}, run.start, run.end, 1.0
+    )
+    ew_cagr = annualised(ew["equity"], ew["date"])
 
     groups = {i.ticker: i.group or "none" for i in run.inputs.universe.instruments}
     res.trades.to_csv(out / "trades.csv", index=False)
@@ -115,7 +119,7 @@ def write_report(
         "run_id": run_id, "summary": s.as_dict(), "expectancy_ci": [ci.low, ci.high],
         "win_rate_ci": [w.low, w.high], "control_percentile": pct,
         "control_runs": len(control) if control else 0, "reference": reference,
-        "reference_cagr": ref_cagr,
+        "reference_cagr": ref_cagr, "equal_weight_cagr": ew_cagr,
     }  # fmt: skip
     (out / "meta.json").write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
     sections = {
@@ -196,6 +200,11 @@ def render_markdown(run: Run, meta: dict, s: Summary, sections: dict) -> str:
             f"Market reference ({meta['reference']} buy & hold, total return)",
             f"CAGR {fmt(meta['reference_cagr'], True)}",
         ),
+        (
+            "Equal-weight universe (yearly rebalance, total return, no costs)",
+            f"CAGR {fmt(meta['equal_weight_cagr'], True)}",
+        ),
+        ("Time with a position", fmt(s.time_in_market, True)),
         ("Max drawdown", f"{fmt(s.max_drawdown, True)} over {s.max_drawdown_sessions} sessions"),
         ("Worst losing streak", f"{s.worst_losing_streak} trades"),
         ("Avg holding", f"{fmt(s.avg_sessions_held, digits=1)} sessions"),

@@ -53,6 +53,7 @@ class Summary:
     signals: int
     executable_share: float
     flags: tuple[str, ...]
+    time_in_market: float = float("nan")  # share of sessions with at least one position
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -142,6 +143,9 @@ def summarize(
         signals=signals,
         executable_share=executable_share(signals, skipped),
         flags=tuple(implausibility_flags(trades)),
+        time_in_market=float((equity["positions"] > 0).mean())
+        if "positions" in equity and len(equity)
+        else float("nan"),
     )
 
 

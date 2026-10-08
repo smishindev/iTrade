@@ -94,3 +94,52 @@ def test_base_neighbours_are_all_candidates_and_fractional_waits_for_spike_b(tmp
     runs = runs_with(tmp_path, {"base": 0.10, "fractional": 0.30})
     assert select(runs, PARAMS).variant == "base"
     assert select(runs, PARAMS, fractional_confirmed=True).variant == "fractional"
+
+
+# --- ETF_TREND_V2 (spec §8) ---------------------------------------------------------------------
+
+TREND = load_strategy("etf_trend_v2")
+
+
+def trend_runs(tmp_path, values, control=60.0):
+    for variant, e in values.items():
+        write_run(tmp_path, variant, e)
+    runs = load_runs(tmp_path, "validation", "v1")
+    runs["control_percentile"] = control
+    return runs
+
+
+def test_trend_families_and_neighbours():
+    from itrade.backtest.compare import neighbours
+
+    fam = families(TREND)
+    assert fam["rotation:rotation.momentum_sessions"] == ["rot_mom63", "rot_base", "rot_mom252"]
+    assert fam["breakout:breakout.entry_sessions"] == ["brk_20_10", "brk_base", "brk_100_40"]
+    assert fam["rotation:risk.share_granularity"] == ["rot_fractional", "rot_base"]  # by value
+    assert "brk_base" not in neighbours("rot_base", TREND)
+    assert len(neighbours("rot_base", TREND)) == 8  # 7 rotation candidates + fractional
+    assert neighbours("brk_trend", TREND) == ["brk_base"]
+
+
+def test_trend_picks_the_group_with_the_higher_lower_bound(tmp_path):
+    runs = trend_runs(tmp_path, {"rot_base": 0.30, "brk_base": 0.25}, control=90.0)
+    runs.loc["brk_base", "ci_low"] = 0.22  # 0.25 - 0.05 = 0.20 for rot -> breakout wins
+    runs.loc["rot_base", "ci_low"] = 0.20
+    sel = select(runs, TREND)
+    assert sel.variant == "brk_base" and not sel.reject
+    assert sel.group_picks == {"rotation": "rot_base", "breakout": "brk_base"}
+
+
+def test_trend_early_rejection(tmp_path):
+    runs = trend_runs(tmp_path, {"rot_base": -0.05, "brk_base": -0.10}, control=90.0)
+    assert select(runs, TREND).reject
+    (tmp_path / "x").mkdir()
+    runs = trend_runs(tmp_path / "x", {"rot_base": 0.15, "brk_base": 0.05}, control=70.0)
+    sel = select(runs, TREND)
+    assert sel.variant == "rot_base" and sel.reject  # positive but control < 80
+
+
+def test_trend_criteria_use_the_group_costs_variant(tmp_path):
+    runs = trend_runs(tmp_path, {"rot_base": 0.3, "brk_base": 0.1, "rot_costs_x2": 0.1})
+    checks = dict(criteria_check(runs, "rot_base", TREND))
+    assert checks["rot_costs_x2 expectancy > 0"] is True and "CAGR after costs > 0" in checks

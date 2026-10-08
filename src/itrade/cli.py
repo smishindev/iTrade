@@ -223,6 +223,15 @@ def cmd_signals(args: argparse.Namespace) -> int:
 FINAL_FLAG = "i_understand_this_runs_once"
 
 
+def ledger_path(strategy: str):
+    """The hypothesis' research ledger: `[strategy].research_log` (default docs/research-log.md,
+    H1). One ledger per hypothesis, so the once-only final lock is per hypothesis."""
+    from itrade.config import load_strategy, project_root
+
+    rel = load_strategy(strategy)["strategy"].get("research_log", "docs/research-log.md")
+    return project_root() / rel
+
+
 def cmd_backtest(args: argparse.Namespace) -> int:
     """Run a registered variant over a period, write the report, append the research ledger."""
     import os
@@ -231,9 +240,9 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     from itrade.backtest.ledger import FinalAlreadyRun, LedgerRow, append, check_final_allowed
     from itrade.backtest.report import fmt, git_commit, write_report
     from itrade.backtest.runner import random_control, run_variant
-    from itrade.config import load_strategy, project_root
+    from itrade.config import load_strategy
 
-    ledger = project_root() / "docs" / "research-log.md"
+    ledger = ledger_path(args.strategy)
     if args.period == "final":
         if not getattr(args, FINAL_FLAG):
             print(
@@ -290,11 +299,11 @@ def cmd_compare(args: argparse.Namespace) -> int:
     """Markdown comparison of every variant run on a period (current strategy version only)."""
     from itrade.backtest.compare import comparison_markdown, load_runs
     from itrade.backtest.ledger import latest_run_ids
-    from itrade.config import load_strategy, project_root, strategy_version
+    from itrade.config import load_strategy, strategy_version
 
     params = load_strategy(args.strategy)
     version = strategy_version(args.strategy)
-    latest = set(latest_run_ids(project_root() / "docs" / "research-log.md", args.period).values())
+    latest = set(latest_run_ids(ledger_path(args.strategy), args.period).values())
     runs = load_runs(Store().root / "research", args.period, version, latest)
     if runs.empty:
         print(f"no {args.period} runs of strategy version {version[:8]}")
@@ -307,6 +316,7 @@ def cmd_review(args: argparse.Namespace) -> int:
     """Re-derive sampled trades from bars and the spec; charts + review.md next to the report.
     Does not touch the research ledger (the run itself is logged by `backtest`)."""
     from itrade.backtest.engine import market_frame
+    from itrade.backtest.inputs import is_trend
     from itrade.backtest.report import provenance, review_sample
     from itrade.backtest.review import write_review
     from itrade.backtest.runner import run_variant
@@ -317,8 +327,25 @@ def cmd_review(args: argparse.Namespace) -> int:
     run_id = f"{run.variant}_{run.period}_{provenance(run)['trades_sha256'][:8]}"
     out = Store().root / "research" / run_id / "review"
     market = {t: market_frame(b) for t, b in run.inputs.bars.items()}
+    check = None
+    if is_trend(run.inputs.params):  # ETF_TREND_V2: independent re-derivation of A / B
+        from functools import partial
+
+        from itrade.backtest.review_trend import check_trend_trade
+
+        groups = {i.ticker: i.group or "none" for i in run.inputs.universe.instruments}
+        check = partial(
+            check_trend_trade, market=market, prepared=run.inputs.prepared,
+            sessions=run.inputs.sessions, p=run.inputs.signal_params, groups=groups,
+        )  # fmt: skip
     n, failed = write_review(
-        sample, market, run.inputs.prepared, run.inputs.sessions, run.inputs.signal_params, out
+        sample,
+        market,
+        run.inputs.prepared,
+        run.inputs.sessions,
+        run.inputs.signal_params,
+        out,
+        check,
     )
     print(f"{n} trades reviewed, {failed} with a failed check: {out / 'review.md'}")
     return 1 if failed else 0
