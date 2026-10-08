@@ -69,14 +69,23 @@ def check_trade(
     limit, stop = entry_levels(sig["close"], sig["atr_star"], sig["m"], sig["s"], p)
     limit_e, stop_x = _rescale(limit, market, t, entry), _rescale(stop, market, t, exit_)
     checks += [
-        Check("limit = C + 0.5 ATR", limit_e == trade["limit"], f"{limit_e} vs {trade['limit']}"),
+        # the trade row is in exit-day prices: a split while holding rescales limit and entry
+        Check(
+            "limit = C + 0.5 ATR",
+            _rescale(limit, market, t, exit_) == trade["limit"],
+            f"{_rescale(limit, market, t, exit_)} vs {trade['limit']}",
+        ),
         Check("stop = C - 2 ATR", stop_x == trade["stop"], f"{stop_x} vs {trade['stop']}"),
     ]
 
     eb = _bar(market, entry)
     checks += [
         Check("LOO: open <= limit", eb.open <= limit_e, f"open {eb.open}, limit {limit_e}"),
-        Check("entry at the open", trade["entry_price"] == eb.open, f"{trade['entry_price']}"),
+        Check(
+            "entry at the open",
+            trade["entry_price"] == _rescale(eb.open, market, entry, exit_),
+            f"{trade['entry_price']}",
+        ),
     ]
 
     # Path: no stop touch and no exit signal before the exit, in the order the day runs

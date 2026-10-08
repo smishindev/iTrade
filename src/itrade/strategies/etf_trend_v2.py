@@ -251,7 +251,7 @@ class RotationRules:
         # kept positions already fill their place this month: a later stop leaves it empty
         self.done = {t for t in positions if t in self.target}
         self.exiting = {t for t in positions if t not in self.target}
-        return {t: "rotation_out" for t in self.exiting}
+        return {t: "rotation_out" for t in positions if t in self.exiting}  # deterministic order
 
     def entry_decisions(self, d, prepared, held):
         candidates, skipped = [], []

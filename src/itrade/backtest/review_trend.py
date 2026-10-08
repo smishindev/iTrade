@@ -146,13 +146,18 @@ def check_trend_trade(
     limit, stop = _levels(f.loc[t], p)
     limit_e, stop_x = _rescale(limit, m, t, entry), _rescale(stop, m, t, exit_)
     checks += [
-        Check("limit", limit_e == trade["limit"], f"{limit_e} vs {trade['limit']}"),
+        # the trade row is in exit-day prices: a split while holding rescales limit and entry
+        Check("limit", _rescale(limit, m, t, exit_) == trade["limit"], f"{trade['limit']}"),
         Check("stop", stop_x == trade["stop"], f"{stop_x} vs {trade['stop']}"),
     ]
     eb = _bar(m, entry)
     checks += [
         Check("LOO: open <= limit", eb.open <= limit_e, f"open {eb.open}"),
-        Check("entry at the open", trade["entry_price"] == eb.open, f"{trade['entry_price']}"),
+        Check(
+            "entry at the open",
+            trade["entry_price"] == _rescale(eb.open, m, entry, exit_),
+            f"{trade['entry_price']}",
+        ),
     ]
 
     def exit_due(d: pd.Timestamp) -> str | None:
