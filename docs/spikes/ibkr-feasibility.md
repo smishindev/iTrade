@@ -60,7 +60,7 @@ _7 октября 2026, 12:04–12:13 UTC (08:04–08:13 Нью-Йорк, пре
    (`SocketException 10054`). Значит, после реального разрыва повторное подключение может получить 326, пока
    Gateway не освободит старое соединение — повтор с паузой это покрывает; второй процесс с тем же clientId
    сразу получает отказ (`connect` при работающем `reconnect`, `messages-20261007T120717Z`).
-9. **Счёт (P1.B.04).** Free Trial: `AccountType` INDIVIDUAL, `NetLiquidation` = `TotalCashValue` =
+9. **Счёт (P1.B.04, ✅ сверено владельцем с веб-интерфейсом 9 окт., `messages-20261008T222455Z`).** Free Trial: `AccountType` INDIVIDUAL, `NetLiquidation` = `TotalCashValue` =
    `AvailableFunds` = 1 000 000 USD (виртуальные), `BuyingPower` = 4 000 000 → **маржинальный** счёт, не Cash;
    позиций нет; валюты: USD (+ строка BASE). Из 29 тегов `AccountSummaryTags` **не пришли**: `SettledCash`,
    `PreviousDayEquityWithLoanValue`, `ReqTEquity`, `ReqTMargin` (в классе API опечатка — в `reqAccountUpdates`
