@@ -1,9 +1,10 @@
 """Compare registered variants on one period and apply the pre-registered selection rule.
 
 H1 (research-log): base is used unless a candidate beats it by >= +0.05R and the other members of
-its parameter family (base included) have positive expectancy. ETF_TREND_V2 (spec §8): the same
-rule inside each rule group (rotation, breakout), then the group pick with the higher 90% lower
-bound, then early rejection (expectancy <= 0 or control percentile < 80 -> no final run).
+its parameter family (base included) have positive expectancy. ETF_TREND_V2 (spec §8, measured on
+the account's money — owner 2026-10-08): the same rule on validation CAGR (margin 1 pp, family all
+CAGR > 0) inside each rule group, then the group pick with the higher control percentile (total
+P&L), then early rejection (CAGR <= 0 or control percentile < 80 -> no final run).
 Diagnostics never win. A variant's family is its first override key (within its rule group).
 """
 
@@ -137,12 +138,20 @@ def neighbours(variant: str, params: dict) -> list[str]:
     return sorted({m for fam in fams if variant in fam for m in fam} - {variant})
 
 
+def _metric(params: dict) -> tuple[str, float, str]:
+    """(column, margin, unit) the selection compares: H1 expectancy in R, H2 CAGR."""
+    if is_trend(params):
+        return "cagr", float(params["selection"]["margin_cagr"]), "CAGR"
+    return "expectancy_r", SELECTION_MARGIN_R, "R"
+
+
 def _pick_in_group(
     runs: pd.DataFrame, params: dict, g: RuleGroup, fractional_confirmed: bool
 ) -> tuple[str, list[str]]:
     if g.base not in runs.index:
         raise ValueError(f"{g.base} has not been run on this period")
-    base = float(runs.loc[g.base, "expectancy_r"])
+    col, margin, unit = _metric(params)
+    base = float(runs.loc[g.base, col])
     reasons, winners = [], []
     for key, members in families(params).items():
         if g.base not in members:
@@ -153,17 +162,17 @@ def _pick_in_group(
             if name not in runs.index:
                 reasons.append(f"{name}: not run")
                 continue
-            e = float(runs.loc[name, "expectancy_r"])
+            e = float(runs.loc[name, col])
             others = [m for m in members if m != name]
             missing = [m for m in others if m not in runs.index]
-            positive = not missing and all(runs.loc[m, "expectancy_r"] > 0 for m in others)
-            beats = e >= base + SELECTION_MARGIN_R
+            positive = not missing and all(runs.loc[m, col] > 0 for m in others)
+            beats = e >= base + margin
             verdict = "selected" if beats and positive else "no"
             if name.endswith("fractional") and not fractional_confirmed:
                 verdict = "not eligible until P1.B.10 confirms fractional shares with a stop"
             reasons.append(
-                f"{name} ({key}): {e:+.3f}R vs {g.base} {base:+.3f}R, "
-                f"{'beats' if beats else 'does not beat'} by {SELECTION_MARGIN_R}R; "
+                f"{name} ({key}): {e:+.3f} {unit} vs {g.base} {base:+.3f}, "
+                f"{'beats' if beats else 'does not beat'} by {margin} {unit}; "
                 f"family {others} {'all > 0' if positive else 'not all > 0'} → {verdict}"
             )
             if verdict == "selected":
@@ -180,21 +189,23 @@ def select(runs: pd.DataFrame, params: dict, fractional_confirmed: bool = False)
         picks[g.name], reasons = pick, reasons + why
     if not is_trend(params):
         return Selection(picks[""], reasons)
-    chosen = max(picks.values(), key=lambda v: (float(runs.loc[v, "ci_low"]), v))
+
+    def control(v: str) -> float:
+        pct = runs.loc[v, "control_percentile"]
+        return -1.0 if pct is None or pd.isna(pct) else float(pct)
+
+    chosen = max(picks.values(), key=lambda v: (control(v), float(runs.loc[v, "cagr"]), v))
     reasons.append(
-        "between groups (higher 90% lower bound): "
-        + ", ".join(f"{v} {float(runs.loc[v, 'ci_low']):+.3f}" for v in picks.values())
+        "between groups (higher control percentile on total P&L): "
+        + ", ".join(f"{v} {control(v):.1f}" for v in picks.values())
         + f" → {chosen}"
     )
     s = params["selection"]
-    e, pct = float(runs.loc[chosen, "expectancy_r"]), runs.loc[chosen, "control_percentile"]
-    reject = e <= s["early_reject_max_expectancy_r"] or (
-        pct is None or pct < s["early_reject_min_control_percentile"]
-    )
+    cagr, pct = float(runs.loc[chosen, "cagr"]), control(chosen)
+    reject = cagr <= s["early_reject_max_cagr"] or pct < s["early_reject_min_control_percentile"]
     reasons.append(
-        f"early rejection: expectancy {e:+.3f}R (must be > {s['early_reject_max_expectancy_r']}), "
-        f"control {pct if pct is None else f'{pct:.1f}'} (must be >= "
-        f"{s['early_reject_min_control_percentile']}) → "
+        f"early rejection: CAGR {cagr:+.2%} (must be > {s['early_reject_max_cagr']:.0%}), "
+        f"control {pct:.1f} (must be >= {s['early_reject_min_control_percentile']}) → "
         + ("**H2 rejected, final period not run**" if reject else "final run allowed")
     )
     return Selection(chosen, reasons, reject, picks)
@@ -205,8 +216,17 @@ def criteria_check(runs: pd.DataFrame, variant: str, params: dict) -> list[tuple
     c, r = params["criteria"], runs.loc[variant]
     near = [m for m in neighbours(variant, params) if m in runs.index]
     costs = group_of(variant, params).costs_x2
+    col = "cagr" if is_trend(params) else "expectancy_r"  # costs_x2 and neighbours judged on it
+    expectancy = (
+        ("expectancy > 0R", r["expectancy_r"] > 0)
+        if is_trend(params)
+        else (
+            f"expectancy >= +{c['min_expectancy_r']}R",
+            r["expectancy_r"] >= c["min_expectancy_r"],
+        )
+    )
     out = [
-        (f"expectancy >= +{c['min_expectancy_r']}R", r["expectancy_r"] >= c["min_expectancy_r"]),
+        expectancy,
         ("90% lower bound > 0", r["ci_low"] > 0),
         (f"trades >= {c['min_trades']}", r["trades"] >= c["min_trades"]),
         (
@@ -215,12 +235,12 @@ def criteria_check(runs: pd.DataFrame, variant: str, params: dict) -> list[tuple
             and r["control_percentile"] >= c["min_control_percentile"],
         ),
         (
-            f"{costs} expectancy > 0",
-            costs in runs.index and runs.loc[costs, "expectancy_r"] > 0,
+            f"{costs} {'CAGR' if col == 'cagr' else 'expectancy'} > 0",
+            costs in runs.index and runs.loc[costs, col] > 0,
         ),
         (
             "most neighbours > 0",
-            bool(near) and sum(runs.loc[m, "expectancy_r"] > 0 for m in near) > len(near) / 2,
+            bool(near) and sum(runs.loc[m, col] > 0 for m in near) > len(near) / 2,
         ),
         (
             f"executable >= {c['min_executable_signal_share']:.0%}",

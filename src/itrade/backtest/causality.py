@@ -80,3 +80,42 @@ def causality_violations(
         if decisions_at(d, original, sessions, p) != decisions_at(d, mutated, sessions, p):
             violations.append(d)
     return violations
+
+
+def trend_decisions_at(d: pd.Timestamp, prepared, sessions: pd.DatetimeIndex, p, groups):
+    """ETF_TREND_V2: exits (every instrument hypothetically held) and entries after the close
+    of d, from a fresh rules object — at a month end this includes the rotation ranking."""
+    rules = p.make_rules(sessions, groups)
+    held = {t: None for t, f in prepared.items() if d in f.index}
+    exits = rules.exit_decisions(d, held, prepared, sessions)
+    entries, skipped = rules.entry_decisions(d, prepared, set())
+    return exits, entries, skipped, list(getattr(rules, "target", []))
+
+
+def trend_causality_violations(
+    bars: Mapping[str, pd.DataFrame],
+    member: Mapping[str, pd.Series],
+    sessions: pd.DatetimeIndex,
+    p,
+    groups: Mapping[str, str],
+    dates: Iterable[pd.Timestamp],
+    prepare: Callable | None = None,
+    seed: int = 0,
+) -> list[pd.Timestamp]:
+    """Dates whose ETF_TREND_V2 decisions changed when only the future was changed."""
+    from itrade.strategies.etf_trend_v2 import prepare_trend_instrument
+
+    prepare = prepare or prepare_trend_instrument
+    original = {t: prepare(b, member[t], sessions, p) for t, b in bars.items()}
+    violations = []
+    for k, d in enumerate(dates):
+        d = pd.Timestamp(d)
+        mutated = {
+            t: prepare(mutate_future(b, d, seed + 1000 * k + j), member[t], sessions, p)
+            for j, (t, b) in enumerate(bars.items())
+        }
+        a = trend_decisions_at(d, original, sessions, p, groups)
+        b = trend_decisions_at(d, mutated, sessions, p, groups)
+        if a != b:
+            violations.append(d)
+    return violations

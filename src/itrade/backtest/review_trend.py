@@ -61,23 +61,43 @@ def rotation_eligible(f: pd.DataFrame, d: pd.Timestamp, p) -> bool:
     return not np.isnan(m) and m > 0 and (not p.trend_filter or above_trend(f, d, p.trend_sma))
 
 
-def rotation_target(
-    d: pd.Timestamp, prepared: Mapping[str, pd.DataFrame], p, groups: Mapping[str, str]
+def rotation_ranking(
+    d: pd.Timestamp,
+    prepared: Mapping[str, pd.DataFrame],
+    p,
+    groups: Mapping[str, str],
+    equity: Decimal | None = None,
 ) -> list[str]:
+    """Every eligible (and, with whole shares, buyable at E_d) ETF, best first, keeping only the
+    best of each group (one per group)."""
+
+    def buyable(f) -> bool:
+        if equity is None or not (p.fallback_unbuyable and p.whole_shares):
+            return True
+        return _levels(f.loc[d], p)[0] <= p.weight * equity
+
     ranked = sorted(
         (-mom_at(f, d, p.momentum_sessions), -float(f.loc[d, "adv"]), t)
         for t, f in prepared.items()
-        if rotation_eligible(f, d, p)
+        if rotation_eligible(f, d, p) and buyable(f)
     )
-    target, used = [], set()
+    out, used = [], set()
     for _, _, t in ranked:
         if p.one_per_group and groups[t] in used:
             continue
-        target.append(t)
+        out.append(t)
         used.add(groups[t])
-        if len(target) == p.top_n:
-            break
-    return target
+    return out
+
+
+def rotation_target(
+    d: pd.Timestamp,
+    prepared: Mapping[str, pd.DataFrame],
+    p,
+    groups: Mapping[str, str],
+    equity: Decimal | None = None,
+) -> list[str]:
+    return rotation_ranking(d, prepared, p, groups, equity)[: p.top_n]
 
 
 def _levels(row, p) -> tuple[Decimal, Decimal]:
@@ -95,7 +115,10 @@ def check_trend_trade(
     sessions: pd.DatetimeIndex,
     p,
     groups: Mapping[str, str],
+    equity: Mapping[pd.Timestamp, Decimal] | None = None,
 ) -> list[Check]:
+    """`equity` (E by date, from the run) lets the rotation check leave out ETFs one share of
+    which does not fit the place (spec §2 p. 3a); without it, the target is unfiltered."""
     ticker = trade["ticker"]
     m, f = market[ticker], prepared[ticker]
     entry, exit_ = pd.Timestamp(trade["entry_date"]), pd.Timestamp(trade["exit_date"])
@@ -113,9 +136,10 @@ def check_trend_trade(
             checks.append(Check("trend: C* > SMA200", above_trend(f, t, p.trend_sma)))
     else:
         decision = max(d for d in sessions[:i_entry] if month_end(d, sessions))
-        target = rotation_target(decision, prepared, p, groups)
+        e_d = equity.get(decision) if equity is not None else None
+        allowed = rotation_target(decision, prepared, p, groups, e_d)
         checks += [
-            Check("in the month's target", ticker in target, f"{decision.date()}: {target}"),
+            Check("in the month's target", ticker in allowed, f"{decision.date()}: {allowed}"),
             Check("still eligible on t", rotation_eligible(f, t, p)),
         ]
 
@@ -136,7 +160,8 @@ def check_trend_trade(
         if p.rules == "breakout":
             lo = low_at(f, d, p.exit_sessions)
             return "channel_exit" if not np.isnan(lo) and float(_cs(f)[d]) < lo else None
-        if month_end(d, sessions) and ticker not in rotation_target(d, prepared, p, groups):
+        e_d = equity.get(d) if equity is not None else None
+        if month_end(d, sessions) and ticker not in rotation_target(d, prepared, p, groups, e_d):
             return "rotation_out"
         return None
 
@@ -171,7 +196,13 @@ def check_trend_trade(
         - trade["exit_costs"]
         + trade["dividends"]
     )
-    planned = trade["qty"] * (trade["limit"] - trade["stop"])
+    if p.rules == "rotation":  # R unit: risk_unit_atr below the decision close (review B3)
+        atr = f.loc[t, "atr_star"] / f.loc[t, "m"]
+        unit = floor_tick((f.loc[t, "close"] - p.risk_unit_atr * atr) * f.loc[t, "s"], p.tick_size)
+        unit = _rescale(unit, m, t, exit_)
+    else:
+        unit = trade["stop"]
+    planned = trade["qty"] * (trade["limit"] - unit)
     r = (pnl / planned).quantize(R_STEP) if planned > 0 else Decimal(0)
     checks += [
         Check("P&L = qty x move - costs + dividends", pnl == trade["pnl"], f"{pnl}"),

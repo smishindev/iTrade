@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pandas as pd
 import pytest
 
 from itrade.backtest.compare import (
@@ -121,25 +122,40 @@ def test_trend_families_and_neighbours():
     assert neighbours("brk_trend", TREND) == ["brk_base"]
 
 
-def test_trend_picks_the_group_with_the_higher_lower_bound(tmp_path):
+def test_trend_picks_the_group_with_the_higher_control_percentile(tmp_path):
     runs = trend_runs(tmp_path, {"rot_base": 0.30, "brk_base": 0.25}, control=90.0)
-    runs.loc["brk_base", "ci_low"] = 0.22  # 0.25 - 0.05 = 0.20 for rot -> breakout wins
-    runs.loc["rot_base", "ci_low"] = 0.20
+    runs.loc["brk_base", "control_percentile"] = 97.0
     sel = select(runs, TREND)
     assert sel.variant == "brk_base" and not sel.reject
     assert sel.group_picks == {"rotation": "rot_base", "breakout": "brk_base"}
 
 
+def test_trend_variant_must_beat_base_cagr_by_one_point(tmp_path):
+    runs = trend_runs(
+        tmp_path, {"rot_base": 0.1, "rot_mom63": 0.1, "rot_mom252": 0.1, "brk_base": 0.1}
+    )
+    cagr = {"rot_base": 0.05, "rot_mom63": 0.065, "rot_mom252": 0.03, "brk_base": 0.01}
+    runs["cagr"] = pd.Series(cagr)  # rot_mom63 +1.5 pp, family all > 0
+    sel = select(runs.assign(control_percentile=90.0), TREND)
+    assert sel.group_picks["rotation"] == "rot_mom63"
+    runs["cagr"] = pd.Series(cagr | {"rot_mom63": 0.055})  # only +0.5 pp
+    assert select(runs.assign(control_percentile=90.0), TREND).group_picks["rotation"] == "rot_base"
+
+
 def test_trend_early_rejection(tmp_path):
-    runs = trend_runs(tmp_path, {"rot_base": -0.05, "brk_base": -0.10}, control=90.0)
-    assert select(runs, TREND).reject
-    (tmp_path / "x").mkdir()
-    runs = trend_runs(tmp_path / "x", {"rot_base": 0.15, "brk_base": 0.05}, control=70.0)
-    sel = select(runs, TREND)
-    assert sel.variant == "rot_base" and sel.reject  # positive but control < 80
+    runs = trend_runs(tmp_path, {"rot_base": 0.3, "brk_base": 0.2}, control=90.0)
+    runs["cagr"] = -0.01
+    assert select(runs, TREND).reject  # money lost on validation
+    runs["cagr"] = 0.04
+    runs["control_percentile"] = 70.0
+    assert select(runs, TREND).reject  # no better than random choices
+    runs["control_percentile"] = 85.0
+    assert not select(runs, TREND).reject
 
 
-def test_trend_criteria_use_the_group_costs_variant(tmp_path):
-    runs = trend_runs(tmp_path, {"rot_base": 0.3, "brk_base": 0.1, "rot_costs_x2": 0.1})
+def test_trend_criteria_use_money_for_costs_and_neighbours(tmp_path):
+    runs = trend_runs(tmp_path, {"rot_base": 0.3, "brk_base": 0.1, "rot_costs_x2": -0.1})
+    runs.loc["rot_costs_x2", "cagr"] = 0.002  # R negative but the account still grew
     checks = dict(criteria_check(runs, "rot_base", TREND))
-    assert checks["rot_costs_x2 expectancy > 0"] is True and "CAGR after costs > 0" in checks
+    assert checks["rot_costs_x2 CAGR > 0"] is True and "CAGR after costs > 0" in checks
+    assert checks["expectancy > 0R"] is True

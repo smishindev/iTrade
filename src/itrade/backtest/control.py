@@ -82,14 +82,19 @@ class ControlRun:
     run: int
     trades: int
     expectancy_r: float
+    total_pnl: float = float("nan")  # the run's total P&L in USD (ETF_TREND_V2 statistic)
 
 
-def percentile(strategy_expectancy: float, runs: list[ControlRun]) -> float:
-    """Share of control runs (in %) whose expectancy is below the strategy's."""
-    values = np.array([r.expectancy_r for r in runs if not np.isnan(r.expectancy_r)])
+def percentile(
+    strategy_value: float, runs: list[ControlRun], statistic: str = "expectancy_r"
+) -> float:
+    """Share of control runs (in %) whose `statistic` (expectancy_r for H1, total_pnl for
+    ETF_TREND_V2 — review B2) is below the strategy's."""
+    values = np.array([getattr(r, statistic) for r in runs])
+    values = values[~np.isnan(values)]
     if len(values) == 0:
         return float("nan")
-    return float((values < strategy_expectancy).mean() * 100)
+    return float((values < strategy_value).mean() * 100)
 
 
 # --- execution (serial or parallel) ------------------------------------------------------------
@@ -106,7 +111,8 @@ def _one_run(k: int) -> ControlRun:
     w = _WORKER
     result = w["run_fn"](w["builder"](w["base_seed"] + k))
     r = result.trades["r"].astype(float)
-    return ControlRun(k, len(r), float(r.mean()) if len(r) else float("nan"))
+    pnl = float(result.trades["pnl"].astype(float).sum()) if len(r) else 0.0
+    return ControlRun(k, len(r), float(r.mean()) if len(r) else float("nan"), pnl)
 
 
 def h1_builder(

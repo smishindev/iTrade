@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from functools import partial
 
+import pandas as pd
+
 from itrade.backtest.account import settlement_rules
 from itrade.backtest.control import (
     ControlRun,
@@ -127,7 +129,6 @@ def trend_control(run: Run, kwargs: dict, runs: int | None, workers: int) -> lis
     from itrade.backtest.control import run_control_with
     from itrade.backtest.control_trend import (
         breakout_builder,
-        breakout_counts_per_year,
         breakout_eligible,
         rotation_builder,
     )
@@ -141,9 +142,11 @@ def trend_control(run: Run, kwargs: dict, runs: int | None, workers: int) -> lis
         )  # fmt: skip
     else:
         eligible = breakout_eligible(inputs.prepared, run.start, run.end, p)
+        # matched to the strategy's own new signals per year (held tickers are not signals)
+        years = pd.DatetimeIndex(run.result.signal_dates).year
+        counts = pd.Series(years).value_counts().sort_index()
         builder = partial(
-            breakout_builder, prepared=inputs.prepared, eligible=eligible,
-            counts=breakout_counts_per_year(eligible),
+            breakout_builder, prepared=inputs.prepared, eligible=eligible, counts=counts,
         )  # fmt: skip
     return run_control_with(
         partial(_run_with_prepared, **kwargs),

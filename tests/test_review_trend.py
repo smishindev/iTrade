@@ -17,6 +17,7 @@ from test_trend_rules import COSTS, setup
 
 SESSIONS = pd.DatetimeIndex(pd.bdate_range("2020-01-01", periods=700))
 GROUPS = {"A": "g1", "B": "g1", "C": "g2", "D": "g3", "E": "g4", "F": "g5"}
+EQUITY: dict = {}  # rules -> {date: E} of the fixture run (buyability in the rotation check)
 
 
 def bars(seed: int, drift: float) -> pd.DataFrame:
@@ -32,7 +33,7 @@ def bars(seed: int, drift: float) -> pd.DataFrame:
     })  # fmt: skip
 
 
-@pytest.fixture(scope="module", params=["rot_base", "brk_base"])
+@pytest.fixture(scope="module", params=["rot_base", "rot_stop2", "brk_base"])
 def world(request):
     variant = request.param
     params, p, policy, options = setup(variant)
@@ -46,11 +47,12 @@ def world(request):
         SESSIONS[260], SESSIONS[-1], options=options, r_denominator="planned",
         count_exiting_positions=False,
     )  # fmt: skip
+    EQUITY[p.rules] = dict(zip(res.equity["date"], res.equity["equity"], strict=True))
     return variant, res, market, prepared, p
 
 
 def checks_of(trade, market, prepared, p):
-    return check_trend_trade(trade, market, prepared, SESSIONS, p, GROUPS)
+    return check_trend_trade(trade, market, prepared, SESSIONS, p, GROUPS, EQUITY.get(p.rules))
 
 
 def test_every_simulated_trade_passes(world):

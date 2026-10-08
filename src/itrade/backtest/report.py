@@ -25,7 +25,7 @@ from itrade.backtest.corporate_actions import overrides_sha256
 from itrade.backtest.engine import market_frame
 from itrade.backtest.metrics import Summary, by_group, by_year, skip_reasons, summarize
 from itrade.backtest.runner import Run
-from itrade.backtest.stats import bootstrap_mean, wilson
+from itrade.backtest.stats import block_bootstrap_mean, bootstrap_mean, wilson
 from itrade.config import project_root, strategy_version
 
 
@@ -91,14 +91,20 @@ def write_report(
     s = summarize(res.trades, res.skipped, res.equity, res.signals)
     r = res.trades["r"].astype(float).to_numpy()
     crit = params["criteria"]
-    ci = bootstrap_mean(
-        r,
-        level=float(crit["expectancy_ci_level"]),
-        samples=int(crit["bootstrap_samples"]),
-        seed=int(params["control"]["base_seed"]),
-    )
+    boot = {
+        "level": float(crit["expectancy_ci_level"]),
+        "samples": int(crit["bootstrap_samples"]),
+        "seed": int(params["control"]["base_seed"]),
+    }
+    if crit.get("bootstrap_blocks") == "exit_month":  # ETF_TREND_V2: overlapping trades
+        months = pd.to_datetime(res.trades["exit_date"]).dt.to_period("M").astype(str)
+        ci = block_bootstrap_mean(r, months.to_numpy(), **boot)
+    else:
+        ci = bootstrap_mean(r, **boot)
     w = wilson(int((r > 0).sum()), len(r))
-    pct = percentile(s.expectancy_r, control) if control else None
+    statistic = params["control"].get("statistic", "expectancy_r")
+    value = s.total_pnl if statistic == "total_pnl" else s.expectancy_r
+    pct = percentile(value, control, statistic) if control else None
 
     capital = Decimal(str(params["risk"]["initial_capital_usd"]))
     ref = buy_and_hold(market_frame(run.inputs.bars[reference]), run.start, run.end, capital)
@@ -118,7 +124,8 @@ def write_report(
     meta |= {
         "run_id": run_id, "summary": s.as_dict(), "expectancy_ci": [ci.low, ci.high],
         "win_rate_ci": [w.low, w.high], "control_percentile": pct,
-        "control_runs": len(control) if control else 0, "reference": reference,
+        "control_runs": len(control) if control else 0, "control_statistic": statistic,
+        "reference": reference,
         "reference_cagr": ref_cagr, "equal_weight_cagr": ew_cagr,
     }  # fmt: skip
     (out / "meta.json").write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")

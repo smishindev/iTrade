@@ -235,14 +235,17 @@ def ledger_path(strategy: str):
 def cmd_backtest(args: argparse.Namespace) -> int:
     """Run a registered variant over a period, write the report, append the research ledger."""
     import os
-    from pathlib import Path
 
+    from itrade.backtest.inputs import is_trend
     from itrade.backtest.ledger import FinalAlreadyRun, LedgerRow, append, check_final_allowed
-    from itrade.backtest.report import fmt, git_commit, write_report
-    from itrade.backtest.runner import random_control, run_variant
+    from itrade.backtest.report import git_commit
     from itrade.config import load_strategy
 
     ledger = ledger_path(args.strategy)
+    if not ledger.exists() or "## Ledger" not in ledger.read_text(encoding="utf-8"):
+        # every run must be logged: no ledger (no pre-registration) -> no run
+        print(f"REFUSED: no research ledger at {ledger} — pre-register the hypothesis first")
+        return 3
     if args.period == "final":
         if not getattr(args, FINAL_FLAG):
             print(
@@ -270,9 +273,27 @@ def cmd_backtest(args: argparse.Namespace) -> int:
             notes=f"final run started at `{commit}`; result in the next row",
         ))  # fmt: skip
 
-    run = run_variant(args.strategy, args.variant, args.period)
     workers = args.workers or max(1, (os.cpu_count() or 2) - 2)
-    control = random_control(run, args.control, workers) if args.control else None
+    _run_and_log(args.strategy, args.variant, args.period, args.control, workers, ledger)
+    params = load_strategy(args.strategy)
+    if args.period == "final" and is_trend(params):
+        # ETF_TREND_V2 §8 p. 4 / review S1: the chosen variant's costs_x2 runs under the same lock
+        from itrade.backtest.compare import group_of
+
+        costs = group_of(args.variant, params).costs_x2
+        _run_and_log(args.strategy, costs, "final", 0, workers, ledger)
+    return 0
+
+
+def _run_and_log(strategy: str, variant: str, period: str, control_runs: int, workers: int, ledger):
+    from pathlib import Path
+
+    from itrade.backtest.ledger import LedgerRow, append
+    from itrade.backtest.report import fmt, write_report
+    from itrade.backtest.runner import random_control, run_variant
+
+    run = run_variant(strategy, variant, period)
+    control = random_control(run, control_runs, workers) if control_runs else None
     report = write_report(run, Store().root / "research", control)
     s = report.summary
     lo, hi = report.expectancy_ci
@@ -292,7 +313,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         f"{f'{pct:.1f}' if pct is not None else 'not run'}"
     )
     print(f"report: {Path(report.directory) / 'report.md'}")
-    return 0
+    return number
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
@@ -337,6 +358,7 @@ def cmd_review(args: argparse.Namespace) -> int:
         check = partial(
             check_trend_trade, market=market, prepared=run.inputs.prepared,
             sessions=run.inputs.sessions, p=run.inputs.signal_params, groups=groups,
+            equity=dict(zip(run.result.equity["date"], run.result.equity["equity"], strict=True)),
         )  # fmt: skip
     n, failed = write_review(
         sample,

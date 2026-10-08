@@ -115,3 +115,24 @@ def test_final_is_locked_before_it_runs(fake_project, capsys):
     assert len(final_runs(ledger)) == 1  # the lock row survived the crash
     assert main([*FINAL, "--control", "1000"]) == 3
     assert "REFUSED" in capsys.readouterr().out
+
+
+def test_no_run_without_a_ledger(fake_project, capsys):
+    ledger, _ = fake_project
+    ledger.unlink()
+    assert main(["backtest", "--period", "development"]) == 3
+    assert "pre-register" in capsys.readouterr().out
+
+
+def test_trend_final_runs_its_group_costs_x2_under_the_same_lock(fake_project, monkeypatch):
+    import itrade.cli as cli
+
+    _, _ = fake_project
+    h2 = cli.ledger_path("etf_trend_v2")
+    h2.write_text(TEMPLATE, encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(cli, "_run_and_log", lambda s, v, per, c, w, led: calls.append((v, per, c)))
+    args = ["backtest", "--strategy", "etf_trend_v2", "--variant", "brk_trend", *FINAL[1:]]
+    assert main([*args, "--control", "1000"]) == 0
+    assert calls == [("brk_trend", "final", 1000), ("brk_costs_x2", "final", 0)]
+    assert len(final_runs(h2)) == 1  # one lock row for the hypothesis

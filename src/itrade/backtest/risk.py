@@ -223,9 +223,11 @@ def size_entry(
             return _skip(reason)
 
     # #6: purchase + half the round trip must fit the settled cash still available.
+    wanted = q
     while q > ZERO and q * limit + round_trip(q, limit, stop) / 2 > state.available_cash:
         q -= g
-    if q <= ZERO:
+    if q <= ZERO or (policy.sizing == "weight" and q < wanted):
+        # weight sizing (ETF_TREND_V2): never a cut-down position — wait for settled cash
         return _skip("settled_cash")
 
     # #8: costs must not eat more than max_cost_in_r of the trade's planned risk.

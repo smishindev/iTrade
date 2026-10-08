@@ -94,6 +94,7 @@ class BacktestResult:
     skipped: pd.DataFrame
     equity: pd.DataFrame
     signals: int  # entry candidates produced by the strategy (before risk limits)
+    signal_dates: list = field(default_factory=list)  # decision date of each counted signal
 
     def trades_hash(self) -> str:
         csv = self.trades.to_csv(index=False, float_format="%.10g").encode("utf-8")
@@ -113,6 +114,7 @@ class _State:
     skipped: list[dict] = field(default_factory=list)
     equity: list[dict] = field(default_factory=list)
     signals: int = 0
+    signal_dates: list = field(default_factory=list)
 
 
 ZERO_PRICE = Decimal(0)  # a "stop" no open price can reach (no_stop diagnostic)
@@ -137,6 +139,9 @@ class Rules(Protocol):
     def on_skip(self, ticker: str, d: pd.Timestamp, reason: str) -> None: ...
 
     def is_new_signal(self, candidate) -> bool:  # False for a retry of an earlier signal
+        ...
+
+    def on_close(self, d: pd.Timestamp, equity: Decimal) -> None:  # before the decisions
         ...
 
 
@@ -165,6 +170,9 @@ class PullbackRules:
 
     def is_new_signal(self, candidate) -> bool:
         return True
+
+    def on_close(self, d: pd.Timestamp, equity: Decimal) -> None:
+        pass
 
 
 def make_rules(params, sessions: pd.DatetimeIndex, info: Mapping[str, InstrumentInfo]) -> Rules:
@@ -290,13 +298,17 @@ def run_backtest(
         if options.skip_weekday and d.day_name() == options.skip_weekday:
             continue  # owner absent: no decisions after this close (broker-side stops stay active)
 
+        strategy.on_close(d, equity)
+
         # 3a. Exit decisions for tomorrow's open.
         still_open = {t: p for t, p in acct.positions.items() if t not in st.pending_exits}
         st.pending_exits.update(strategy.exit_decisions(d, still_open, prepared, sessions))
 
         # 3b. Entry decisions, sized against the whole book (positions + pending entries).
         candidates, skipped = strategy.entry_decisions(d, prepared, set(acct.positions))
-        st.signals += sum(1 for c in candidates if strategy.is_new_signal(c))
+        new = [c for c in candidates if strategy.is_new_signal(c)]
+        st.signals += len(new)
+        st.signal_dates += [d] * len(new)
         st.skipped += [_skip(s.date, s.ticker, s.reason) for s in skipped]
         for c in candidates:
             exclude = set() if count_exiting_positions else set(st.pending_exits)
@@ -305,7 +317,7 @@ def run_backtest(
             rt = cost_model_round_trip(cost_cfg, info[c.ticker].half_spread_bps)
             res = size_entry(
                 c.limit,
-                c.stop,
+                getattr(c, "risk_stop", None) or c.stop,  # the level that defines 1R
                 info[c.ticker].group,
                 Decimal(repr(info[c.ticker].half_spread_bps)),
                 state,
@@ -313,7 +325,9 @@ def run_backtest(
                 rt,
             )
             if not res.taken:
-                st.skipped.append(_skip(d, c.ticker, res.reason))
+                # a retry's rejection is logged but is not a new signal (executable share)
+                label = res.reason if strategy.is_new_signal(c) else f"{res.reason}:retry"
+                st.skipped.append(_skip(d, c.ticker, label))
                 strategy.on_skip(c.ticker, d, res.reason)
                 continue
             key = f"{d.date()}:{c.ticker}"
@@ -329,6 +343,7 @@ def run_backtest(
         skipped=pd.DataFrame(st.skipped, columns=["date", "ticker", "reason"]),
         equity=pd.DataFrame(st.equity),
         signals=st.signals,
+        signal_dates=st.signal_dates,
     )
 
 

@@ -41,3 +41,18 @@ def test_bootstrap_width_close_to_normal_theory():
 
 def test_bootstrap_empty():
     assert math.isnan(bootstrap_mean(np.array([])).estimate)
+
+
+def test_block_bootstrap_is_wider_when_trades_move_together():
+    from itrade.backtest.stats import block_bootstrap_mean
+
+    rng = np.random.default_rng(0)
+    month_effect = rng.normal(0, 1.0, 40)  # 40 months, 5 trades each sharing the month's move
+    x = np.repeat(month_effect, 5) + rng.normal(0, 0.2, 200)
+    blocks = np.repeat(np.arange(40), 5)
+    iid = bootstrap_mean(x, samples=4000, seed=1)
+    blk = block_bootstrap_mean(x, blocks, samples=4000, seed=1)
+    assert blk.estimate == iid.estimate
+    assert (blk.high - blk.low) > 1.8 * (iid.high - iid.low)
+    one_per_block = block_bootstrap_mean(x[:40], np.arange(40), samples=4000, seed=1)
+    assert one_per_block.low < one_per_block.estimate < one_per_block.high
