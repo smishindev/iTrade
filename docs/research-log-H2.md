@@ -53,6 +53,15 @@ and most neighbours CAGR > 0 on validation · executable signals ≥ 70% · max 
 
 ---
 
+## Decision P1.H2.14 (2026-10-08, owner): H2 rejected on validation — final period not run
+
+- The pre-registered rule (spec §8) picks `rot_mom63` (validation CAGR +2.7%, control percentile on total P&L **43.1**
+  < 80) → early rejection. No candidate above the 59th percentile; every variant −0.8…+2.7% a year vs SPY +15.7%.
+- Review P1.H2.13 (quant-reviewer): trustworthy; 43.1 reproduces; the control matches the strategy; other random draws
+  37–57. Report: [spikes/hypothesis-H2-validation.md](spikes/hypothesis-H2-validation.md).
+- **Decision:** H2 is rejected by its own rule. The final period 2021-01-04 … 2026-09-30 stays **unseen**.
+- Hypotheses used: **2 of 3** (SCOPE, stop criteria).
+
 ## Ledger
 
 | # | Date | Variant | Period | Trades | Exp. R (90% CI) | Win % | Max DD | Control pct | Notes |
