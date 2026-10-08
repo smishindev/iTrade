@@ -171,11 +171,26 @@ def md_table(df: pd.DataFrame, index: bool = True) -> str:
     return "\n".join([head, sep, *rows])
 
 
+def bootstrap_note(params: dict) -> str:
+    if params["criteria"].get("bootstrap_blocks") == "exit_month":
+        return (
+            "The expectancy interval is a block bootstrap by exit month: trades that overlap in "
+            "time stay together."
+        )
+    return (
+        "Trades are treated as independent in the bootstrap; overlapping trades in correlated "
+        "ETFs make the true interval wider."
+    )
+
+
 def render_markdown(run: Run, meta: dict, s: Summary, sections: dict) -> str:
     lo, hi = meta["expectancy_ci"]
     wlo, whi = meta["win_rate_ci"]
     pct = meta["control_percentile"]
-    control = f"{pct:.1f} ({meta['control_runs']} runs)" if pct is not None else "not run"
+    stat = "total P&L" if meta.get("control_statistic") == "total_pnl" else "mean R"
+    control = (
+        f"{pct:.1f} ({meta['control_runs']} runs, on {stat})" if pct is not None else "not run"
+    )
     note = (
         (
             "_Development-period results are for debugging only (pre-registration, "
@@ -242,8 +257,7 @@ def render_markdown(run: Run, meta: dict, s: Summary, sections: dict) -> str:
         "## Provenance", "", md_table(table(provenance_rows, columns=["", "value"]), False), "",
         "## Results (after all costs)", "",
         md_table(table(rows, columns=["metric", "value"]), False), "",
-        "Trades are treated as independent in the bootstrap; overlapping trades in correlated "
-        "ETFs make the true interval wider.",
+        bootstrap_note(run.inputs.params),
         "", "## Skipped signals", "", md_table(sections["reasons"]),
         "", "## By year (exit year)", "", md_table(sections["year"]),
         "", "## By correlation group", "", md_table(sections["group"]),

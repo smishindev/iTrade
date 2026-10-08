@@ -57,3 +57,6 @@ and most neighbours CAGR > 0 on validation · executable signals ≥ 70% · max 
 
 | # | Date | Variant | Period | Trades | Exp. R (90% CI) | Win % | Max DD | Control pct | Notes |
 |---|------|---------|--------|--------|-----------------|-------|--------|-------------|-------|
+| 1 | 2026-10-07 | rot_base | development | 168 | 0.048 (-0.067 … 0.168) | 41.7% | 15.1% | 77.4 | run `rot_base_development_bf04ac09`, exec 99.4%, costs 0.033R, v`22b3a82e` · **superseded by #3: identical trades and numbers; the row order of the trades table was not deterministic (fixed in c38ff8e)** |
+| 2 | 2026-10-07 | brk_base | development | 193 | 0.223 (0.050 … 0.406) | 37.8% | 8.6% | 98.5 | run `brk_base_development_c8582914`, exec 96.7%, costs 0.066R, v`22b3a82e` |
+| 3 | 2026-10-07 | rot_base | development | 168 | 0.048 (-0.067 … 0.168) | 41.7% | 15.1% | 77.4 | run `rot_base_development_5db4ddf5`, exec 99.4%, costs 0.033R, v`22b3a82e` |
