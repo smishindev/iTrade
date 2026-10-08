@@ -79,6 +79,28 @@ class RiskPolicy:
             max_positions_per_group=int(r["max_positions_per_group"]),
         )
 
+    @classmethod
+    def for_tom(cls, params: dict, min_per_order_usd: float, slippage_bps: float) -> RiskPolicy:
+        """ETF_TOM_V3 §2 p. 4: weight / N per ticker, whole shares, no group cap (all US equity)."""
+        r, tom = params["risk"], params["tom"]
+        whole = r["share_granularity"] == "whole"
+        return cls(
+            risk_per_trade=ZERO,
+            max_open_positions=int(r["max_open_positions"]),
+            max_total_open_risk=None,
+            max_position_fraction=_d(r["max_position_fraction"]),
+            max_invested_fraction=_d(r["max_invested_fraction"]),
+            max_group_fraction=None,
+            max_order_notional_usd=None,
+            max_cost_in_r=_d(r["max_cost_in_r"]),
+            granularity=Decimal(1) if whole else _d(r["fractional_step"]),
+            min_per_order_usd=_d(min_per_order_usd),
+            slippage_bps=_d(slippage_bps),
+            sizing="weight",
+            weight=_d(tom["weight"]) / len(tom["tickers"]),
+            max_positions_per_group=None,
+        )
+
 
 def _d(x: float | int | str) -> Decimal:
     return Decimal(str(x))

@@ -1,0 +1,108 @@
+# ETF_TOM_V3 (hypothesis H3, the last of three) — turn-of-the-month window in index ETFs.
+# Specification: docs/STRATEGY_ETF_TOM_V3.md. The strategy version is the SHA-256 of the canonical JSON
+# of {"strategy": this file, "universe": config/universes/etf_pullback_v1.toml} (keys sorted, no
+# whitespace) — any change in either file is a new version.
+# Written 2026-10-09 from the owner's decisions, before any H3 run (pre-registration).
+
+[strategy]
+id = "ETF_TOM_V3"
+universe = "etf_pullback_v1"              # SPY, IWM, QQQ are members; membership rules as H1
+research_log = "docs/research-log-H3.md"  # own ledger: the final lock is per hypothesis
+
+[indicators]
+price_series = "dividend_neutral"
+atr_period = 20
+liquidity_window = 20
+
+[tom]                                     # spec §2
+tickers = ["SPY"]
+entry_day = -1                            # enter at the open of the month's last session (-2: one earlier)
+exit_day = 3                              # exit at the open after the close of new-month session +3
+limit_atr = 1.0                           # LOO limit = C + limit_atr * ATR/M; unfilled -> window skipped
+stop_atr = 3.0                            # emergency GTC stop = C - stop_atr * ATR/M (also the R unit)
+weight = 0.80                             # of equity, split equally across the tickers
+
+[universe_rules]
+min_history_sessions = 756
+min_avg_dollar_volume_usd = 50_000_000
+
+[risk]
+initial_capital_usd = 3280
+max_open_positions = 3
+max_position_fraction = 0.80
+max_invested_fraction = 0.95
+max_cost_in_r = 0.10
+share_granularity = "whole"
+fractional_step = 0.0001
+tick_size = 0.01
+
+[simulation]                              # as H1
+fill_entry = "open"
+fill_exit = "open"
+fill_stop = "stop_or_gap_open"
+dividend_withholding = 0.25
+settlement = [
+  { from = "1995-06-07", days = 3 },
+  { from = "2017-09-05", days = 2 },
+  { from = "2024-05-28", days = 1 },
+]
+
+[periods]                                 # spec §5 (owner, 2026-10-09): selection on 2006–2020 as a whole
+development = { start = "2006-01-03", end = "2020-12-31" }   # = validation; not a separate period
+validation  = { start = "2006-01-03", end = "2020-12-31" }
+final       = { start = "2021-01-04", end = "2026-09-30" }   # runs once
+
+[control]
+runs = 1000
+base_seed = 20261009
+statistic = "total_pnl"                   # random 4-session windows elsewhere in the month (spec §4)
+
+[criteria]                                # spec §8: all must hold on the final period
+r_denominator = "planned"
+min_expectancy_r = 0.0
+expectancy_ci_level = 0.90
+bootstrap_samples = 10000
+bootstrap_blocks = "exit_month"
+min_trades = 60
+min_control_percentile = 95
+max_drawdown = 0.20
+min_executable_signal_share = 0.70
+
+[selection]                               # spec §7 (same rule as H2)
+margin_control_pct = 10
+early_reject_max_cagr = 0.0
+early_reject_min_control_percentile = 80
+
+# Pre-registered variants (spec §6, 8 of 20). Family = first override key.
+[[variants]]
+name = "tom_spy"
+rules = "tom"
+[[variants]]
+name = "tom_iwm"
+rules = "tom"
+overrides = { "tom.tickers" = ["IWM"] }
+[[variants]]
+name = "tom_qqq"
+rules = "tom"
+overrides = { "tom.tickers" = ["QQQ"] }
+[[variants]]
+name = "tom_basket"
+rules = "tom"
+overrides = { "tom.tickers" = ["SPY", "IWM", "QQQ"] }
+[[variants]]
+name = "tom_entry2"
+rules = "tom"
+overrides = { "tom.entry_day" = -2 }
+[[variants]]
+name = "tom_exit2"
+rules = "tom"
+overrides = { "tom.exit_day" = 2 }
+[[variants]]
+name = "tom_exit4"
+rules = "tom"
+overrides = { "tom.exit_day" = 4 }
+[[variants]]
+name = "tom_costs_x2"
+rules = "tom"
+diagnostic = true
+overrides = { "costs.multiplier" = 2.0 }

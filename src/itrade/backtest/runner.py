@@ -22,7 +22,7 @@ from itrade.backtest.engine import (
     market_frame,
     run_backtest,
 )
-from itrade.backtest.inputs import StrategyInputs, is_trend, load_inputs
+from itrade.backtest.inputs import StrategyInputs, is_money, is_tom, is_trend, load_inputs
 from itrade.backtest.risk import RiskPolicy
 from itrade.backtest.variants import RunOptions, apply_variant
 from itrade.config import load_strategy
@@ -89,12 +89,14 @@ def engine_kwargs(
         "withholding": Decimal(str(params["simulation"]["dividend_withholding"])),
         "options": options,
         # H2 §5: R on planned risk; a position sold at the next open does not block its entry
-        "r_denominator": "planned" if is_trend(params) else "actual",
-        "count_exiting_positions": not is_trend(params),
+        "r_denominator": "planned" if is_money(params) else "actual",
+        "count_exiting_positions": not is_money(params),
     }
 
 
 def risk_policy(params: dict, costs: CostConfig) -> RiskPolicy:
+    if is_tom(params):
+        return RiskPolicy.for_tom(params, costs.min_per_order_usd, costs.slippage_bps)
     if is_trend(params):
         rules = params["strategy"]["rules"]
         return RiskPolicy.for_trend(params, rules, costs.min_per_order_usd, costs.slippage_bps)
@@ -109,6 +111,8 @@ def random_control(run: Run, runs: int | None = None, workers: int = 1) -> list[
     """Spec §10 random control for an existing run (same variant, period and settings)."""
     params = run.inputs.params
     kwargs = engine_kwargs(run.inputs, params, run.start, run.end, run.options)
+    if is_tom(params):
+        return tom_control(run, kwargs, runs, workers)
     if is_trend(params):
         return trend_control(run, kwargs, runs, workers)
     eligible = eligible_pairs(run.inputs.prepared, run.start, run.end)
@@ -154,6 +158,25 @@ def trend_control(run: Run, kwargs: dict, runs: int | None, workers: int) -> lis
         builder = partial(
             breakout_builder, prepared=inputs.prepared, eligible=eligible, counts=counts,
         )  # fmt: skip
+    return run_control_with(
+        partial(_run_with_prepared, **kwargs),
+        builder,
+        runs=runs if runs is not None else int(params["control"]["runs"]),
+        base_seed=int(params["control"]["base_seed"]),
+        workers=workers,
+    )
+
+
+def tom_control(run: Run, kwargs: dict, runs: int | None, workers: int) -> list[ControlRun]:
+    """ETF_TOM_V3 §4: one random 4-session window per month, before the turn of the month."""
+    from itrade.backtest.control import run_control_with
+    from itrade.backtest.control_tom import tom_builder
+
+    params, inputs = run.inputs.params, run.inputs
+    builder = partial(
+        tom_builder, prepared=inputs.prepared, sessions=inputs.sessions,
+        start=run.start, end=run.end, p=inputs.signal_params,
+    )  # fmt: skip
     return run_control_with(
         partial(_run_with_prepared, **kwargs),
         builder,

@@ -29,7 +29,8 @@ class RuleGroup:
 
 
 def is_trend(params: dict) -> bool:
-    return params.get("strategy", {}).get("id") == "ETF_TREND_V2"
+    """Measured on the account's money with rule groups (H2 ETF_TREND_V2, H3 ETF_TOM_V3)."""
+    return params.get("strategy", {}).get("id") in ("ETF_TREND_V2", "ETF_TOM_V3")
 
 
 def rule_groups(params: dict) -> list[RuleGroup]:
@@ -37,7 +38,7 @@ def rule_groups(params: dict) -> list[RuleGroup]:
     if not is_trend(params):
         return [RuleGroup("", "base", "costs_x2", tuple(variants))]
     out = []
-    for rules in ("rotation", "breakout"):
+    for rules in dict.fromkeys(v["rules"] for v in variants):  # groups in registration order
         vs = tuple(v for v in variants if v.get("rules") == rules)
         base = next(v["name"] for v in vs if not v.get("overrides"))
         costs = next(

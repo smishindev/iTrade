@@ -236,7 +236,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     """Run a registered variant over a period, write the report, append the research ledger."""
     import os
 
-    from itrade.backtest.inputs import is_trend
+    from itrade.backtest.inputs import is_money
     from itrade.backtest.ledger import FinalAlreadyRun, LedgerRow, append, check_final_allowed
     from itrade.backtest.report import git_commit
     from itrade.config import load_strategy
@@ -276,7 +276,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     workers = args.workers or max(1, (os.cpu_count() or 2) - 2)
     _run_and_log(args.strategy, args.variant, args.period, args.control, workers, ledger)
     params = load_strategy(args.strategy)
-    if args.period == "final" and is_trend(params):
+    if args.period == "final" and is_money(params):
         # ETF_TREND_V2 §8 p. 4 / review S1: the chosen variant's costs_x2 runs under the same lock
         from itrade.backtest.compare import group_of
 
@@ -337,7 +337,7 @@ def cmd_review(args: argparse.Namespace) -> int:
     """Re-derive sampled trades from bars and the spec; charts + review.md next to the report.
     Does not touch the research ledger (the run itself is logged by `backtest`)."""
     from itrade.backtest.engine import market_frame
-    from itrade.backtest.inputs import is_trend
+    from itrade.backtest.inputs import is_tom, is_trend
     from itrade.backtest.report import provenance, review_sample
     from itrade.backtest.review import write_review
     from itrade.backtest.runner import run_variant
@@ -359,6 +359,15 @@ def cmd_review(args: argparse.Namespace) -> int:
             check_trend_trade, market=market, prepared=run.inputs.prepared,
             sessions=run.inputs.sessions, p=run.inputs.signal_params, groups=groups,
             equity=dict(zip(run.result.equity["date"], run.result.equity["equity"], strict=True)),
+        )  # fmt: skip
+    if is_tom(run.inputs.params):  # ETF_TOM_V3: window recomputed from the calendar
+        from functools import partial
+
+        from itrade.backtest.review_tom import check_tom_trade
+
+        check = partial(
+            check_tom_trade, market=market, prepared=run.inputs.prepared,
+            sessions=run.inputs.sessions, p=run.inputs.signal_params,
         )  # fmt: skip
     n, failed = write_review(
         sample,

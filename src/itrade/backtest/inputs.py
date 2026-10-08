@@ -13,17 +13,30 @@ from itrade.config import Universe, load_named_universe, load_strategy
 from itrade.data.calendar import load_sessions
 from itrade.data.store import Store
 from itrade.strategies.etf_pullback_v1 import SignalParams, prepare_instrument
+from itrade.strategies.etf_tom_v3 import TomParams, prepare_tom_instrument
 from itrade.strategies.etf_trend_v2 import TrendParams, prepare_trend_instrument
 
 
 def is_trend(params: dict) -> bool:
+    """ETF_TREND_V2 (H2)."""
     return params["strategy"]["id"] == "ETF_TREND_V2"
+
+
+def is_tom(params: dict) -> bool:
+    """ETF_TOM_V3 (H3)."""
+    return params["strategy"]["id"] == "ETF_TOM_V3"
+
+
+def is_money(params: dict) -> bool:
+    """Hypotheses measured on the account's money (H2 onwards): planned-risk R, total-P&L
+    control percentile, selection on control percentile, early rejection."""
+    return is_trend(params) or is_tom(params)
 
 
 @dataclass
 class StrategyInputs:
     params: dict
-    signal_params: SignalParams | TrendParams
+    signal_params: SignalParams | TrendParams | TomParams
     universe: Universe
     bars: dict[str, pd.DataFrame]
     membership: pd.DataFrame
@@ -42,7 +55,9 @@ def load_inputs(
     bars = {t: apply_dividend_overrides(store.read_bars(t), t, overrides) for t in universe.tickers}
     table = membership(bars, MembershipRules.from_strategy(params))
     sessions = load_sessions(store.root, universe.calendar)
-    if is_trend(params):
+    if is_tom(params):
+        sp, prepare = TomParams.from_strategy(params), prepare_tom_instrument
+    elif is_trend(params):
         sp, prepare = TrendParams.from_strategy(params), prepare_trend_instrument
     else:
         sp, prepare = SignalParams.from_strategy(params), prepare_instrument
