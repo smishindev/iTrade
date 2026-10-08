@@ -1,10 +1,11 @@
 """Compare registered variants on one period and apply the pre-registered selection rule.
 
 H1 (research-log): base is used unless a candidate beats it by >= +0.05R and the other members of
-its parameter family (base included) have positive expectancy. ETF_TREND_V2 (spec §8, measured on
-the account's money — owner 2026-10-08): the same rule on validation CAGR (margin 1 pp, family all
-CAGR > 0) inside each rule group, then the group pick with the higher control percentile (total
-P&L), then early rejection (CAGR <= 0 or control percentile < 80 -> no final run).
+its parameter family (base included) have positive expectancy. ETF_TREND_V2 (spec §8, owner
+2026-10-08): inside each rule group a variant replaces the base if its control percentile (total
+P&L) is >= 10 points higher and its whole family has CAGR > 0 (several qualify -> the highest);
+then the group pick with the higher control percentile; then early rejection (CAGR <= 0 or
+control percentile < 80 -> no final run).
 Diagnostics never win. A variant's family is its first override key (within its rule group).
 """
 
@@ -180,7 +181,8 @@ def _pick_in_group(
                 verdict = "not eligible until P1.B.10 confirms fractional shares with a stop"
             reasons.append(
                 f"{name} ({key}): {e:+.3f} {unit} vs {g.base} {base:+.3f}, "
-                f"{'beats' if beats else 'does not beat'} by {margin} {unit}; "
+                f"{'beats' if beats else 'does not beat'} it by >= {margin} {unit} "
+                f"(gap {e - base:+.1f}); "
                 f"family {others} {'all > 0' if positive else 'not all > 0'} → {verdict}"
             )
             if verdict == "selected":
