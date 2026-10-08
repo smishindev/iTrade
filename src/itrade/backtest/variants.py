@@ -29,6 +29,8 @@ def apply_variant(params: dict, name: str) -> tuple[dict, RunOptions, bool]:
         raise KeyError(f"unknown variant {name!r}; registered: {variant_names(params)}")
     variant = matches[0]
     out = copy.deepcopy(params)
+    if "rules" in variant:  # ETF_TREND_V2: which rule set the variant runs (spec §7)
+        out["strategy"]["rules"] = variant["rules"]
     options = RunOptions()
     for key, value in variant.get("overrides", {}).items():
         section, _, field = key.partition(".")

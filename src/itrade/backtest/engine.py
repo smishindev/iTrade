@@ -134,6 +134,11 @@ class Rules(Protocol):
 
     def on_entry(self, ticker: str, d: pd.Timestamp) -> None: ...
 
+    def on_skip(self, ticker: str, d: pd.Timestamp, reason: str) -> None: ...
+
+    def is_new_signal(self, candidate) -> bool:  # False for a retry of an earlier signal
+        ...
+
 
 @dataclass
 class PullbackRules:
@@ -154,6 +159,12 @@ class PullbackRules:
 
     def on_entry(self, ticker: str, d: pd.Timestamp) -> None:
         pass
+
+    def on_skip(self, ticker: str, d: pd.Timestamp, reason: str) -> None:
+        pass
+
+    def is_new_signal(self, candidate) -> bool:
+        return True
 
 
 def make_rules(params, sessions: pd.DatetimeIndex, info: Mapping[str, InstrumentInfo]) -> Rules:
@@ -233,10 +244,12 @@ def run_backtest(
                 st.skipped.append(
                     _skip(pe.signal_date, pe.ticker, "limit_not_reached" if b else "no_bar")
                 )
+                strategy.on_skip(pe.ticker, d, "limit_not_reached" if b else "no_bar")
                 continue
             entry_cost = cost(pe.ticker, pe.qty, fill.price, BUY)
             if pe.qty * fill.price + entry_cost > acct.available():
                 st.skipped.append(_skip(pe.signal_date, pe.ticker, "settled_cash_at_fill"))
+                strategy.on_skip(pe.ticker, d, "settled_cash_at_fill")
                 continue
             acct.buy(pe.ticker, pe.qty, fill.price, entry_cost, d, pe.stop)
             st.planned[pe.ticker] = (pe.limit, pe.planned_risk)
@@ -283,7 +296,7 @@ def run_backtest(
 
         # 3b. Entry decisions, sized against the whole book (positions + pending entries).
         candidates, skipped = strategy.entry_decisions(d, prepared, set(acct.positions))
-        st.signals += len(candidates)
+        st.signals += sum(1 for c in candidates if strategy.is_new_signal(c))
         st.skipped += [_skip(s.date, s.ticker, s.reason) for s in skipped]
         for c in candidates:
             exclude = set() if count_exiting_positions else set(st.pending_exits)
@@ -301,6 +314,7 @@ def run_backtest(
             )
             if not res.taken:
                 st.skipped.append(_skip(d, c.ticker, res.reason))
+                strategy.on_skip(c.ticker, d, res.reason)
                 continue
             key = f"{d.date()}:{c.ticker}"
             acct.reserve(key, res.reservation)

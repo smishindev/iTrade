@@ -13,12 +13,17 @@ from itrade.config import Universe, load_named_universe, load_strategy
 from itrade.data.calendar import load_sessions
 from itrade.data.store import Store
 from itrade.strategies.etf_pullback_v1 import SignalParams, prepare_instrument
+from itrade.strategies.etf_trend_v2 import TrendParams, prepare_trend_instrument
+
+
+def is_trend(params: dict) -> bool:
+    return params["strategy"]["id"] == "ETF_TREND_V2"
 
 
 @dataclass
 class StrategyInputs:
     params: dict
-    signal_params: SignalParams
+    signal_params: SignalParams | TrendParams
     universe: Universe
     bars: dict[str, pd.DataFrame]
     membership: pd.DataFrame
@@ -37,9 +42,12 @@ def load_inputs(
     bars = {t: apply_dividend_overrides(store.read_bars(t), t, overrides) for t in universe.tickers}
     table = membership(bars, MembershipRules.from_strategy(params))
     sessions = load_sessions(store.root, universe.calendar)
-    sp = SignalParams.from_strategy(params)
+    if is_trend(params):
+        sp, prepare = TrendParams.from_strategy(params), prepare_trend_instrument
+    else:
+        sp, prepare = SignalParams.from_strategy(params), prepare_instrument
     prepared = {}
     for ticker, df in bars.items():
         member = table[table["ticker"] == ticker].set_index("date")["is_member"]
-        prepared[ticker] = prepare_instrument(df, member, sessions, sp)
+        prepared[ticker] = prepare(df, member, sessions, sp)
     return StrategyInputs(params, sp, universe, bars, table, sessions, prepared)

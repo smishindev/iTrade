@@ -20,7 +20,7 @@ from itrade.backtest.engine import (
     market_frame,
     run_backtest,
 )
-from itrade.backtest.inputs import StrategyInputs, load_inputs
+from itrade.backtest.inputs import StrategyInputs, is_trend, load_inputs
 from itrade.backtest.risk import RiskPolicy
 from itrade.backtest.variants import RunOptions, apply_variant
 from itrade.config import load_strategy
@@ -78,7 +78,7 @@ def engine_kwargs(
         "info": info,
         "sessions": inputs.sessions,
         "signal_params": inputs.signal_params,
-        "policy": RiskPolicy.from_config(params, costs.min_per_order_usd, costs.slippage_bps),
+        "policy": risk_policy(params, costs),
         "cost_cfg": costs,
         "rules": settlement_rules(params),
         "initial_capital": Decimal(str(params["risk"]["initial_capital_usd"])),
@@ -86,7 +86,17 @@ def engine_kwargs(
         "end": end,
         "withholding": Decimal(str(params["simulation"]["dividend_withholding"])),
         "options": options,
+        # H2 §5: R on planned risk; a position sold at the next open does not block its entry
+        "r_denominator": "planned" if is_trend(params) else "actual",
+        "count_exiting_positions": not is_trend(params),
     }
+
+
+def risk_policy(params: dict, costs: CostConfig) -> RiskPolicy:
+    if is_trend(params):
+        rules = params["strategy"]["rules"]
+        return RiskPolicy.for_trend(params, rules, costs.min_per_order_usd, costs.slippage_bps)
+    return RiskPolicy.from_config(params, costs.min_per_order_usd, costs.slippage_bps)
 
 
 def _run_with_prepared(prepared, **kwargs) -> BacktestResult:
