@@ -130,16 +130,24 @@ def test_trend_picks_the_group_with_the_higher_control_percentile(tmp_path):
     assert sel.group_picks == {"rotation": "rot_base", "breakout": "brk_base"}
 
 
-def test_trend_variant_must_beat_base_cagr_by_one_point(tmp_path):
+def test_trend_variant_must_beat_base_control_by_ten_points(tmp_path):
+    """Owner 2026-10-08: within a group, the control percentile (exposure-neutral) decides;
+    a more invested variant with a higher CAGR but the same percentile does not win."""
     runs = trend_runs(
-        tmp_path, {"rot_base": 0.1, "rot_mom63": 0.1, "rot_mom252": 0.1, "brk_base": 0.1}
+        tmp_path, {"rot_base": 0.1, "rot_top2": 0.1, "rot_top4": 0.1, "brk_base": 0.1}
     )
-    cagr = {"rot_base": 0.05, "rot_mom63": 0.065, "rot_mom252": 0.03, "brk_base": 0.01}
-    runs["cagr"] = pd.Series(cagr)  # rot_mom63 +1.5 pp, family all > 0
-    sel = select(runs.assign(control_percentile=90.0), TREND)
-    assert sel.group_picks["rotation"] == "rot_mom63"
-    runs["cagr"] = pd.Series(cagr | {"rot_mom63": 0.055})  # only +0.5 pp
-    assert select(runs.assign(control_percentile=90.0), TREND).group_picks["rotation"] == "rot_base"
+    runs["cagr"] = pd.Series(
+        {"rot_base": 0.05, "rot_top2": 0.03, "rot_top4": 0.09, "brk_base": 0.01}
+    )
+    pct = {"rot_base": 70.0, "rot_top2": 72.0, "rot_top4": 75.0, "brk_base": 60.0}
+    runs["control_percentile"] = pd.Series(pct)
+    assert select(runs, TREND).group_picks["rotation"] == "rot_base"  # +3.5 pp CAGR, +5 pct
+    runs["control_percentile"] = pd.Series(pct | {"rot_top4": 85.0})
+    assert select(runs, TREND).group_picks["rotation"] == "rot_top4"  # +15 points, family > 0
+    runs["cagr"] = pd.Series(
+        {"rot_base": 0.05, "rot_top2": -0.01, "rot_top4": 0.09, "brk_base": 0.01}
+    )
+    assert select(runs, TREND).group_picks["rotation"] == "rot_base"  # a family member lost money
 
 
 def test_trend_early_rejection(tmp_path):

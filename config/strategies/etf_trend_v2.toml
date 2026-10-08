@@ -85,7 +85,8 @@ max_drawdown = 0.20
 min_executable_signal_share = 0.70
 
 [selection]                               # spec §8 (owner, 2026-10-08: measured on the account's money)
-margin_cagr = 0.01                        # a family variant must beat its base's CAGR by 1 pp on validation
+margin_control_pct = 10                   # a family variant must beat its base's control percentile by 10 points
+                                          # (owner, 2026-10-08: CAGR rewarded exposure, review); family CAGR > 0
 early_reject_max_cagr = 0.0               # chosen variant's validation CAGR at or below this -> reject, no final
 early_reject_min_control_percentile = 80  # ... or its control percentile (total P&L) below this
 

@@ -138,11 +138,19 @@ def neighbours(variant: str, params: dict) -> list[str]:
     return sorted({m for fam in fams if variant in fam for m in fam} - {variant})
 
 
-def _metric(params: dict) -> tuple[str, float, str]:
-    """(column, margin, unit) the selection compares: H1 expectancy in R, H2 CAGR."""
+def _metric(params: dict) -> tuple[str, float, str, str]:
+    """(column, margin, unit, family-positive column) of the within-group selection.
+    H1: expectancy in R. ETF_TREND_V2: control percentile (exposure-neutral — the control uses
+    the variant's own sizing), with every family member's CAGR > 0 (owner, 2026-10-08)."""
     if is_trend(params):
-        return "cagr", float(params["selection"]["margin_cagr"]), "CAGR"
-    return "expectancy_r", SELECTION_MARGIN_R, "R"
+        margin = float(params["selection"]["margin_control_pct"])
+        return "control_percentile", margin, "pct", "cagr"
+    return "expectancy_r", SELECTION_MARGIN_R, "R", "expectancy_r"
+
+
+def _num(x) -> float:
+    """A missing value (e.g. no control run) never wins a comparison."""
+    return float("-inf") if x is None or pd.isna(x) else float(x)
 
 
 def _pick_in_group(
@@ -150,8 +158,8 @@ def _pick_in_group(
 ) -> tuple[str, list[str]]:
     if g.base not in runs.index:
         raise ValueError(f"{g.base} has not been run on this period")
-    col, margin, unit = _metric(params)
-    base = float(runs.loc[g.base, col])
+    col, margin, unit, pos_col = _metric(params)
+    base = _num(runs.loc[g.base, col])
     reasons, winners = [], []
     for key, members in families(params).items():
         if g.base not in members:
@@ -162,10 +170,10 @@ def _pick_in_group(
             if name not in runs.index:
                 reasons.append(f"{name}: not run")
                 continue
-            e = float(runs.loc[name, col])
+            e = _num(runs.loc[name, col])
             others = [m for m in members if m != name]
             missing = [m for m in others if m not in runs.index]
-            positive = not missing and all(runs.loc[m, col] > 0 for m in others)
+            positive = not missing and all(runs.loc[m, pos_col] > 0 for m in others)
             beats = e >= base + margin
             verdict = "selected" if beats and positive else "no"
             if name.endswith("fractional") and not fractional_confirmed:
