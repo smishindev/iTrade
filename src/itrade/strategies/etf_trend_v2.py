@@ -48,6 +48,10 @@ class TrendParams:
     top_n: int
     one_per_group: bool
     retry_entries: bool
+    risk_unit_atr: float  # rotation's R unit (3 ATR for every variant, review B3)
+    fallback_unbuyable: bool  # rotation: an unbuyable target -> next by rank
+    weight: Decimal  # rotation: equal share of equity per position
+    whole_shares: bool
     # breakout
     entry_sessions: int
     exit_sessions: int
@@ -74,6 +78,10 @@ class TrendParams:
             top_n=int(rot["top_n"]),
             one_per_group=bool(rot["one_per_group"]),
             retry_entries=bool(rot["retry_entries_until_month_end"]),
+            risk_unit_atr=float(rot["risk_unit_atr"]),
+            fallback_unbuyable=bool(rot["fallback_unbuyable"]),
+            weight=Decimal(str(rot["weight"])),
+            whole_shares=params["risk"]["share_granularity"] == "whole",
             entry_sessions=int(brk["entry_sessions"]),
             exit_sessions=int(brk["exit_sessions"]),
             trend_filter=bool(active["trend_filter"]),
@@ -97,6 +105,7 @@ class TrendCandidate:
     limit: Decimal  # raw (traded) price, floored to the tick
     stop: Decimal
     retry: bool = False
+    risk_stop: Decimal | None = None  # level that defines 1R when it is not the stop
 
 
 def prepare_trend_instrument(
@@ -143,12 +152,20 @@ def _defined(row, *cols: str) -> bool:
     return all(not np.isnan(row[c]) for c in cols)
 
 
+def risk_stop(row, p: TrendParams) -> Decimal:
+    """Rotation's 1R level: C - risk_unit_atr x ATR/M in traded prices, whatever the variant's
+    stop (review B3: weight sizing does not depend on the stop, so R must not either)."""
+    atr = row["atr_star"] / row["m"]
+    return floor_tick((row["close"] - p.risk_unit_atr * atr) * row["s"], p.tick_size)
+
+
 def _candidate(d, ticker, row, score, p, retry=False) -> TrendCandidate | SkippedSignal:
     limit, stop = levels(row, p)
-    if not limit > stop:
+    unit = risk_stop(row, p) if p.rules == ROTATION else None
+    if not limit > stop or (unit is not None and not limit > unit):
         return SkippedSignal(d, ticker, "invalid_levels")
     close_raw = Decimal(repr(float(row["close"] * row["s"])))
-    return TrendCandidate(d, ticker, score, float(row["adv"]), close_raw, limit, stop, retry)
+    return TrendCandidate(d, ticker, score, float(row["adv"]), close_raw, limit, stop, retry, unit)
 
 
 def is_month_end(d: pd.Timestamp, sessions: pd.DatetimeIndex) -> bool:
@@ -167,6 +184,9 @@ class RotationRules:
     groups: dict[str, str]
     target: list[str] = field(default_factory=list)
     done: set[str] = field(default_factory=set)  # entered or dropped this month
+    ranked: list[str] = field(default_factory=list)  # this month's eligible, best first
+    equity: Decimal | None = None  # E at the decision close (engine `on_close`)
+    fresh: set[str] = field(default_factory=set)  # fallbacks not yet offered (new signals)
 
     def eligible(self, row) -> bool:
         if not row["member"] or not _defined(row, "mom", "atr_star", "adv"):
@@ -177,28 +197,56 @@ class RotationRules:
             return False
         return bool(row["mom"] > 0)
 
+    def on_close(self, d: pd.Timestamp, equity: Decimal) -> None:
+        self.equity = equity
+
+    def buyable(self, row) -> bool:
+        """§2 p. 3a: with whole shares, one share at the limit must fit the weight x E place."""
+        if not (self.p.fallback_unbuyable and self.p.whole_shares) or self.equity is None:
+            return True
+        limit, _ = levels(row, self.p)
+        return limit <= self.p.weight * self.equity
+
     def rank(self, d: pd.Timestamp, prepared: Mapping) -> list[str]:
-        """§2 p. 1–3: eligible, by momentum desc → ADV desc → ticker; top N, one per group."""
+        """§2 p. 1–3: eligible, by momentum desc → ADV desc → ticker; top N, one per group.
+        Also keeps the whole ranking for the fallback of an unbuyable target (§2 p. 3a)."""
         rows = []
         for ticker, frame in prepared.items():
-            if d in frame.index and self.eligible(frame.loc[d]):
+            if d in frame.index and self.eligible(frame.loc[d]) and self.buyable(frame.loc[d]):
                 r = frame.loc[d]
                 rows.append((-float(r["mom"]), -float(r["adv"]), ticker))
-        target, used = [], set()
-        for _, _, ticker in sorted(rows):
-            group = self.groups.get(ticker, "none")
-            if self.p.one_per_group and group in used:
-                continue
-            target.append(ticker)
-            used.add(group)
-            if len(target) == self.p.top_n:
-                break
+        self.ranked = [ticker for _, _, ticker in sorted(rows)]
+        target: list[str] = []
+        for ticker in self.ranked:
+            if self._fits(ticker, target):
+                target.append(ticker)
+                if len(target) == self.p.top_n:
+                    break
         return target
+
+    def _fits(self, ticker: str, target: list[str]) -> bool:
+        group = self.groups.get(ticker, "none")
+        return not (self.p.one_per_group and any(self.groups.get(t) == group for t in target))
+
+    def _fallback(self, dropped: str) -> None:
+        """§2 p. 3a: a target ETF one share of which exceeds its place (`size_zero`) is replaced
+        by the next eligible ETF by rank that fits the group rule; it is offered from the next
+        close on, as a new signal."""
+        self.target = [t for t in self.target if t != dropped]
+        for ticker in self.ranked:
+            if ticker in self.target or ticker in self.done or ticker == dropped:
+                continue
+            if self._fits(ticker, self.target):
+                self.target.append(ticker)
+                self.fresh.add(ticker)
+                return
 
     def exit_decisions(self, d, positions, prepared, sessions) -> dict[str, str]:
         if not is_month_end(d, self.sessions):
             return {}
-        self.target, self.done = self.rank(d, prepared), set()
+        self.target, self.fresh = self.rank(d, prepared), set()
+        # kept positions already fill their place this month: a later stop leaves it empty
+        self.done = {t for t in positions if t in self.target}
         return {t: "rotation_out" for t in positions if t not in self.target}
 
     def entry_decisions(self, d, prepared, held):
@@ -217,7 +265,9 @@ class RotationRules:
                 self.done.add(ticker)
                 skipped.append(SkippedSignal(d, ticker, "no_longer_eligible"))
                 continue
-            c = _candidate(d, ticker, row, float(row["mom"]), self.p, retry=not decision_day)
+            retry = not decision_day and ticker not in self.fresh
+            self.fresh.discard(ticker)
+            c = _candidate(d, ticker, row, float(row["mom"]), self.p, retry=retry)
             (candidates if isinstance(c, TrendCandidate) else skipped).append(c)
         return candidates, skipped
 
@@ -227,6 +277,8 @@ class RotationRules:
     def on_skip(self, ticker: str, d: pd.Timestamp, reason: str) -> None:
         if reason not in RETRY_REASONS:
             self.done.add(ticker)
+        if reason == "size_zero" and self.p.fallback_unbuyable and ticker in self.target:
+            self._fallback(ticker)
 
     def is_new_signal(self, candidate) -> bool:
         return not candidate.retry
@@ -281,3 +333,6 @@ class BreakoutRules:
 
     def is_new_signal(self, candidate) -> bool:
         return True
+
+    def on_close(self, d: pd.Timestamp, equity: Decimal) -> None:
+        pass

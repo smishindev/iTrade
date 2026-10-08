@@ -11,7 +11,7 @@ PARAMS = load_strategy("etf_trend_v2")
 def test_version_is_pinned():
     # Pinned on purpose: changing parameters or universe must be a conscious new version.
     assert strategy_version("etf_trend_v2") == (
-        "6c18c6a3ffdd84e86942f946b2aa6a2178c9ba14b37ac3c0c12d8e5d0108efba"
+        "e3f06c2ed3625c3215b07d8b3f25b73ceb0a9ae1d1884684a577eecf8e5023be"
     )
 
 

@@ -24,6 +24,8 @@ one_per_group = true                      # at most one ETF per correlation grou
 weight = 0.20                             # equal share of equity per position
 limit_atr = 1.0                           # LOO limit = C + limit_atr * ATR/M
 stop_atr = 3.0                            # GTC stop = C - stop_atr * ATR/M (decision close)
+risk_unit_atr = 3.0                       # R unit for every rotation variant (review B3): not overridden
+fallback_unbuyable = true                 # a target ETF one share of which exceeds the weight -> next by rank
 retry_entries_until_month_end = true      # unfilled target entries are retried after each close
 
 # Rules B — channel breakout (spec §3). Decision after every session.
@@ -69,21 +71,23 @@ final       = { start = "2021-01-04", end = "2026-09-30" }   # runs once
 [control]
 runs = 1000
 base_seed = 20261008
+statistic = "total_pnl"                   # percentile on the run's total P&L, not mean R (review B2)
 
 [criteria]                                # spec §9: all must hold on the final period
-r_denominator = "planned"                 # R = result / (q * (limit - stop))
-min_expectancy_r = 0.20
+r_denominator = "planned"                 # R = result / (q * (limit - unit)); unit: stop (B), risk_unit_atr (A)
+min_expectancy_r = 0.0                    # mean R > 0 and its lower bound > 0 (owner, 2026-10-08)
 expectancy_ci_level = 0.90
 bootstrap_samples = 10000
+bootstrap_blocks = "exit_month"          # block bootstrap: trades overlap in time (review S4)
 min_trades = 60
 min_control_percentile = 95
 max_drawdown = 0.20
 min_executable_signal_share = 0.70
 
-[selection]                               # spec §8
-margin_r = 0.05                           # a family variant must beat its base by this on validation
-early_reject_max_expectancy_r = 0.0       # chosen variant at or below this on validation -> reject, no final
-early_reject_min_control_percentile = 80
+[selection]                               # spec §8 (owner, 2026-10-08: measured on the account's money)
+margin_cagr = 0.01                        # a family variant must beat its base's CAGR by 1 pp on validation
+early_reject_max_cagr = 0.0               # chosen variant's validation CAGR at or below this -> reject, no final
+early_reject_min_control_percentile = 80  # ... or its control percentile (total P&L) below this
 
 # Pre-registered variants (spec §7, 18 of 20). `rules` picks the rule set; the family of a variant is its
 # first override key (neighbours = same family + its base). Diagnostics are never selected.

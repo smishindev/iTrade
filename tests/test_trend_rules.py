@@ -188,3 +188,48 @@ def test_breakout_trend_variant_and_neighbours_parse():
     assert policy.max_open_positions == 4 and policy.sizing == "weight"
     assert policy.weight == D("0.2") and policy.max_positions_per_group == 1
     assert not np.isnan(frames()["mom"]).any()
+
+
+def test_rotation_stop_of_a_carried_over_position_is_not_rebought():
+    """Review P1.H2 B1: D bought in June, kept at the June decision, stopped in July -> the place
+    stays empty until the July decision (no re-buy as a 'retry')."""
+    lows = series(19.9, {"2024-07-08": 18.0, "2024-07-09": 19.9})
+    res = run(*rotation_world(D={"lows": lows}), "rot_base")
+    d = res.trades[res.trades["ticker"] == "D"]
+    assert list(d["exit_reason"]) == ["stop"]
+    assert d.iloc[0]["exit_date"] == pd.Timestamp("2024-07-08")
+
+
+def test_rotation_waits_for_settled_cash_instead_of_a_cut_down_position():
+    """Review S2: when all three places rotate at once, sale proceeds are unsettled at the next
+    open; the entry that does not fit is retried later at full size, never bought small."""
+    params, p, policy, _ = setup("rot_base")
+    from itrade.backtest.risk import PortfolioState, size_entry
+
+    state = PortfolioState(D("3280"), D("300"), [])  # only $300 settled for a $656 place
+    res = size_entry(D("20.40"), D("18.80"), "g1", D("2"), state, policy, lambda q, a, b: D("0.8"))
+    assert (res.qty, res.reason) == (D(0), "settled_cash")
+
+
+def test_rotation_r_unit_does_not_move_with_the_variant_stop():
+    """Review B3: weight sizing ignores the stop, so 1R is always 3 ATR below the decision close."""
+    base = run(*rotation_world(), "rot_base").trades.set_index(["ticker", "entry_date"])
+    tight = run(*rotation_world(), "rot_stop2").trades.set_index(["ticker", "entry_date"])
+    assert list(base.index) == list(tight.index)
+    assert (tight["stop"] > base["stop"]).all()  # 2 ATR stop is closer ...
+    assert (tight["risk"] == base["risk"]).all() and (tight["r"] == base["r"]).all()  # ... same R
+
+
+def test_rotation_ranks_only_buyable_etfs():
+    """Review S7 / owner 2026-10-08: one share of A (700) exceeds its 20% place (656), so A is
+    left out of the ranking and B (same group, next by rank) is in the target from the start —
+    no rejected order and no monthly sell-and-rebuy of the replacement."""
+    mkt, prep, info = rotation_world()
+    prep["A"] = frames(mom=0.30, close=700.0, close_star=700.0, sma_trend=500.0, atr_star=10.0)
+    mkt["A"] = market(opens=[700.0] * N, lows=[690.0] * N).assign(high=710.0, close=700.0)
+    res = run(mkt, prep, info, "rot_base")
+    b = res.trades[res.trades["ticker"] == "B"]
+    assert "A" not in set(res.trades["ticker"])
+    assert list(b["entry_date"]) == [pd.Timestamp("2024-06-03")]  # held through June's decision
+    assert "size_zero" not in set(res.skipped["reason"])
+    assert res.signals == 4  # B, C, D (May) + E (June)
