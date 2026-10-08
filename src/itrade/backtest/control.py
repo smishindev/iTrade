@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -18,6 +19,8 @@ import pandas as pd
 from itrade.backtest.engine import BacktestResult
 
 RunFn = Callable[[Mapping[str, pd.DataFrame]], BacktestResult]
+# seed -> prepared frames of one control run (must be picklable for workers > 1)
+Builder = Callable[[int], Mapping[str, pd.DataFrame]]
 
 
 def eligible_pairs(
@@ -101,10 +104,16 @@ def _init_worker(payload: dict) -> None:
 
 def _one_run(k: int) -> ControlRun:
     w = _WORKER
-    picks = random_picks(w["eligible"], w["counts"], w["base_seed"] + k)
-    result = w["run_fn"](control_prepared(w["prepared"], picks))
+    result = w["run_fn"](w["builder"](w["base_seed"] + k))
     r = result.trades["r"].astype(float)
     return ControlRun(k, len(r), float(r.mean()) if len(r) else float("nan"))
+
+
+def h1_builder(
+    seed: int, prepared: Mapping[str, pd.DataFrame], eligible: pd.DataFrame, counts: pd.Series
+) -> dict[str, pd.DataFrame]:
+    """Spec §10 (ETF_PULLBACK_V1): random pairs matched per year, RSI replaced."""
+    return control_prepared(prepared, random_picks(eligible, counts, seed))
 
 
 def run_control(
@@ -116,12 +125,17 @@ def run_control(
     base_seed: int,
     workers: int = 1,
 ) -> list[ControlRun]:
-    """`run_fn(prepared) -> BacktestResult` must be picklable (a module-level callable or
-    functools.partial of one) when workers > 1."""
-    payload = {
-        "run_fn": run_fn, "prepared": dict(prepared), "eligible": eligible,
-        "counts": counts, "base_seed": base_seed,
-    }  # fmt: skip
+    """ETF_PULLBACK_V1 control. `run_fn(prepared) -> BacktestResult` must be picklable (a
+    module-level callable or functools.partial of one) when workers > 1."""
+    builder = partial(h1_builder, prepared=dict(prepared), eligible=eligible, counts=counts)
+    return run_control_with(run_fn, builder, runs, base_seed, workers)
+
+
+def run_control_with(
+    run_fn: RunFn, builder: Builder, runs: int, base_seed: int, workers: int = 1
+) -> list[ControlRun]:
+    """Run k uses `builder(base_seed + k)`; both callables picklable when workers > 1."""
+    payload = {"run_fn": run_fn, "builder": builder, "base_seed": base_seed}
     if workers <= 1:
         _init_worker(payload)
         return [_one_run(k) for k in range(runs)]

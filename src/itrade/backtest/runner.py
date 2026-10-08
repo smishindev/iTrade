@@ -107,6 +107,8 @@ def random_control(run: Run, runs: int | None = None, workers: int = 1) -> list[
     """Spec §10 random control for an existing run (same variant, period and settings)."""
     params = run.inputs.params
     kwargs = engine_kwargs(run.inputs, params, run.start, run.end, run.options)
+    if is_trend(params):
+        return trend_control(run, kwargs, runs, workers)
     eligible = eligible_pairs(run.inputs.prepared, run.start, run.end)
     counts = strategy_counts_per_year(eligible, run.inputs.signal_params.rsi_max)
     return run_control(
@@ -114,6 +116,38 @@ def random_control(run: Run, runs: int | None = None, workers: int = 1) -> list[
         run.inputs.prepared,
         eligible,
         counts,
+        runs=runs if runs is not None else int(params["control"]["runs"]),
+        base_seed=int(params["control"]["base_seed"]),
+        workers=workers,
+    )
+
+
+def trend_control(run: Run, kwargs: dict, runs: int | None, workers: int) -> list[ControlRun]:
+    """ETF_TREND_V2 §6: random ranking (rotation) or random breakouts (breakout)."""
+    from itrade.backtest.control import run_control_with
+    from itrade.backtest.control_trend import (
+        breakout_builder,
+        breakout_counts_per_year,
+        breakout_eligible,
+        rotation_builder,
+    )
+
+    params, inputs = run.inputs.params, run.inputs
+    p = inputs.signal_params
+    if p.rules == "rotation":
+        builder = partial(
+            rotation_builder, prepared=inputs.prepared, sessions=inputs.sessions,
+            start=run.start, end=run.end, p=p,
+        )  # fmt: skip
+    else:
+        eligible = breakout_eligible(inputs.prepared, run.start, run.end, p)
+        builder = partial(
+            breakout_builder, prepared=inputs.prepared, eligible=eligible,
+            counts=breakout_counts_per_year(eligible),
+        )  # fmt: skip
+    return run_control_with(
+        partial(_run_with_prepared, **kwargs),
+        builder,
         runs=runs if runs is not None else int(params["control"]["runs"]),
         base_seed=int(params["control"]["base_seed"]),
         workers=workers,
