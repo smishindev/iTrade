@@ -1,0 +1,160 @@
+# ETF_TREND_V2 (hypothesis H2) — every parameter of both rule sets, the risk policy, simulation and
+# research protocol. Specification: docs/STRATEGY_ETF_TREND_V2.md. The strategy version is the SHA-256
+# of the canonical JSON of {"strategy": this file, "universe": config/universes/etf_pullback_v1.toml}
+# (keys sorted, no whitespace) — any change in either file is a new version.
+# Written 2026-10-08 from the owner's decisions, before any H2 run (pre-registration).
+
+[strategy]
+id = "ETF_TREND_V2"
+universe = "etf_pullback_v1"              # same 29 ETFs and membership rules as H1
+
+[indicators]
+price_series = "dividend_neutral"         # O*,H*,L*,C* = price x M_t (H1 spec §1)
+trend_sma = 200
+atr_period = 20                           # Wilder ATR
+liquidity_window = 20                     # sessions for average dollar volume
+
+# Rules A — monthly rotation (spec §2). Decision after the last XNYS session of each month.
+[rotation]
+momentum_sessions = 126                   # MOM = C*_t / C*_{t-n} - 1, must be > 0
+trend_filter = true                       # also C* > SMA(trend_sma)
+top_n = 3
+one_per_group = true                      # at most one ETF per correlation group in the target
+weight = 0.20                             # equal share of equity per position
+limit_atr = 1.0                           # LOO limit = C + limit_atr * ATR/M
+stop_atr = 3.0                            # GTC stop = C - stop_atr * ATR/M (decision close)
+retry_entries_until_month_end = true      # unfilled target entries are retried after each close
+
+# Rules B — channel breakout (spec §3). Decision after every session.
+[breakout]
+entry_sessions = 55                       # C*_t > max(C*_{t-55..t-1})
+exit_sessions = 20                        # C*_t < min(C*_{t-20..t-1}) -> MOO next open
+trend_filter = false                      # variant brk_trend: also C* > SMA(trend_sma)
+limit_atr = 0.5
+stop_atr = 2.0
+risk_per_trade = 0.005                    # 0.5% of equity = planned risk budget
+
+[universe_rules]
+min_history_sessions = 756
+min_avg_dollar_volume_usd = 50_000_000
+
+[risk]                                    # spec §4, both rule sets
+initial_capital_usd = 3280                # 10,000 ILS at USD/ILS 3.05 (2026-10-06)
+max_open_positions = 3                    # positions + pending entries
+max_position_fraction = 0.20              # of equity, at the limit price
+max_invested_fraction = 0.95
+max_positions_per_group = 1
+max_cost_in_r = 0.10                      # skip if expected round-trip cost > 0.10 * planned risk
+share_granularity = "whole"               # "whole" | "fractional"
+fractional_step = 0.0001
+tick_size = 0.01
+
+[simulation]                              # as H1
+fill_entry = "open"
+fill_exit = "open"
+fill_stop = "stop_or_gap_open"
+dividend_withholding = 0.25
+settlement = [
+  { from = "1995-06-07", days = 3 },
+  { from = "2017-09-05", days = 2 },
+  { from = "2024-05-28", days = 1 },
+]
+
+[periods]                                 # same dates as H1; final still unseen
+development = { start = "2006-01-03", end = "2016-12-30" }
+validation  = { start = "2017-01-03", end = "2020-12-31" }
+final       = { start = "2021-01-04", end = "2026-09-30" }   # runs once
+
+[control]
+runs = 1000
+base_seed = 20261008
+
+[criteria]                                # spec §9: all must hold on the final period
+r_denominator = "planned"                 # R = result / (q * (limit - stop))
+min_expectancy_r = 0.20
+expectancy_ci_level = 0.90
+bootstrap_samples = 10000
+min_trades = 60
+min_control_percentile = 95
+max_drawdown = 0.20
+min_executable_signal_share = 0.70
+
+[selection]                               # spec §8
+margin_r = 0.05                           # a family variant must beat its base by this on validation
+early_reject_max_expectancy_r = 0.0       # chosen variant at or below this on validation -> reject, no final
+early_reject_min_control_percentile = 80
+
+# Pre-registered variants (spec §7, 18 of 20). `rules` picks the rule set; the family of a variant is its
+# first override key (neighbours = same family + its base). Diagnostics are never selected.
+[[variants]]
+name = "rot_base"
+rules = "rotation"
+[[variants]]
+name = "rot_mom63"
+rules = "rotation"
+overrides = { "rotation.momentum_sessions" = 63 }
+[[variants]]
+name = "rot_mom252"
+rules = "rotation"
+overrides = { "rotation.momentum_sessions" = 252 }
+[[variants]]
+name = "rot_top2"
+rules = "rotation"
+overrides = { "rotation.top_n" = 2 }
+[[variants]]
+name = "rot_top4"
+rules = "rotation"
+overrides = { "rotation.top_n" = 4, "risk.max_open_positions" = 4 }
+[[variants]]
+name = "rot_no_trend"
+rules = "rotation"
+overrides = { "rotation.trend_filter" = false }
+[[variants]]
+name = "rot_stop2"
+rules = "rotation"
+overrides = { "rotation.stop_atr" = 2.0 }
+[[variants]]
+name = "rot_stop4"
+rules = "rotation"
+overrides = { "rotation.stop_atr" = 4.0 }
+[[variants]]
+name = "brk_base"
+rules = "breakout"
+[[variants]]
+name = "brk_20_10"
+rules = "breakout"
+overrides = { "breakout.entry_sessions" = 20, "breakout.exit_sessions" = 10 }
+[[variants]]
+name = "brk_100_40"
+rules = "breakout"
+overrides = { "breakout.entry_sessions" = 100, "breakout.exit_sessions" = 40 }
+[[variants]]
+name = "brk_trend"
+rules = "breakout"
+overrides = { "breakout.trend_filter" = true }
+[[variants]]
+name = "brk_stop3"
+rules = "breakout"
+overrides = { "breakout.stop_atr" = 3.0 }
+[[variants]]
+name = "brk_risk1"
+rules = "breakout"
+overrides = { "breakout.risk_per_trade" = 0.01 }
+[[variants]]
+name = "rot_fractional"
+rules = "rotation"
+overrides = { "risk.share_granularity" = "fractional" }   # candidate only if P1.B.10 confirms
+[[variants]]
+name = "brk_fractional"
+rules = "breakout"
+overrides = { "risk.share_granularity" = "fractional" }   # candidate only if P1.B.10 confirms
+[[variants]]
+name = "rot_costs_x2"
+rules = "rotation"
+diagnostic = true
+overrides = { "costs.multiplier" = 2.0 }
+[[variants]]
+name = "brk_costs_x2"
+rules = "breakout"
+diagnostic = true
+overrides = { "costs.multiplier" = 2.0 }
