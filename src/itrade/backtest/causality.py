@@ -9,6 +9,7 @@ bit for bit, to the run on the original data. A strategy that peeks at the futur
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -86,6 +87,7 @@ def trend_decisions_at(d: pd.Timestamp, prepared, sessions: pd.DatetimeIndex, p,
     """ETF_TREND_V2: exits (every instrument hypothetically held) and entries after the close
     of d, from a fresh rules object — at a month end this includes the rotation ranking."""
     rules = p.make_rules(sessions, groups)
+    rules.on_close(d, Decimal("3280"))  # exercises the rotation's buyability filter
     held = {t: None for t, f in prepared.items() if d in f.index}
     exits = rules.exit_decisions(d, held, prepared, sessions)
     entries, skipped = rules.entry_decisions(d, prepared, set())

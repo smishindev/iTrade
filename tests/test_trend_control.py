@@ -86,3 +86,31 @@ def test_rotation_control_runs_are_deterministic_and_vary():
     }
     assert len(picked) > 1  # the ranking really is random
     assert all(r.trades > 0 for r in a)
+
+
+def test_calibrated_control_copies_the_strategy_turnover():
+    """Review blocker: the random ranking must rotate as often as the strategy does."""
+    from itrade.backtest.control_trend import calibrate_redraw
+
+    _, p, _, _ = setup("rot_base")
+    sessions = pd.DatetimeIndex(pd.bdate_range("2023-01-02", "2024-12-31"))
+    tickers = [f"T{i}" for i in range(9)]
+    groups = {t: f"g{i}" for i, t in enumerate(tickers)}
+    rng = np.random.default_rng(5)
+
+    def world(changing: bool):
+        out = {}
+        for i, t in enumerate(tickers):
+            mom = (
+                rng.uniform(0.01, 1, len(sessions)) if changing else np.full(len(sessions), 0.1 + i)
+            )
+            out[t] = pd.DataFrame(
+                {"close_star": 20.0, "sma_trend": 15.0, "atr_star": 0.4, "adv": 1e8, "mom": mom,
+                 "member": True},
+                index=sessions,
+            )  # fmt: skip
+        return out
+
+    still = calibrate_redraw(world(False), sessions, sessions[0], sessions[-1], p, groups)
+    churn = calibrate_redraw(world(True), sessions, sessions[0], sessions[-1], p, groups)
+    assert still <= 0.1 and churn >= 0.8

@@ -187,6 +187,7 @@ class RotationRules:
     ranked: list[str] = field(default_factory=list)  # this month's eligible, best first
     equity: Decimal | None = None  # E at the decision close (engine `on_close`)
     fresh: set[str] = field(default_factory=set)  # fallbacks not yet offered (new signals)
+    exiting: set[str] = field(default_factory=set)  # sold rotation_out at the next open
 
     def eligible(self, row) -> bool:
         if not row["member"] or not _defined(row, "mom", "atr_star", "adv"):
@@ -234,7 +235,9 @@ class RotationRules:
         close on, as a new signal."""
         self.target = [t for t in self.target if t != dropped]
         for ticker in self.ranked:
-            if ticker in self.target or ticker in self.done or ticker == dropped:
+            if ticker in self.target or ticker in self.done or ticker in self.exiting:
+                continue
+            if ticker == dropped:
                 continue
             if self._fits(ticker, self.target):
                 self.target.append(ticker)
@@ -247,7 +250,8 @@ class RotationRules:
         self.target, self.fresh = self.rank(d, prepared), set()
         # kept positions already fill their place this month: a later stop leaves it empty
         self.done = {t for t in positions if t in self.target}
-        return {t: "rotation_out" for t in positions if t not in self.target}
+        self.exiting = {t for t in positions if t not in self.target}
+        return {t: "rotation_out" for t in self.exiting}
 
     def entry_decisions(self, d, prepared, held):
         candidates, skipped = [], []

@@ -130,15 +130,21 @@ def trend_control(run: Run, kwargs: dict, runs: int | None, workers: int) -> lis
     from itrade.backtest.control_trend import (
         breakout_builder,
         breakout_eligible,
+        calibrate_redraw,
         rotation_builder,
     )
 
     params, inputs = run.inputs.params, run.inputs
     p = inputs.signal_params
     if p.rules == "rotation":
+        groups = {i.ticker: i.group or "none" for i in inputs.universe.instruments}
+        redraw = calibrate_redraw(
+            inputs.prepared, inputs.sessions, run.start, run.end, p, groups,
+            seed=int(params["control"]["base_seed"]),
+        )  # fmt: skip
         builder = partial(
             rotation_builder, prepared=inputs.prepared, sessions=inputs.sessions,
-            start=run.start, end=run.end, p=p,
+            start=run.start, end=run.end, p=p, redraw=redraw,
         )  # fmt: skip
     else:
         eligible = breakout_eligible(inputs.prepared, run.start, run.end, p)
