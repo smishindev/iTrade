@@ -60,3 +60,21 @@ and most neighbours CAGR > 0 on validation · executable signals ≥ 70% · max 
 | 1 | 2026-10-07 | rot_base | development | 168 | 0.048 (-0.067 … 0.168) | 41.7% | 15.1% | 77.4 | run `rot_base_development_bf04ac09`, exec 99.4%, costs 0.033R, v`22b3a82e` · **superseded by #3: identical trades and numbers; the row order of the trades table was not deterministic (fixed in c38ff8e)** |
 | 2 | 2026-10-07 | brk_base | development | 193 | 0.223 (0.050 … 0.406) | 37.8% | 8.6% | 98.5 | run `brk_base_development_c8582914`, exec 96.7%, costs 0.066R, v`22b3a82e` |
 | 3 | 2026-10-07 | rot_base | development | 168 | 0.048 (-0.067 … 0.168) | 41.7% | 15.1% | 77.4 | run `rot_base_development_5db4ddf5`, exec 99.4%, costs 0.033R, v`22b3a82e` |
+| 4 | 2026-10-07 | rot_base | validation | 81 | -0.007 (-0.240 … 0.247) | 38.3% | 18.6% | 4.6 | run `rot_base_validation_9a2d169f`, exec 97.6%, costs 0.044R, v`22b3a82e` |
+| 5 | 2026-10-07 | rot_mom63 | validation | 91 | 0.149 (-0.062 … 0.384) | 51.6% | 13.2% | 43.1 | run `rot_mom63_validation_9b085b6a`, exec 100.0%, costs 0.043R, v`22b3a82e` |
+| 6 | 2026-10-07 | rot_mom252 | validation | 67 | 0.023 (-0.233 … 0.316) | 35.8% | 14.4% | 15.8 | run `rot_mom252_validation_877a6d72`, exec 95.7%, costs 0.042R, v`22b3a82e` |
+| 7 | 2026-10-07 | rot_top2 | validation | 54 | 0.045 (-0.179 … 0.285) | 44.4% | 12.3% | 12.2 | run `rot_top2_validation_60fa718b`, exec 100.0%, costs 0.040R, v`22b3a82e` |
+| 8 | 2026-10-07 | rot_top4 | validation | 98 | 0.080 (-0.154 … 0.332) | 37.8% | 20.2% | 12.8 | run `rot_top4_validation_6e568107`, exec 96.1%, costs 0.045R, v`22b3a82e` |
+| 9 | 2026-10-07 | rot_no_trend | validation | 81 | -0.008 (-0.245 … 0.249) | 38.3% | 19.9% | 2.0 | run `rot_no_trend_validation_776d9952`, exec 96.4%, costs 0.044R, v`22b3a82e` |
+| 10 | 2026-10-07 | rot_stop2 | validation | 91 | -0.016 (-0.215 … 0.206) | 31.9% | 19.3% | 4.2 | run `rot_stop2_validation_c724b6c5`, exec 97.8%, costs 0.045R, v`22b3a82e` |
+| 11 | 2026-10-07 | rot_stop4 | validation | 75 | 0.051 (-0.216 … 0.339) | 42.7% | 16.3% | 11.6 | run `rot_stop4_validation_c1c8229e`, exec 97.4%, costs 0.044R, v`22b3a82e` |
+| 12 | 2026-10-07 | brk_base | validation | 93 | -0.059 (-0.338 … 0.267) | 31.2% | 12.4% | 7.6 | run `brk_base_validation_ef91c23f`, exec 84.9%, costs 0.083R, v`22b3a82e` |
+| 13 | 2026-10-07 | brk_20_10 | validation | 146 | 0.103 (-0.080 … 0.308) | 39.0% | 7.6% | 49.1 | run `brk_20_10_validation_4793702d`, exec 83.9%, costs 0.080R, v`22b3a82e` |
+| 14 | 2026-10-07 | brk_100_40 | validation | 64 | -0.114 (-0.521 … 0.425) | 18.8% | 14.1% | 1.3 | run `brk_100_40_validation_80b27bef`, exec 83.7%, costs 0.083R, v`22b3a82e` |
+| 15 | 2026-10-07 | brk_trend | validation | 93 | 0.004 (-0.267 … 0.312) | 32.3% | 10.0% | 23.3 | run `brk_trend_validation_f5db5124`, exec 84.6%, costs 0.082R, v`22b3a82e` |
+| 16 | 2026-10-07 | brk_stop3 | validation | 74 | 0.120 (-0.154 … 0.409) | 43.2% | 7.6% | 59.3 | run `brk_stop3_validation_ecd3f6c7`, exec 94.5%, costs 0.072R, v`22b3a82e` |
+| 17 | 2026-10-07 | brk_risk1 | validation | 93 | -0.048 (-0.328 … 0.281) | 31.2% | 15.3% | 5.7 | run `brk_risk1_validation_6bcf4237`, exec 85.3%, costs 0.073R, v`22b3a82e` |
+| 18 | 2026-10-07 | rot_fractional | validation | 80 | 0.044 (-0.186 … 0.291) | 40.0% | 17.6% | 15.6 | run `rot_fractional_validation_0c9f3331`, exec 97.6%, costs 0.042R, v`22b3a82e` |
+| 19 | 2026-10-07 | brk_fractional | validation | 93 | 0.012 (-0.304 … 0.375) | 31.2% | 10.8% | 13.5 | run `brk_fractional_validation_f32f2f55`, exec 87.0%, costs 0.079R, v`22b3a82e` |
+| 20 | 2026-10-07 | rot_costs_x2 (diag) | validation | 81 | -0.052 (-0.285 … 0.203) | 37.0% | 20.0% | 4.4 | run `rot_costs_x2_validation_07b5d703`, exec 97.6%, costs 0.089R, v`22b3a82e` |
+| 21 | 2026-10-07 | brk_costs_x2 (diag) | validation | 94 | -0.182 (-0.442 … 0.125) | 28.7% | 15.2% | 8.2 | run `brk_costs_x2_validation_026eed8c`, exec 84.3%, costs 0.168R, v`22b3a82e` |
