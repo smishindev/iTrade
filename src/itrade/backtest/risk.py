@@ -18,17 +18,23 @@ ZERO = Decimal("0")
 
 @dataclass(frozen=True)
 class RiskPolicy:
+    """H1 (spec §5) uses every cap; ETF_TREND_V2 (§4) sizes by weight or risk, caps positions per
+    group by count and drops the caps it does not have (None = no such cap)."""
+
     risk_per_trade: Decimal
     max_open_positions: int
-    max_total_open_risk: Decimal
+    max_total_open_risk: Decimal | None
     max_position_fraction: Decimal
     max_invested_fraction: Decimal
-    max_group_fraction: Decimal
-    max_order_notional_usd: Decimal
+    max_group_fraction: Decimal | None
+    max_order_notional_usd: Decimal | None
     max_cost_in_r: Decimal
     granularity: Decimal  # 1 for whole shares, fractional_step otherwise
     min_per_order_usd: Decimal
     slippage_bps: Decimal
+    sizing: str = "risk"  # "risk": q from the risk budget (§5.2) | "weight": q = weight x E / Lim
+    weight: Decimal = ZERO
+    max_positions_per_group: int | None = None
 
     @classmethod
     def from_config(cls, params: dict, min_per_order_usd: float, slippage_bps: float) -> RiskPolicy:
@@ -46,6 +52,31 @@ class RiskPolicy:
             granularity=Decimal(1) if whole else _d(r["fractional_step"]),
             min_per_order_usd=_d(min_per_order_usd),
             slippage_bps=_d(slippage_bps),
+        )
+
+    @classmethod
+    def for_trend(
+        cls, params: dict, rules: str, min_per_order_usd: float, slippage_bps: float
+    ) -> RiskPolicy:
+        """ETF_TREND_V2 §4: `rules` = "rotation" (equal weight) or "breakout" (risk budget)."""
+        r = params["risk"]
+        whole = r["share_granularity"] == "whole"
+        rotation = rules == "rotation"
+        return cls(
+            risk_per_trade=ZERO if rotation else _d(params["breakout"]["risk_per_trade"]),
+            max_open_positions=int(r["max_open_positions"]),
+            max_total_open_risk=None,
+            max_position_fraction=_d(r["max_position_fraction"]),
+            max_invested_fraction=_d(r["max_invested_fraction"]),
+            max_group_fraction=None,
+            max_order_notional_usd=None,
+            max_cost_in_r=_d(r["max_cost_in_r"]),
+            granularity=Decimal(1) if whole else _d(r["fractional_step"]),
+            min_per_order_usd=_d(min_per_order_usd),
+            slippage_bps=_d(slippage_bps),
+            sizing="weight" if rotation else "risk",
+            weight=_d(params["rotation"]["weight"]) if rotation else ZERO,
+            max_positions_per_group=int(r["max_positions_per_group"]),
         )
 
 
@@ -140,13 +171,20 @@ def size_entry(
     # #7 first: a full book rejects the whole signal.
     if len(state.exposures) >= policy.max_open_positions:
         return _skip("max_positions")
+    if policy.max_positions_per_group is not None:
+        same_group = sum(1 for e in state.exposures if e.group == group)
+        if same_group >= policy.max_positions_per_group:
+            return _skip("max_group")
 
-    # §5.2 base quantity from the risk budget, then shrink until risk + costs fit the budget.
-    budget = policy.risk_per_trade * state.equity
-    per_share = dist + limit * 2 * (half_spread_bps + policy.slippage_bps) / Decimal(10_000)
-    q = floor_to((budget - 2 * policy.min_per_order_usd) / per_share, g)
-    while q > ZERO and q * dist + round_trip(q, limit, stop) > budget:
-        q -= g
+    if policy.sizing == "weight":
+        q = floor_to(policy.weight * state.equity / limit, g)
+    else:
+        # §5.2 base quantity from the risk budget, then shrink until risk + costs fit the budget.
+        budget = policy.risk_per_trade * state.equity
+        per_share = dist + limit * 2 * (half_spread_bps + policy.slippage_bps) / Decimal(10_000)
+        q = floor_to((budget - 2 * policy.min_per_order_usd) / per_share, g)
+        while q > ZERO and q * dist + round_trip(q, limit, stop) > budget:
+            q -= g
     if q <= ZERO:
         return _skip("size_zero")
 
@@ -154,20 +192,32 @@ def size_entry(
     open_risk = sum((e.risk for e in state.exposures), ZERO)
     invested = sum((e.value for e in state.exposures), ZERO)
     in_group = sum((e.value for e in state.exposures if e.group == group), ZERO)
+    p = policy
     caps = [
-        ("max_position", floor_to(policy.max_position_fraction * state.equity / limit, g)),
-        ("max_order_notional", floor_to(policy.max_order_notional_usd / limit, g)),
+        ("max_position", floor_to(p.max_position_fraction * state.equity / limit, g)),
+        (
+            "max_order_notional",
+            None
+            if p.max_order_notional_usd is None
+            else floor_to(p.max_order_notional_usd / limit, g),
+        ),
         (
             "max_total_risk",
-            floor_to((policy.max_total_open_risk * state.equity - open_risk) / dist, g),
+            None
+            if p.max_total_open_risk is None
+            else floor_to((p.max_total_open_risk * state.equity - open_risk) / dist, g),
         ),
+        ("max_invested", floor_to((p.max_invested_fraction * state.equity - invested) / limit, g)),
         (
-            "max_invested",
-            floor_to((policy.max_invested_fraction * state.equity - invested) / limit, g),
+            "max_group",
+            None
+            if p.max_group_fraction is None
+            else floor_to((p.max_group_fraction * state.equity - in_group) / limit, g),
         ),
-        ("max_group", floor_to((policy.max_group_fraction * state.equity - in_group) / limit, g)),
     ]
     for reason, cap in caps:
+        if cap is None:
+            continue
         q = min(q, cap)
         if q <= ZERO:
             return _skip(reason)

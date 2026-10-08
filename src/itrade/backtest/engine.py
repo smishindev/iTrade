@@ -1,8 +1,10 @@
-"""Day-by-day portfolio simulation of ETF_PULLBACK_V1 (spec §6). Deterministic.
+"""Day-by-day portfolio simulation (ETF_PULLBACK_V1 spec §6; reused by ETF_TREND_V2).
 
 Per session d (spec §6.1): settle cash; splits and dividends of ex-date d; open — exits (MOO) then
 entries (LOO); intraday stops; close — equity, exit signals, entry signals sized by the risk policy
 and turned into orders for d+1. Every skipped signal and unfilled order is recorded with a reason.
+Deterministic. The strategy enters through `Rules` (exit decisions, entry decisions, entry-filled
+notice); fills, costs, cash and risk limits are shared by every strategy.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Protocol
 
 import pandas as pd
 
@@ -35,7 +38,13 @@ from itrade.backtest.risk import (
 from itrade.backtest.variants import RunOptions
 from itrade.costs import CostConfig
 from itrade.costs.model import BUY, SELL
-from itrade.strategies.etf_pullback_v1 import SignalParams, entry_signals, exit_signal
+from itrade.strategies.etf_pullback_v1 import (
+    EntryCandidate,
+    SignalParams,
+    SkippedSignal,
+    entry_signals,
+    exit_signal,
+)
 
 ZERO = Decimal("0")
 DEFAULT_OPTIONS = RunOptions()
@@ -109,6 +118,52 @@ class _State:
 ZERO_PRICE = Decimal(0)  # a "stop" no open price can reach (no_stop diagnostic)
 
 
+class Rules(Protocol):
+    """A strategy as the simulation sees it. Decisions are taken after the close of `d`, use only
+    prepared rows <= d and execute at the next open."""
+
+    def exit_decisions(
+        self, d: pd.Timestamp, positions: Mapping, prepared: Mapping, sessions: pd.DatetimeIndex
+    ) -> dict[str, str]:  # ticker -> exit reason (MOO next open)
+        ...
+
+    def entry_decisions(
+        self, d: pd.Timestamp, prepared: Mapping, held: set[str]
+    ) -> tuple[list[EntryCandidate], list[SkippedSignal]]:  # candidates in priority order
+        ...
+
+    def on_entry(self, ticker: str, d: pd.Timestamp) -> None: ...
+
+
+@dataclass
+class PullbackRules:
+    """ETF_PULLBACK_V1 §4 as `Rules`."""
+
+    p: SignalParams
+
+    def exit_decisions(self, d, positions, prepared, sessions) -> dict[str, str]:
+        out = {}
+        for ticker, pos in positions.items():
+            sig = exit_signal(d, ticker, pos.entry_date, prepared[ticker], sessions, self.p)
+            if sig is not None:
+                out[ticker] = sig.reason
+        return out
+
+    def entry_decisions(self, d, prepared, held):
+        return entry_signals(d, prepared, held, self.p)
+
+    def on_entry(self, ticker: str, d: pd.Timestamp) -> None:
+        pass
+
+
+def make_rules(params, sessions: pd.DatetimeIndex, info: Mapping[str, InstrumentInfo]) -> Rules:
+    """A fresh (possibly stateful) `Rules` for one run: SignalParams -> H1; parameters with
+    `make_rules(sessions, groups)` (ETF_TREND_V2) build their own."""
+    if isinstance(params, SignalParams):
+        return PullbackRules(params)
+    return params.make_rules(sessions, {t: i.group for t, i in info.items()})
+
+
 def run_backtest(
     market: Mapping[str, pd.DataFrame],
     prepared: Mapping[str, pd.DataFrame],
@@ -123,11 +178,18 @@ def run_backtest(
     end: str | pd.Timestamp,
     withholding: Decimal = Decimal("0.25"),
     options: RunOptions = DEFAULT_OPTIONS,
+    r_denominator: str = "actual",
+    count_exiting_positions: bool = True,
 ) -> BacktestResult:
     """`market[t]`: date-indexed open/high/low/close/dividends/splits and `s` (split scale S(d)).
-    `prepared[t]`: output of prepare_instrument. Signals are generated only within [start, end]."""
+    `prepared[t]`: the strategy's prepared rows. Signals are generated only within [start, end].
+    `signal_params`: H1 SignalParams or parameters with `make_rules` (see `make_rules`).
+    `r_denominator`: "actual" = q x (entry - stop) (H1 §7) | "planned" = q x (Lim - Stp) (H2 §5).
+    `count_exiting_positions`: positions with an exit order for the next open still count against
+    the limits when sizing new entries (H1), or not (H2: they are sold at that open first)."""
     days = sessions[(sessions >= pd.Timestamp(start)) & (sessions <= pd.Timestamp(end))]
     st = _State(Account(initial_capital, sessions, rules))
+    strategy = make_rules(signal_params, sessions, info)
     tickers = sorted(market)
     mult = options.cost_multiplier
     market = {t: FastFrame.of(f) for t, f in market.items()}
@@ -145,7 +207,9 @@ def run_backtest(
 
     def close_position(ticker: str, d: pd.Timestamp, price: Decimal, reason: str) -> None:
         closed = st.account.sell_all(ticker, price, cost(ticker, _qty(st, ticker), price, SELL), d)
-        st.trades.append(_trade_row(closed, reason, st.planned.pop(ticker), sessions))
+        st.trades.append(
+            _trade_row(closed, reason, st.planned.pop(ticker), sessions, r_denominator)
+        )
 
     for d in days:
         acct = st.account
@@ -176,6 +240,7 @@ def run_backtest(
                 continue
             acct.buy(pe.ticker, pe.qty, fill.price, entry_cost, d, pe.stop)
             st.planned[pe.ticker] = (pe.limit, pe.planned_risk)
+            strategy.on_entry(pe.ticker, d)
         st.pending_entries = []
 
         # 2. Intraday stops (including positions opened at today's open).
@@ -213,19 +278,16 @@ def run_backtest(
             continue  # owner absent: no decisions after this close (broker-side stops stay active)
 
         # 3a. Exit decisions for tomorrow's open.
-        for ticker, pos in acct.positions.items():
-            if ticker in st.pending_exits:
-                continue
-            sig = exit_signal(d, ticker, pos.entry_date, prepared[ticker], sessions, signal_params)
-            if sig is not None:
-                st.pending_exits[ticker] = sig.reason
+        still_open = {t: p for t, p in acct.positions.items() if t not in st.pending_exits}
+        st.pending_exits.update(strategy.exit_decisions(d, still_open, prepared, sessions))
 
         # 3b. Entry decisions, sized against the whole book (positions + pending entries).
-        candidates, skipped = entry_signals(d, prepared, set(acct.positions), signal_params)
+        candidates, skipped = strategy.entry_decisions(d, prepared, set(acct.positions))
         st.signals += len(candidates)
         st.skipped += [_skip(s.date, s.ticker, s.reason) for s in skipped]
         for c in candidates:
-            state = PortfolioState(equity, acct.available(), _exposures(st, info))
+            exclude = set() if count_exiting_positions else set(st.pending_exits)
+            state = PortfolioState(equity, acct.available(), _exposures(st, info, exclude))
             # Decisions price costs with the model; a cost multiplier hits realised fills only.
             rt = cost_model_round_trip(cost_cfg, info[c.ticker].half_spread_bps)
             res = size_entry(
@@ -270,10 +332,13 @@ def _skip(d: pd.Timestamp, ticker: str, reason: str) -> dict:
     return {"date": pd.Timestamp(d), "ticker": ticker, "reason": reason}
 
 
-def _exposures(st: _State, info: Mapping[str, InstrumentInfo]) -> list[Exposure]:
+def _exposures(
+    st: _State, info: Mapping[str, InstrumentInfo], exclude: set[str] | frozenset = frozenset()
+) -> list[Exposure]:
     out = [
         Exposure(t, info[t].group, p.qty, p.entry_price, p.stop, p.qty * st.last_close[t])
         for t, p in st.account.positions.items()
+        if t not in exclude
     ]
     out += [
         Exposure(pe.ticker, info[pe.ticker].group, pe.qty, pe.limit, pe.stop, pe.qty * pe.limit)
@@ -322,6 +387,7 @@ def _trade_row(
     reason: str,
     planned: tuple[Decimal, Decimal],
     sessions: pd.DatetimeIndex,
+    r_denominator: str = "actual",
 ) -> dict:
     p = closed.position
     limit, planned_risk = planned
@@ -332,7 +398,10 @@ def _trade_row(
         - closed.exit_costs
         + p.dividends
     )
-    risk = p.qty * (p.entry_price - p.stop) if p.entry_price > p.stop else planned_risk
+    if r_denominator == "planned":
+        risk = planned_risk
+    else:
+        risk = p.qty * (p.entry_price - p.stop) if p.entry_price > p.stop else planned_risk
     held = int(sessions.get_loc(closed.exit_date) - sessions.get_loc(p.entry_date)) + 1
     return {
         "ticker": p.ticker, "entry_date": p.entry_date, "exit_date": closed.exit_date,
@@ -355,4 +424,7 @@ def market_frame(bars: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-__all__ = ["BacktestResult", "InstrumentInfo", "market_frame", "run_backtest", "to_price"]
+__all__ = [
+    "BacktestResult", "InstrumentInfo", "PullbackRules", "Rules", "make_rules", "market_frame",
+    "run_backtest", "to_price",
+]  # fmt: skip
