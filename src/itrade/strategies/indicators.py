@@ -70,6 +70,22 @@ def average_dollar_volume(close: pd.Series, volume: pd.Series, w: int) -> pd.Ser
     return (close * volume).rolling(w, min_periods=w).mean()
 
 
+def momentum(close: pd.Series, n: int) -> pd.Series:
+    """ETF_TREND_V2 §1 — MOM_n(t) = C_t / C_{t-n} - 1 (total return on the dividend-neutral
+    series)."""
+    return close / close.shift(n) - 1.0  # shift(n > 0) looks back only
+
+
+def prior_high(close: pd.Series, n: int) -> pd.Series:
+    """ETF_TREND_V2 §1 — HIGH_n(t) = max(C_{t-n}, …, C_{t-1}); the current bar is excluded."""
+    return close.shift(1).rolling(n, min_periods=n).max()
+
+
+def prior_low(close: pd.Series, n: int) -> pd.Series:
+    """ETF_TREND_V2 §1 — LOW_n(t) = min(C_{t-n}, …, C_{t-1}); the current bar is excluded."""
+    return close.shift(1).rolling(n, min_periods=n).min()
+
+
 def dividend_multiplier(close: pd.Series, dividends: pd.Series) -> pd.Series:
     """§1 — M_t = prod over ex-dates x <= t of (1 + D_x / C_x). Built forward only: a later
     dividend never changes an earlier M."""
