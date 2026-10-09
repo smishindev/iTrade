@@ -56,3 +56,8 @@ dotnet_naming_style.pascal.capitalization = pascal_case
 dotnet_diagnostic.CA1305.severity = error   # specify IFormatProvider
 dotnet_diagnostic.CA1307.severity = error   # specify StringComparison
 dotnet_diagnostic.CA1309.severity = warning # use ordinal comparison
+
+# EF Core migrations are generated code: style rules do not apply (their behaviour is tested).
+[src/**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none
