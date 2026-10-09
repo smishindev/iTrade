@@ -1,0 +1,30 @@
+# iTrade local database (P2.3.01). Start: `docker compose -f deploy/docker-compose.yml up -d`.
+# Listens on 127.0.0.1 only. The password comes from deploy/.env (git-ignored; copy deploy/env.example).
+name: itrade
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: itrade-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: itrade
+      POSTGRES_USER: itrade
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      # localhost only; 55432 because 5432 is taken on the owner's PC
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      # A named Docker volume, not a Windows folder: PostgreSQL needs POSIX ownership and permissions on its
+      # data directory, which bind-mounted NTFS folders do not give. Backups go to D:\ITradeData\backups.
+      - itrade-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itrade -d itrade"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  itrade-pg:

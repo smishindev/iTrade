@@ -82,7 +82,10 @@ Stop: `dotnet build` + юнит- и архитектурные тесты, ес�
 
 ## P2.3 PostgreSQL
 
-### [ ] P2.3.01 · 🤝 PostgreSQL 18 в Docker · 1 ч
+### [x] P2.3.01 · 🤝 PostgreSQL 18 в Docker · 1 ч
+> 9 октября 2026: `deploy/docker-compose.yml` — postgres 18.6, UTC, `127.0.0.1:55432` (5432 занят), healthcheck; именованный том
+> (папка Windows не даёт PostgreSQL нужных прав); пароль — в файле секретов владельца рядом с compose, шаблон `deploy/env.example`.
+> Проверено: здорова, localhost подключается, сетевой адрес — нет.
 **Где:** `deploy/docker-compose.yml`, `deploy/.env.example`.
 **Шаги:** вы устанавливаете Docker Desktop; я описываю сервис `postgres:18` (порт только 127.0.0.1, том `D:\ITradeData\pg`, healthcheck);
 пароль БД — в `deploy/.env` (в .gitignore), в репозитории только `.env.example`.
