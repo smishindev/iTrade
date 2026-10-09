@@ -4,7 +4,7 @@ argument-hint: "[TICKER ...]"
 allowed-tools: Bash(uv run itrade:*), PowerShell(uv run itrade:*)
 ---
 
-1. Run `uv run itrade ingest $ARGUMENTS -v`.
+1. Run `uv run --directory python itrade ingest $ARGUMENTS -v`.
 2. Summarise per ticker: promoted or not, date range, errors, warnings.
 3. Compare warnings with `docs/data-notes.md`. If there are warnings not explained there,
    use the `data-auditor` agent on just those tickers and show its proposed data-notes rows.

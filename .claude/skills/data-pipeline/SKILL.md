@@ -7,14 +7,14 @@ description: How iTrade market data is fetched, stored, validated and queried. L
 
 ```
 source.fetch() -> data/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable, kept even if rejected)
-               -> validate_bars()                                   (src/itrade/data/quality.py)
+               -> validate_bars()                                   (python/src/itrade/data/quality.py)
                -> data/curated/bars/<TICKER>.parquet + manifest.json (only if no ERROR)
 ```
 
 ## Commands
-- `uv run itrade ingest [TICKERS...] [-v]` — fetch, snapshot, validate, promote. Exit 1 if any ticker was not promoted.
-- `uv run itrade quality [TICKERS...] -v` — re-validate curated files.
-- `uv run itrade sql "<query>"` — DuckDB; view `bars(date, open, high, low, close, adj_close, volume, dividends, splits, ticker)`.
+- `uv run --directory python itrade ingest [TICKERS...] [-v]` — fetch, snapshot, validate, promote. Exit 1 if any ticker was not promoted.
+- `uv run --directory python itrade quality [TICKERS...] -v` — re-validate curated files.
+- `uv run --directory python itrade sql "<query>"` — DuckDB; view `bars(date, open, high, low, close, adj_close, volume, dividends, splits, ticker)`.
 - In Python: `Store().read_bars("SPY")`.
 
 ## Rules
@@ -25,11 +25,11 @@ source.fetch() -> data/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable, k
 
 ## Adding an instrument
 1. Add an `[[instruments]]` block to `config/universe.toml` with a realistic `half_spread_bps`.
-2. `uv run itrade ingest <TICKER> -v`.
+2. `uv run --directory python itrade ingest <TICKER> -v`.
 3. Every warning → a row in `docs/data-notes.md` with an explanation.
 
 ## Adding a data source
-1. Implement the `DataSource` protocol in `src/itrade/data/sources.py` returning `BAR_COLUMNS`
+1. Implement the `DataSource` protocol in `python/src/itrade/data/sources.py` returning `BAR_COLUMNS`
    (use `normalize_bars` if the vendor is Yahoo-shaped), register it in `SOURCES`.
 2. Unit-test it with a recorded/fake response — tests must not hit the network
    (mark unavoidable ones `@pytest.mark.network`).

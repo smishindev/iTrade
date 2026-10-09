@@ -20,11 +20,15 @@ LOOKAHEAD_SMELLS = [
     (re.compile(r"rolling\([^)]*center\s*=\s*True"), "centered rolling window (uses future rows)"),
     (re.compile(r"\.iloc\[\s*-1\s*\]"), "iloc[-1] in signal code (is this the last *known* bar?)"),
 ]
-SIGNAL_DIRS = ("src/itrade/strategies/", "src/itrade/backtest/", "src/itrade/signals/")
+SIGNAL_DIRS = (
+    "python/src/itrade/strategies/", "python/src/itrade/backtest/", "python/src/itrade/signals/"
+)
+PYTHON_DIR = "python"  # the Python project (pyproject.toml, .venv) since P2.1.01
 
 
 def ruff_cmd(root: Path) -> list[str]:
-    for exe in (root / ".venv" / "Scripts" / "ruff.exe", root / ".venv" / "bin" / "ruff"):
+    venv = root / PYTHON_DIR / ".venv"
+    for exe in (venv / "Scripts" / "ruff.exe", venv / "bin" / "ruff"):
         if exe.exists():
             return [str(exe)]
     if shutil.which("ruff"):
@@ -71,7 +75,8 @@ def main() -> None:
         return
 
     ruff = ruff_cmd(root)
-    run = {"cwd": root, "capture_output": True, "text": True, "timeout": 60}
+    # ruff reads python/pyproject.toml when run from the Python project folder
+    run = {"cwd": root / PYTHON_DIR, "capture_output": True, "text": True, "timeout": 60}
     subprocess.run([*ruff, "format", "--quiet", file_path], **run)
     subprocess.run([*ruff, "check", "--fix", "--quiet", file_path], **run)
     lint = subprocess.run([*ruff, "check", "--output-format", "concise", file_path], **run)

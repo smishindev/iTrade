@@ -1,6 +1,6 @@
 ---
 name: research-integrity
-description: Rules for any backtest, strategy, signal, indicator or performance-metric work in iTrade (Python spike A in src/itrade/strategies and src/itrade/backtest, or the C# core in ITrade.Strategies / ITrade.Simulation). Load before writing or changing that code, before running a backtest, and before reporting any strategy result to the owner.
+description: Rules for any backtest, strategy, signal, indicator or performance-metric work in iTrade (Python spike A in python/src/itrade/strategies and python/src/itrade/backtest, or the C# core in ITrade.Strategies / ITrade.Simulation). Load before writing or changing that code, before running a backtest, and before reporting any strategy result to the owner.
 ---
 
 # Research integrity

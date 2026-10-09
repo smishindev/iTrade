@@ -5,7 +5,7 @@ description: How iTrade prices trades — commission (IBKR Pro Tiered minimums),
 
 # Cost model
 
-Code: `src/itrade/costs/model.py` (C# port in phase 4: `ITrade.Simulation/Costs`, must match to the cent).
+Code: `python/src/itrade/costs/model.py` (C# port in phase 4: `ITrade.Simulation/Costs`, must match to the cent).
 Assumptions: `config/costs.toml` (IBKR Pro **Tiered**, Israeli resident).
 
 ## API
@@ -20,7 +20,7 @@ tc.total, tc.bps, tc.as_dict()
 - `capital_gains_tax(...)` is a placeholder; real tax lots and the Israeli FX rule come in phase 7 (P7.4).
 
 ## CLI
-`uv run itrade costs --notional 300 --price 60.61 --ticker VWO` — per-order breakdown and round trip.
+`uv run --directory python itrade costs --notional 300 --price 60.61 --ticker VWO` — per-order breakdown and round trip.
 
 ## What it means for this account (10,000 ILS ≈ $3,280; risk 0.25% ≈ $8.2 = 1R)
 - A typical position is $150–650, so the **minimum commission dominates**: round trip ≈ $0.8–1.0.

@@ -11,12 +11,13 @@ from pathlib import Path
 
 
 def project_root() -> Path:
-    """Repo root: $ITRADE_ROOT if set, else the nearest parent holding pyproject.toml."""
+    """Repo root: $ITRADE_ROOT if set, else the nearest parent holding config/project.toml
+    (the Python project itself lives in python/ since P2.1.01)."""
     if env := os.environ.get("ITRADE_ROOT"):
         return Path(env)
     here = Path(__file__).resolve()
     for parent in here.parents:
-        if (parent / "pyproject.toml").exists():
+        if (parent / "config" / "project.toml").exists():
             return parent
     return Path.cwd()
 

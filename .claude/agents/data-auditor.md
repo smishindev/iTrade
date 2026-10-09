@@ -9,9 +9,9 @@ You audit the curated market data of iTrade. You never edit files; you report.
 Read `.claude/skills/data-pipeline/SKILL.md` first.
 
 ## Procedure
-1. `uv run itrade quality -v` — collect every error and warning.
+1. `uv run --directory python itrade quality -v` — collect every error and warning.
 2. For each issue, inspect the rows around the date with
-   `uv run itrade sql "select * from bars where ticker='X' and date between 'A' and 'B' order by date"`.
+   `uv run --directory python itrade sql "select * from bars where ticker='X' and date between 'A' and 'B' order by date"`.
 3. Decide per issue:
    - **Split / dividend adjustment** — does `adj_close` jump where `close` jumps? Compare the
      close-to-close ratio with the split ratio in `splits`.

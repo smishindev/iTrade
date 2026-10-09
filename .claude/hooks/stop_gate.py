@@ -1,6 +1,6 @@
 """Stop hook: do not let Claude finish a turn with failing tests, lint or build.
 
-Python (ruff + pytest) runs when src/, tests/, config/, tools/ or pyproject.toml changed.
+Python (ruff + pytest, in python/) runs when python/, config/ or tools/ changed.
 C# (dotnet build) runs for each spike under spikes/ that changed, if the SDK is installed.
 On failure exits 2 so Claude sees the output and keeps working. Skips when it already
 blocked once this turn (stop_hook_active) to avoid loops.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from _common import project_dir, read_input
 
-PYTHON_WATCHED = ("src/", "tests/", "config/", "tools/", "pyproject.toml")
+PYTHON_WATCHED = ("python/", "config/", "tools/")
 
 
 def tail(text: str, n: int = 40) -> str:
@@ -34,9 +34,11 @@ def changed_paths(root: Path) -> list[str]:
 
 
 def python_checks(root: Path) -> list[str]:
-    run = {"cwd": root, "capture_output": True, "text": True}
+    run = {"cwd": root / "python", "capture_output": True, "text": True}
     failures = []
-    lint = subprocess.run(["uv", "run", "--quiet", "ruff", "check", "src", "tests"], timeout=120, **run)
+    lint = subprocess.run(
+        ["uv", "run", "--quiet", "ruff", "check", "src", "tests", "tools"], timeout=120, **run
+    )
     if lint.returncode != 0:
         failures.append("ruff check failed:\n" + tail(lint.stdout + lint.stderr))
     tests = subprocess.run(

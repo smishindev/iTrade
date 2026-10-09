@@ -19,10 +19,10 @@ if git diff --cached -U0 | grep -E '^\+' | grep -E '\bD?U[A-Z]?[0-9]{6,9}\b' | g
     exit 1
 fi
 
-if echo "$staged" | grep -Eq '\.py$|^pyproject\.toml$|^config/|^tools/'; then
-    uv run --quiet ruff format --check src tests
-    uv run --quiet ruff check src tests
-    uv run --quiet pytest -q -m "not network"
+if echo "$staged" | grep -Eq '^python/|^config/|^tools/'; then
+    (cd python && uv run --quiet ruff format --check src tests tools \
+        && uv run --quiet ruff check src tests tools \
+        && uv run --quiet pytest -q -m "not network")
 fi
 
 if echo "$staged" | grep -q '^spikes/' && command -v dotnet >/dev/null 2>&1; then

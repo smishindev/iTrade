@@ -39,9 +39,9 @@ def main() -> None:
         return
 
     if rel.startswith("data/raw/"):
-        deny("data/raw/ holds immutable vendor snapshots. Never edit them; re-run `uv run itrade ingest`.")
+        deny("data/raw/ holds immutable vendor snapshots. Never edit them; re-run `uv run itrade ingest` (in python/).")
     if rel.startswith("data/"):
-        deny("data/ is generated. Change the pipeline in src/itrade/data/ and re-run `uv run itrade ingest`.")
+        deny("data/ is generated. Change the pipeline in python/src/itrade/data/ and re-run `uv run itrade ingest` (in python/).")
     if rel == "config/project.toml":
         deny(
             "config/project.toml sets the project phase. Only the owner edits it, after "

@@ -11,12 +11,16 @@ answer is to hold the ETF — and that is a successful outcome.
 
 ## Setup
 
+The Python project (data, checks, cost model, research archive) lives in `python/`; `src/` is for the
+C# solution (phase 2).
+
 ```sh
+cd python
 uv sync
 uv run pytest
 ```
 
-## Commands
+## Commands (from `python/`)
 
 ```sh
 uv run itrade ingest                 # download the universe, snapshot, validate, promote
@@ -30,8 +34,8 @@ uv run itrade sql "select ticker, count(*), min(date), max(date) from bars group
 
 ```
 config/            universe.toml (instruments), costs.toml (fee/tax assumptions)
-src/itrade/data/   sources -> raw snapshot -> quality checks -> curated parquet
-src/itrade/costs/  commission, spread, slippage, FX, Israeli capital-gains tax
+python/src/itrade/data/   sources -> raw snapshot -> quality checks -> curated parquet
+python/src/itrade/costs/  commission, spread, slippage, FX, Israeli capital-gains tax
 data/              generated, git-ignored (raw/ is immutable)
 docs/              scope, gates
 ```

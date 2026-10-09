@@ -11,20 +11,21 @@ The owner communicates in Russian — answer in Russian.
 ## Target stack (decided — docs/PLAN.md §2)
 React 19 + TypeScript (web/) · C# / .NET 10 + ASP.NET Core (src/ITrade.*) · PostgreSQL 18 (Docker) ·
 Parquet snapshots in `D:\ITradeData` · official IBKR TWS API (C#) via IB Gateway.
-Python (current `src/itrade/`, moving to `python/` in phase 2) = research spike A, reference oracle,
+Python (current `python/src/itrade/`, moving to `python/` in phase 2) = research spike A, reference oracle,
 free data ingest, statistics. **Python never trades.**
 
 ## Where things are now (end of phase 1, plan v4)
 - `config/universe.toml` instruments · `config/costs.toml` fee/tax assumptions · `config/project.toml` phase (owner-only)
-- `src/itrade/data/` ingest → raw snapshot → quality → curated · `src/itrade/costs/` cost model · `src/itrade/cli.py`
-- Research archive: `src/itrade/strategies`, `src/itrade/backtest`, `docs/research-log*.md` (H1–H3, all **closed**),
+- `python/src/itrade/data/` ingest → raw snapshot → quality → curated · `python/src/itrade/costs/` cost model · `python/src/itrade/cli.py`
+- Research archive: `python/src/itrade/strategies`, `python/src/itrade/backtest`, `docs/research-log*.md` (H1–H3, all **closed**),
   `docs/spikes/` · `docs/data-notes.md` reviewed data warnings · `docs/accountant-questions.md`
 - v3 plan, scope, gates and roadmap (active trading): `docs/archive/`
 
 ## Commands
-- `uv sync` · `uv run pytest` · `uv run ruff check src tests` · `uv run ruff format src tests`
-- `uv run itrade ingest|quality|costs|sql` (see README)
-- Add dependencies with `uv add`, never `pip install`. (.NET commands are added in phase 2.)
+- Python project in `python/` (since P2.1.01): from there `uv sync` · `uv run pytest` · `uv run ruff check src tests tools`
+  · `uv run ruff format src tests tools` · `uv run itrade ingest|quality|costs|sql` (see README);
+  from the repo root the same with `uv run --directory python …`.
+- Add dependencies with `uv add` (in `python/`), never `pip install`. (.NET commands are added in phase 2.)
 
 ## Working rules
 - **Stay inside the current phase** (`config/project.toml`, names in docs/GATES.md). Next: phase 2 (foundation) once

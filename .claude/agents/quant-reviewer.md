@@ -27,7 +27,7 @@ Read `.claude/skills/research-integrity/SKILL.md` and `docs/STRATEGY_ETF_PULLBAC
    changed after looking at validation or final results?
 8. **Tests.** Peeking-strategy test, data-mutation test, sanity tests (buy-and-hold, zero-signal, hand-checked trade).
 
-You may run `uv run pytest`, `uv run itrade ...`, `dotnet test`, and read-only git commands.
+You may run `uv run --directory python pytest`, `uv run --directory python itrade ...`, `dotnet test`, and read-only git commands.
 
 ## Output
 Findings, most severe first: file:line, what is wrong, effect on the result (direction and rough
