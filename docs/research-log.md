@@ -1,7 +1,7 @@
 # Research log — the multiple-testing ledger
 
 > H1 (`ETF_PULLBACK_V1`) is closed — rejected 2026-10-07. Hypothesis H2 (`ETF_TREND_V2`) has its own ledger:
-> [research-log-H2.md](research-log-H2.md).
+> [research-log-H2.md](research-log-H2.md); H3 (`ETF_TOM_V3`): [research-log-H3.md](research-log-H3.md).
 
 Every run of a strategy variant gets one row in the ledger below, **including failures**, and the
 hypothesis, variants and success criteria are registered **before** the first run. Runs are appended
