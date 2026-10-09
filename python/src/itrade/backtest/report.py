@@ -26,7 +26,7 @@ from itrade.backtest.engine import market_frame
 from itrade.backtest.metrics import Summary, by_group, by_year, skip_reasons, summarize
 from itrade.backtest.runner import Run
 from itrade.backtest.stats import block_bootstrap_mean, bootstrap_mean, wilson
-from itrade.config import project_root, strategy_version
+from itrade.config import data_dir, project_root, strategy_version
 
 
 @dataclass
@@ -70,7 +70,7 @@ def provenance(run: Run) -> dict:
         "end": run.end,
         "strategy_version": strategy_version(run.strategy),
         "variant_params_sha256": hashlib.sha256(params_json).hexdigest(),
-        "data_manifest_sha256": _sha(root / "data" / "curated" / "manifest.json"),
+        "data_manifest_sha256": _sha(data_dir() / "curated" / "manifest.json"),
         "costs_sha256": _sha(root / "config" / "costs.toml"),
         "overrides_sha256": overrides_sha256(),
         "run_options": dataclasses.asdict(run.options),  # not covered by the params hash

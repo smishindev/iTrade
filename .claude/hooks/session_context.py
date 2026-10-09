@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 
-from _common import context, current_phase, project_dir, read_input
+from _common import context, current_phase, data_root, project_dir, read_input
 
 PHASES = {
     0: "decisions",
@@ -32,7 +32,7 @@ def main() -> None:
     if phase < 8:
         lines.append("Live IB Gateway ports are blocked until the live pilot (phase 8).")
 
-    manifest = root / "data" / "curated" / "manifest.json"
+    manifest = data_root(root) / "curated" / "manifest.json"
     if manifest.exists():
         data = json.loads(manifest.read_text())
         lasts = sorted({v.get("last") for v in data.values() if v.get("last")})

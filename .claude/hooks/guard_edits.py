@@ -19,7 +19,9 @@ from _common import (
     LIVE_PORT,
     SECRET_ASSIGNMENT,
     current_phase,
+    data_root,
     deny,
+    is_under,
     new_content,
     project_dir,
     read_input,
@@ -34,6 +36,11 @@ def main() -> None:
     tool_input = payload.get("tool_input", {}) or {}
     file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
     root = project_dir(payload)
+    data = data_root(root)  # outside the repository since P2.1.02 (D:/ITradeData)
+    if file_path and is_under(file_path, data / "raw"):
+        deny(f"{data / 'raw'} holds immutable vendor snapshots. Never edit them; re-run `uv run itrade ingest` (in python/).")
+    if file_path and is_under(file_path, data):
+        deny(f"{data} is generated. Change the pipeline in python/src/itrade/data/ and re-run `uv run itrade ingest` (in python/).")
     rel = rel_path(file_path, root) if file_path else None
     if rel is None:
         return
@@ -79,4 +86,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:  # fail closed: a broken guard must block, not allow
+        deny(f"guard_edits hook error ({type(exc).__name__}: {exc}) - blocked to stay safe; fix the hook.")

@@ -18,7 +18,7 @@ Read `.claude/skills/data-pipeline/SKILL.md` first.
    - **Real market event** — is the move shared by related instruments the same day
      (e.g. SPY, VT, VEA on 2008-10-13)? Cross-check with SQL across tickers.
    - **Vendor gap / bad tick** — isolated, not shared, reverses next day.
-4. Check provenance: `data/curated/manifest.json` has a raw snapshot and SHA-256 for every ticker.
+4. Check provenance: `D:\ITradeData\curated\manifest.json` (path in `config/paths.toml`) has a raw snapshot and SHA-256 for every ticker.
 5. Check coverage for the strategy universe (`config/universes/`): each ETF's first bar vs its
    inception date; dividends and splits present (ex-dates matter: no entries on t+1 ex-date);
    ILS=X covers the whole range.

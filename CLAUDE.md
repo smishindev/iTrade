@@ -47,7 +47,7 @@ free data ingest, statistics. **Python never trades.**
 - Do not rewrite text files with Windows PowerShell `Get-Content`/`Set-Content` (it corrupts UTF-8); use Edit or Python.
 
 ## Guardrails (enforced by `.claude/hooks/` and `.githooks/pre-commit`)
-- PreToolUse: blocks edits under `data/`, edits to `config/project.toml`, secret files, hard-coded credentials,
+- PreToolUse: blocks edits under the data folder (`D:\ITradeData` per `config/paths.toml`; old `data/` too), edits to `config/project.toml`, secret files, hard-coded credentials,
   **real IBKR account numbers** (use `DU0000000`), broker code in Python (always), IBKR API code in C# outside
   `src/ITrade.Broker.IBKR/` and `spikes/ibkr-feasibility/`, live ports 4001/7496 before phase 8 (v3 numbering;
   becomes phase 6 in task P2.6.03 with the owner's consent);

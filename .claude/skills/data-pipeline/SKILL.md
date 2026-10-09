@@ -6,10 +6,11 @@ description: How iTrade market data is fetched, stored, validated and queried. L
 # Data pipeline
 
 ```
-source.fetch() -> data/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable, kept even if rejected)
-               -> validate_bars()                                   (python/src/itrade/data/quality.py)
-               -> data/curated/bars/<TICKER>.parquet + manifest.json (only if no ERROR)
+source.fetch() -> <data>/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable, kept even if rejected)
+               -> validate_bars()                                     (python/src/itrade/data/quality.py)
+               -> <data>/curated/bars/<TICKER>.parquet + manifest.json (only if no ERROR)
 ```
+`<data>` = `D:\ITradeData` (`config/paths.toml`; override with `ITRADE_DATA_DIR`) since P2.1.02.
 
 ## Commands
 - `uv run --directory python itrade ingest [TICKERS...] [-v]` — fetch, snapshot, validate, promote. Exit 1 if any ticker was not promoted.
@@ -18,7 +19,7 @@ source.fetch() -> data/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable, k
 - In Python: `Store().read_bars("SPY")`.
 
 ## Rules
-- Never edit or delete anything in `data/` (hooks block it). Fix the code, re-ingest.
+- Never edit or delete anything in `<data>` (hooks block it). Fix the code, re-ingest.
 - `close` from Yahoo is split-adjusted only; use `adj_close` for returns, `close` for share counts and order sizing.
 - USD/ILS is `ILS=X` (ILS per 1 USD). Use its `close` only; its OHLC is noisy.
 - Each curated file must trace back to a raw snapshot via `manifest.json` (`raw_snapshot`, `raw_sha256`).

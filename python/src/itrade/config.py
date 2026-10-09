@@ -23,7 +23,16 @@ def project_root() -> Path:
 
 
 def data_dir() -> Path:
-    return project_root() / "data"
+    """$ITRADE_DATA_DIR, else `data_dir` in config/paths.toml (P2.1.02: D:/ITradeData),
+    else <root>/data."""
+    if env := os.environ.get("ITRADE_DATA_DIR"):
+        return Path(env)
+    root = project_root()
+    paths = root / "config" / "paths.toml"
+    if paths.exists():
+        configured = Path(tomllib.loads(paths.read_text(encoding="utf-8"))["data_dir"])
+        return configured if configured.is_absolute() else root / configured
+    return root / "data"
 
 
 def load_toml(name: str) -> dict:

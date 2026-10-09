@@ -1,0 +1,4 @@
+# Where iTrade keeps its data (P2.1.02). Outside the repository: raw vendor snapshots (immutable),
+# curated datasets, derived files and research run outputs. The environment variable ITRADE_DATA_DIR
+# overrides this. A relative path is resolved against the repository root.
+data_dir = "D:/ITradeData"

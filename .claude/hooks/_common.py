@@ -109,3 +109,25 @@ BROKER_CODE = re.compile(
     | \bsubmit_order\s*\(
     """
 )
+
+
+def data_root(root: Path) -> Path:
+    """The data folder (P2.1.02): $ITRADE_DATA_DIR, else `data_dir` in config/paths.toml, else <root>/data."""
+    env = os.environ.get("ITRADE_DATA_DIR")
+    if env:
+        return Path(env)
+    paths = root / "config" / "paths.toml"
+    if paths.exists():
+        configured = Path(tomllib.loads(paths.read_text(encoding="utf-8"))["data_dir"])
+        return configured if configured.is_absolute() else root / configured
+    return root / "data"
+
+
+def is_under(file_path: str, folder: Path) -> bool:
+    """True when file_path lies inside folder (case-insensitive, as Windows paths are)."""
+    try:
+        child = os.path.normcase(str(Path(file_path).resolve()))
+        parent = os.path.normcase(str(folder.resolve()))
+    except OSError:
+        return False
+    return child == parent or child.startswith(parent.rstrip("\\/") + os.sep)
