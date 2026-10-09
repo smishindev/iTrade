@@ -59,7 +59,7 @@ class TomParams:
         return -self.entry_day + self.exit_day
 
     def make_rules(self, sessions: pd.DatetimeIndex, groups: Mapping[str, str]) -> TomRules:
-        return TomRules(self)
+        return TomRules(self, sessions)
 
 
 def window_flags(sessions: pd.DatetimeIndex, p: TomParams) -> tuple[pd.Series, pd.Series]:
@@ -133,6 +133,17 @@ def levels(row, p: TomParams) -> tuple[Decimal, Decimal]:
 @dataclass
 class TomRules:
     p: TomParams
+    sessions: pd.DatetimeIndex | None = None
+    end: pd.Timestamp | None = None  # windows must exit (open) on or before it (spec §5)
+
+    def set_period(self, start: pd.Timestamp, end: pd.Timestamp) -> None:
+        self.end = pd.Timestamp(end)
+
+    def _exits_in_period(self, d: pd.Timestamp) -> bool:
+        if self.end is None or self.sessions is None:
+            return True
+        exit_open = self.sessions.get_loc(d) + 1 + self.p.hold_sessions
+        return exit_open < len(self.sessions) and self.sessions[exit_open] <= self.end
 
     def exit_decisions(self, d, positions, prepared, sessions) -> dict[str, str]:
         out = {}
@@ -150,6 +161,8 @@ class TomRules:
                 continue
             row = frame.loc[d]
             if not bool(row["enter_next"]) or not row["member"]:
+                continue
+            if not self._exits_in_period(d):  # a cut-short window belongs to no period (review S2)
                 continue
             if np.isnan(row["atr_star"]) or np.isnan(row["adv"]):
                 continue

@@ -209,6 +209,8 @@ def run_backtest(
     days = sessions[(sessions >= pd.Timestamp(start)) & (sessions <= pd.Timestamp(end))]
     st = _State(Account(initial_capital, sessions, rules))
     strategy = make_rules(signal_params, sessions, info)
+    if hasattr(strategy, "set_period"):  # ETF_TOM_V3: only windows wholly inside the period
+        strategy.set_period(days[0], days[-1])
     tickers = sorted(market)
     mult = options.cost_multiplier
     market = {t: FastFrame.of(f) for t, f in market.items()}

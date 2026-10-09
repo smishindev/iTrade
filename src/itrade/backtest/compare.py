@@ -217,7 +217,11 @@ def select(runs: pd.DataFrame, params: dict, fractional_confirmed: bool = False)
     reasons.append(
         f"early rejection: CAGR {cagr:+.2%} (must be > {s['early_reject_max_cagr']:.0%}), "
         f"control {pct:.1f} (must be >= {s['early_reject_min_control_percentile']}) → "
-        + ("**H2 rejected, final period not run**" if reject else "final run allowed")
+        + (
+            f"**{params['strategy']['id']} rejected, final period not run**"
+            if reject
+            else "final run allowed"
+        )
     )
     return Selection(chosen, reasons, reject, picks)
 
@@ -236,10 +240,13 @@ def criteria_check(runs: pd.DataFrame, variant: str, params: dict) -> list[tuple
             r["expectancy_r"] >= c["min_expectancy_r"],
         )
     )
+    # a criterion a hypothesis did not register is switched off in its config (ETF_TOM_V3, option B)
     out = [
         expectancy,
-        ("90% lower bound > 0", r["ci_low"] > 0),
-        (f"trades >= {c['min_trades']}", r["trades"] >= c["min_trades"]),
+        ("90% lower bound > 0", r["ci_low"] > 0) if c.get("require_ci_lower_bound", True) else None,
+        (f"trades >= {c['min_trades']}", r["trades"] >= c["min_trades"])
+        if c["min_trades"] > 0
+        else None,
         (
             f"control percentile >= {c['min_control_percentile']}",
             r["control_percentile"] is not None
@@ -248,20 +255,26 @@ def criteria_check(runs: pd.DataFrame, variant: str, params: dict) -> list[tuple
         (
             f"{costs} {'CAGR' if col == 'cagr' else 'expectancy'} > 0",
             costs in runs.index and runs.loc[costs, col] > 0,
-        ),
+        )
+        if c.get("require_costs_x2", True)
+        else None,
         (
             "most neighbours > 0",
             bool(near) and sum(runs.loc[m, col] > 0 for m in near) > len(near) / 2,
-        ),
+        )
+        if c.get("require_neighbours", True)
+        else None,
         (
             f"executable >= {c['min_executable_signal_share']:.0%}",
             r["executable_share"] >= c["min_executable_signal_share"],
-        ),
+        )
+        if c["min_executable_signal_share"] > 0
+        else None,
         (f"max drawdown <= {c['max_drawdown']:.0%}", r["max_drawdown"] <= c["max_drawdown"]),
     ]
     if is_trend(params):
         out.append(("CAGR after costs > 0", r["cagr"] > 0))
-    return [(name, bool(ok)) for name, ok in out]
+    return [(name, bool(ok)) for name, ok in filter(None, out)]
 
 
 def comparison_markdown(runs: pd.DataFrame, params: dict, period: str) -> str:

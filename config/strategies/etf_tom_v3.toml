@@ -55,51 +55,61 @@ final       = { start = "2021-01-04", end = "2026-09-30" }   # runs once
 [control]
 runs = 1000
 base_seed = 20261009
-statistic = "total_pnl"                   # random 4-session windows elsewhere in the month (spec §4)
+statistic = "total_pnl"                   # random equal-length blocks ending at the strategy exit (spec §4)
 
-[criteria]                                # spec §8: all must hold on the final period
-r_denominator = "planned"
-min_expectancy_r = 0.0
+[criteria]                                # spec §8 (owner 2026-10-09, option B): the final REPLICATES
+r_denominator = "planned"                 # the discovery on 2006–2020 in the same direction
+min_expectancy_r = 0.0                    # mean R > 0
+require_ci_lower_bound = false            # not a final criterion (power, review B2)
 expectancy_ci_level = 0.90
 bootstrap_samples = 10000
 bootstrap_blocks = "exit_month"
-min_trades = 60
-min_control_percentile = 95
+min_trades = 0                            # the calendar fixes the count (~68 windows)
+min_control_percentile = 50               # better than half of the random windows
+require_costs_x2 = false                  # reported, not a criterion
+require_neighbours = false                # variants are diagnostics only
 max_drawdown = 0.20
-min_executable_signal_share = 0.70
+min_executable_signal_share = 0.0         # not a criterion: always ~100% here (review S3)
 
-[selection]                               # spec §7 (same rule as H2)
-margin_control_pct = 10
+[selection]                               # spec §7 (owner 2026-10-09, option B): discovery on 2006–2020
+margin_control_pct = 10                   # unused: every variant other than tom_spy is a diagnostic
 early_reject_max_cagr = 0.0
-early_reject_min_control_percentile = 80
+early_reject_min_control_percentile = 95  # tom_spy must beat >= 95% of random windows to go to the final
 
-# Pre-registered variants (spec §6, 8 of 20). Family = first override key.
+# Pre-registered variants (spec §6, 8 of 20). Option B: only tom_spy decides; the others are
+# diagnostics (reported, never selected).
 [[variants]]
 name = "tom_spy"
 rules = "tom"
 [[variants]]
 name = "tom_iwm"
 rules = "tom"
+diagnostic = true
 overrides = { "tom.tickers" = ["IWM"] }
 [[variants]]
 name = "tom_qqq"
 rules = "tom"
+diagnostic = true
 overrides = { "tom.tickers" = ["QQQ"] }
 [[variants]]
 name = "tom_basket"
 rules = "tom"
+diagnostic = true
 overrides = { "tom.tickers" = ["SPY", "IWM", "QQQ"] }
 [[variants]]
 name = "tom_entry2"
 rules = "tom"
+diagnostic = true
 overrides = { "tom.entry_day" = -2 }
 [[variants]]
 name = "tom_exit2"
 rules = "tom"
+diagnostic = true
 overrides = { "tom.exit_day" = 2 }
 [[variants]]
 name = "tom_exit4"
 rules = "tom"
+diagnostic = true
 overrides = { "tom.exit_day" = 4 }
 [[variants]]
 name = "tom_costs_x2"
