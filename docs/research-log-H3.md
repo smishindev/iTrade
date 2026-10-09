@@ -42,6 +42,15 @@ CAGR after costs > 0 · max drawdown ≤ 20%. Reported, not criteria: 90% block 
 
 ---
 
+## Decision P1.H3.07 (2026-10-09, owner): H3 rejected at discovery — final period not run
+
+- Discovery 2006–2020 (spec §7): `tom_spy` CAGR +0.5%, control percentile **44.1** < 95 → rejected by the pre-registered
+  rule. Diagnostics 14–55. Report: [spikes/hypothesis-H3-discovery.md](spikes/hypothesis-H3-discovery.md).
+- Review P1.H3.06 (quant-reviewer): trustworthy; 44.1 reproduces exactly; other readings of the rules give 37–60; the few
+  asymmetries favour H3.
+- **Decision:** H3 is rejected and closed (lock row below). The final period 2021-01-04 … 2026-09-30 stays **unseen**.
+- Hypotheses used: **3 of 3** — per SCOPE the project is reconsidered (owner's G1 decision: index + accounting platform).
+
 ## Ledger
 
 | # | Date | Variant | Period | Trades | Exp. R (90% CI) | Win % | Max DD | Control pct | Notes |
@@ -54,3 +63,4 @@ CAGR after costs > 0 · max drawdown ≤ 20%. Reported, not criteria: 90% block 
 | 6 | 2026-10-08 | tom_exit2 (diag) | validation | 177 | -0.005 (-0.047 … 0.036) | 49.7% | 19.5% | 40.7 | run `tom_exit2_validation_5f7d06f0`, exec 100.0%, costs 0.019R, v`f6926b8b` |
 | 7 | 2026-10-08 | tom_exit4 (diag) | validation | 177 | 0.024 (-0.025 … 0.074) | 55.9% | 23.6% | 49.8 | run `tom_exit4_validation_3352c9d0`, exec 100.0%, costs 0.019R, v`f6926b8b` |
 | 8 | 2026-10-08 | tom_costs_x2 (diag) | validation | 177 | -0.011 (-0.057 … 0.035) | 52.0% | 20.3% | 41.9 | run `tom_costs_x2_validation_b325d8b3`, exec 100.0%, costs 0.040R, v`f6926b8b` |
+| 9 | 2026-10-09 | — | closed | 0 | — | — | — | — | H3 closed: rejected at discovery by the pre-registered rule (P1.H3.07); final period unseen |
