@@ -67,7 +67,7 @@ public sealed partial class ArchitectureRules
             .Select(d => $"{d.Source} calls {d.Member}")
             .ToList();
         var io = Violations(TypesIn(DomainNamespace()), new Regex(
-            @"^(System\.Net\.Http\.|System\.IO\.(File|Directory|FileInfo|DirectoryInfo|Stream)\b|Microsoft\.EntityFrameworkCore\.)"));
+            @"^(System\.Net\.Http\.|System\.IO\.(File|Directory|FileInfo|DirectoryInfo|Stream)\b|Microsoft\.EntityFrameworkCore\.|NodaTime\.SystemClock$)"));
         var bad = clock.Concat(io).ToList();
         Assert.True(bad.Count == 0, string.Join(Environment.NewLine, bad));
     }
