@@ -1,0 +1,6 @@
+<Project>
+  <!-- Spikes do not use the solution's central package versions. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

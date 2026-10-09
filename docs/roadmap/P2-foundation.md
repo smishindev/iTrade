@@ -20,22 +20,24 @@ _План v4 (9 октября 2026): перенесено из v3 почти б
 **Шаги:** структура каталогов PLAN §4.1; перенос `data/raw` → `raw/market-data`, `data/curated` → `datasets/<версия>`; хуки защищают `raw` по новому пути.
 **Готово, когда:** ingest пишет в новый каталог; хук блокирует правку `D:\ITradeData\raw`; старый `data/` удалён.
 
-### [ ] P2.1.03 · 🤖 Каркас решения и общие настройки · 2 ч · после: P2.1.01
+### [x] P2.1.03 · 🤖 Каркас решения и общие настройки · 2 ч · после: P2.1.01
+> 9 октября 2026: `ITrade.slnx`, `global.json` (SDK 10.0.302, latestPatch), `Directory.Build.props` (nullable, warnings as
+> errors, анализаторы latest-recommended, InvariantGlobalization), `Directory.Packages.props`, `.editorconfig`; спайки изолированы.
 **Где:** `ITrade.slnx`, `global.json` (.NET 10, фиксированная версия SDK), `Directory.Build.props`
 (nullable, warnings as errors, анализаторы, `InvariantGlobalization`), `Directory.Packages.props` (централизованные версии), `.editorconfig`.
 **Готово, когда:** `dotnet build` пустого решения проходит без предупреждений.
 
-### [ ] P2.1.04 · 🤖 Проекты и ссылки · 1 ч · после: P2.1.03
-**Где:** `src/ITrade.Domain`, `.Strategies`, `.Simulation`, `.Application`, `.Infrastructure`, `.Broker.IBKR`, `.Host`,
-`.Research.Runner`; `tests/ITrade.UnitTests`, `.IntegrationTests`, `.ArchitectureTests`, `.BrokerContractTests`, `.ReplayTests`.
-**Шаги:** ссылки строго по таблице PLAN §3.2.
+### [x] P2.1.04 · 🤖 Проекты и ссылки · 1 ч · после: P2.1.03
+> 9 октября 2026: 5 проектов + 5 тестовых по PLAN §3.1 (v4); граф ссылок совпадает с таблицей; сборка — 0 предупреждений.
+**Где:** `src/ITrade.Domain`, `.Application`, `.Infrastructure`, `.Broker.IBKR`, `.Host`;
+`tests/ITrade.UnitTests`, `.IntegrationTests`, `.ArchitectureTests`, `.BrokerContractTests`, `.ReplayTests` (план v4).
+**Шаги:** ссылки строго по таблице PLAN §3.1.
 **Готово, когда:** решение собирается; граф ссылок совпадает с таблицей.
 
 ### [ ] P2.1.05 · 🤖 Архитектурные тесты · 2 ч · после: P2.1.04
 **Где:** `tests/ITrade.ArchitectureTests`.
-**Шаги:** ArchUnitNET: Domain/Strategies ни от чего не зависят (кроме Domain); в Strategies запрещены `DateTime.Now`,
-`DateTimeOffset.Now`, `HttpClient`, `DbContext`, `File`; `IBApi` только в Broker.IBKR; `IOrderSender` только в `ExecutionService`;
-Research.Runner не ссылается на Broker.IBKR.
+**Шаги:** ArchUnitNET: Domain ни от чего не зависит; в Domain запрещены `DateTime.Now`, `DateTimeOffset.Now`,
+`HttpClient`, `DbContext`, `File`; `IBApi` только в Broker.IBKR; `IOrderSender` только в `ExecutionService` (план v4, PLAN §3.1).
 **Готово, когда:** тесты проходят; намеренное нарушение в ветке — тест падает (проверено и откатено).
 
 ### [ ] P2.1.06 · 🤖 Хуки Claude Code для C# и веба · 2 ч · после: P2.1.04

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ITrade.Domain\ITrade.Domain.csproj" />
+    <ProjectReference Include="..\ITrade.Application\ITrade.Application.csproj" />
+    <ProjectReference Include="..\ITrade.Infrastructure\ITrade.Infrastructure.csproj" />
+    <ProjectReference Include="..\ITrade.Broker.IBKR\ITrade.Broker.IBKR.csproj" />
+  </ItemGroup>
+
+</Project>

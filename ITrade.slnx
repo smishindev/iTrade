@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ITrade.Application/ITrade.Application.csproj" />
+    <Project Path="src/ITrade.Broker.IBKR/ITrade.Broker.IBKR.csproj" />
+    <Project Path="src/ITrade.Domain/ITrade.Domain.csproj" />
+    <Project Path="src/ITrade.Host/ITrade.Host.csproj" />
+    <Project Path="src/ITrade.Infrastructure/ITrade.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ITrade.ArchitectureTests/ITrade.ArchitectureTests.csproj" />
+    <Project Path="tests/ITrade.BrokerContractTests/ITrade.BrokerContractTests.csproj" />
+    <Project Path="tests/ITrade.IntegrationTests/ITrade.IntegrationTests.csproj" />
+    <Project Path="tests/ITrade.ReplayTests/ITrade.ReplayTests.csproj" />
+    <Project Path="tests/ITrade.UnitTests/ITrade.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,4 @@
+<Project>
+  <!-- Spikes are throw-away consoles: keep them independent of the solution-wide settings in the
+       repository root (Directory.Build.props). Each spike's .csproj carries its own settings. -->
+</Project>

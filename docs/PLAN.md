@@ -47,6 +47,24 @@ React 19 + TypeScript (`web/`) · C# / .NET 10 + ASP.NET Core (`src/ITrade.*`) �
 
 Ручные места хранения (керен иштальмут, израильский брокер) вводятся вручную или из файла выписки — без интеграции.
 
+### 3.1 Проекты решения (.NET)
+
+| Проект | Ответственность | Может зависеть от |
+|---|---|---|
+| `ITrade.Domain` | типы и правила: деньги, количество, валюта, инструмент, транзакция, партия, налоговые расчёты как чистые функции | ничего |
+| `ITrade.Application` | сценарии (импорт, оценка, план, подтверждение, исполнение, сверка, отчёты); интерфейсы `IBrokerGateway`, `IClock`, хранилищ | Domain |
+| `ITrade.Infrastructure` | EF Core / PostgreSQL, импорт Flex и CSV, курс Банка Израиля, цены, файлы, бэкапы | Application, Domain |
+| `ITrade.Broker.IBKR` | **единственная** реализация `IBrokerGateway`; **единственное** место со ссылкой на IBApi | Application, Domain |
+| `ITrade.Host` | ASP.NET Core API, фоновые задания, отдача React, вход | все |
+
+Тесты: `ITrade.UnitTests` (Domain, Application), `ITrade.IntegrationTests` (Infrastructure на Testcontainers),
+`ITrade.ArchitectureTests` (правила ниже), `ITrade.BrokerContractTests` (paper-счёт, вручную), `ITrade.ReplayTests`
+(записанные сообщения IBKR, без сети).
+
+Правила (архитектурные тесты в каждой сборке): `Domain` ни от чего не зависит; в `Domain` запрещены `DateTime.Now`,
+`HttpClient`, `DbContext`, файлы; на `IBApi` ссылается только `Broker.IBKR`; `IOrderSender` получает только
+`ExecutionService`.
+
 ## 4. Данные
 
 - **PostgreSQL:** инструменты, счета/места хранения, транзакции (покупка, продажа, дивиденд, удержание, комиссия,

@@ -25,10 +25,21 @@ if echo "$staged" | grep -Eq '^python/|^config/|^tools/'; then
         && uv run --quiet pytest -q -m "not network")
 fi
 
-if echo "$staged" | grep -q '^spikes/' && command -v dotnet >/dev/null 2>&1; then
-    for dir in $(echo "$staged" | grep '^spikes/' | cut -d/ -f2 | sort -u); do
+if echo "$staged" | grep -q '^spikes/[^/]*/' && command -v dotnet >/dev/null 2>&1; then
+    # only files inside a spike folder (spikes/<name>/...); files directly in spikes/ are shared settings
+    for dir in $(echo "$staged" | grep '^spikes/[^/]*/' | cut -d/ -f2 | sort -u); do
         target=$(ls spikes/"$dir"/*.sln* 2>/dev/null | head -n 1)
-        [ -z "$target" ] && target=$(find spikes/"$dir" -name '*.csproj' | head -n 1)
-        [ -n "$target" ] && dotnet build "$target" --nologo -v q
+        if [ -z "$target" ]; then
+            target=$(find spikes/"$dir" -name '*.csproj' | head -n 1)
+        fi
+        if [ -n "$target" ]; then
+            dotnet build "$target" --nologo -v q
+        fi
     done
 fi
+
+if echo "$staged" | grep -Eq '^(src|tests)/|^ITrade\.slnx$|^Directory\.(Build|Packages)\.props$|^global\.json$'     && command -v dotnet >/dev/null 2>&1; then
+    dotnet build ITrade.slnx --nologo -v q
+fi
+
+exit 0
