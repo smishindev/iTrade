@@ -165,7 +165,12 @@ def trade_svg(
         ([prepared.loc[d, c] * k for d, k in zip(days, scale, strict=True)], color)
         for c, color in lines
     ]
-    sma200 = [prepared.loc[d, "sma_trend"] * k for d, k in zip(days, scale, strict=True)]
+    has_trend = "sma_trend" in prepared.columns  # ETF_TOM_V3 has no trend filter
+    sma200 = (
+        [prepared.loc[d, "sma_trend"] * k for d, k in zip(days, scale, strict=True)]
+        if has_trend
+        else []
+    )
 
     levels = [float(trade["limit"]), float(trade["stop"])]
     lo = min([float(b.low) for b in bars] + levels)

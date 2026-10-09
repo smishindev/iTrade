@@ -46,3 +46,11 @@ CAGR after costs > 0 · max drawdown ≤ 20%. Reported, not criteria: 90% block 
 
 | # | Date | Variant | Period | Trades | Exp. R (90% CI) | Win % | Max DD | Control pct | Notes |
 |---|------|---------|--------|--------|-----------------|-------|--------|-------------|-------|
+| 1 | 2026-10-08 | tom_spy | validation | 177 | 0.010 (-0.036 … 0.055) | 52.5% | 18.8% | 44.1 | run `tom_spy_validation_f25e30cc`, exec 100.0%, costs 0.019R, v`f6926b8b` |
+| 2 | 2026-10-08 | tom_iwm (diag) | validation | 176 | -0.023 (-0.067 … 0.021) | 50.0% | 30.5% | 13.7 | run `tom_iwm_validation_9eb7e104`, exec 100.0%, costs 0.015R, v`f6926b8b` |
+| 3 | 2026-10-08 | tom_qqq (diag) | validation | 176 | 0.021 (-0.024 … 0.065) | 53.4% | 20.0% | 50.0 | run `tom_qqq_validation_fcb7c02e`, exec 100.0%, costs 0.015R, v`f6926b8b` |
+| 4 | 2026-10-08 | tom_basket (diag) | validation | 528 | -0.012 (-0.055 … 0.031) | 51.1% | 21.8% | 28.3 | run `tom_basket_validation_ab943d39`, exec 99.8%, costs 0.030R, v`f6926b8b` |
+| 5 | 2026-10-08 | tom_entry2 (diag) | validation | 179 | 0.034 (-0.016 … 0.084) | 57.5% | 20.9% | 54.9 | run `tom_entry2_validation_60482ecb`, exec 100.0%, costs 0.019R, v`f6926b8b` |
+| 6 | 2026-10-08 | tom_exit2 (diag) | validation | 177 | -0.005 (-0.047 … 0.036) | 49.7% | 19.5% | 40.7 | run `tom_exit2_validation_5f7d06f0`, exec 100.0%, costs 0.019R, v`f6926b8b` |
+| 7 | 2026-10-08 | tom_exit4 (diag) | validation | 177 | 0.024 (-0.025 … 0.074) | 55.9% | 23.6% | 49.8 | run `tom_exit4_validation_3352c9d0`, exec 100.0%, costs 0.019R, v`f6926b8b` |
+| 8 | 2026-10-08 | tom_costs_x2 (diag) | validation | 177 | -0.011 (-0.057 … 0.035) | 52.0% | 20.3% | 41.9 | run `tom_costs_x2_validation_b325d8b3`, exec 100.0%, costs 0.040R, v`f6926b8b` |
