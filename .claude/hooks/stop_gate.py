@@ -1,7 +1,8 @@
 """Stop hook: do not let Claude finish a turn with failing tests, lint or build.
 
 Python (ruff + pytest, in python/) runs when python/, config/ or tools/ changed.
-C# (dotnet build) runs for each spike under spikes/ that changed, if the SDK is installed.
+C# (dotnet build) runs for each spike under spikes/ that changed, if the SDK is installed; the solution
+(ITrade.slnx: build + unit and architecture tests) runs when src/, tests/ or solution settings changed.
 On failure exits 2 so Claude sees the output and keeps working. Skips when it already
 blocked once this turn (stop_hook_active) to avoid loops.
 """
@@ -70,6 +71,30 @@ def dotnet_checks(root: Path, changed: list[str]) -> list[str]:
     return failures
 
 
+SOLUTION_WATCHED = ("src/", "tests/")
+SOLUTION_FILES = (
+    "ITrade.slnx", "Directory.Build.props", "Directory.Packages.props", "global.json", ".editorconfig",
+)
+FAST_TESTS = ("tests/ITrade.UnitTests", "tests/ITrade.ArchitectureTests")  # no Docker, no broker
+
+
+def solution_checks(root: Path, changed: list[str]) -> list[str]:
+    if not shutil.which("dotnet") or not (root / "ITrade.slnx").exists():
+        return []
+    if not any(p.startswith(SOLUTION_WATCHED) or p in SOLUTION_FILES for p in changed):
+        return []
+    run = {"cwd": root, "capture_output": True, "text": True, "timeout": 900}
+    build = subprocess.run(["dotnet", "build", "ITrade.slnx", "--nologo", "-v", "q"], **run)
+    if build.returncode != 0:
+        return ["dotnet build ITrade.slnx failed:\n" + tail(build.stdout + build.stderr)]
+    failures = []
+    for project in FAST_TESTS:
+        test = subprocess.run(["dotnet", "test", project, "--no-build", "--nologo", "-v", "q"], **run)
+        if test.returncode != 0:
+            failures.append(f"dotnet test {project} failed:\n" + tail(test.stdout + test.stderr))
+    return failures
+
+
 def main() -> None:
     payload = read_input()
     if payload.get("stop_hook_active"):
@@ -81,6 +106,7 @@ def main() -> None:
     if any(path.startswith(PYTHON_WATCHED) for path in changed):
         failures += python_checks(root)
     failures += dotnet_checks(root, changed)
+    failures += solution_checks(root, changed)
 
     if failures:
         print("Quality gate (stop hook) — fix before finishing:\n\n" + "\n\n".join(failures), file=sys.stderr)

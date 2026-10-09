@@ -42,7 +42,10 @@ _План v4 (9 октября 2026): перенесено из v3 почти б
 `HttpClient`, `DbContext`, `File`; `IBApi` только в Broker.IBKR; `IOrderSender` только в `ExecutionService` (план v4, PLAN §3.1).
 **Готово, когда:** тесты проходят; намеренное нарушение в ветке — тест падает (проверено и откатено).
 
-### [ ] P2.1.06 · 🤖 Хуки Claude Code для C# и веба · 2 ч · после: P2.1.04
+### [~] P2.1.06 · 🤖 Хуки Claude Code для C# и веба · 2 ч · после: P2.1.04
+> 9 октября 2026: C# готово — Stop собирает `ITrade.slnx` и гоняет модульные + архитектурные тесты при изменениях `src/`, `tests/`,
+> настроек решения (проверено: чистый прогон проходит, ошибка компиляции ловится); `.cs` форматируется `dotnet format`;
+> pre-commit собирает решение. Осталось: prettier/eslint/vitest — когда появится `web/` (P2.5.01).
 **Где:** `.claude/hooks/post_edit.py`, `.claude/hooks/stop_gate.py`, `.claude/settings.json`, `.githooks/pre-commit`.
 **Шаги:** после правки `.cs` — `dotnet format` по файлу; после `.ts/.tsx` — prettier + eslint по файлу;
 Stop: `dotnet build` + юнит- и архитектурные тесты, если менялись `src/`/`tests/`; vitest, если менялся `web/`;
