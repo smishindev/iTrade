@@ -34,7 +34,9 @@ _План v4 (9 октября 2026): перенесено из v3 почти б
 **Шаги:** ссылки строго по таблице PLAN §3.1.
 **Готово, когда:** решение собирается; граф ссылок совпадает с таблицей.
 
-### [ ] P2.1.05 · 🤖 Архитектурные тесты · 2 ч · после: P2.1.04
+### [x] P2.1.05 · 🤖 Архитектурные тесты · 2 ч · после: P2.1.04
+> 9 октября 2026: 5 правил (Domain/Application зависимости, часы/сеть/БД/файлы в Domain, IBApi, IOrderSender) — проверкой целей
+> зависимостей по имени: беглый API ArchUnitNET не видел системные типы. Намеренное нарушение (DateTime.Now + HttpClient) поймано и удалено.
 **Где:** `tests/ITrade.ArchitectureTests`.
 **Шаги:** ArchUnitNET: Domain ни от чего не зависит; в Domain запрещены `DateTime.Now`, `DateTimeOffset.Now`,
 `HttpClient`, `DbContext`, `File`; `IBApi` только в Broker.IBKR; `IOrderSender` только в `ExecutionService` (план v4, PLAN §3.1).
