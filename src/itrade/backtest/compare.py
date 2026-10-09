@@ -5,7 +5,7 @@ its parameter family (base included) have positive expectancy. ETF_TREND_V2 (spe
 2026-10-08): inside each rule group a variant replaces the base if its control percentile (total
 P&L) is >= 10 points higher and its whole family has CAGR > 0 (several qualify -> the highest);
 then the group pick with the higher control percentile; then early rejection (CAGR <= 0 or
-control percentile < 80 -> no final run).
+control percentile below `[selection].early_reject_min_control_percentile` -> no final run).
 Diagnostics never win. A variant's family is its first override key (within its rule group).
 """
 

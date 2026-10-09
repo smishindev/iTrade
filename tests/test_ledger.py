@@ -136,3 +136,17 @@ def test_trend_final_runs_its_group_costs_x2_under_the_same_lock(fake_project, m
     assert main([*args, "--control", "1000"]) == 0
     assert calls == [("brk_trend", "final", 1000), ("brk_costs_x2", "final", 0)]
     assert len(final_runs(h2)) == 1  # one lock row for the hypothesis
+
+
+def test_a_closed_hypothesis_refuses_its_final(tmp_path):
+    from itrade.backtest.ledger import close_hypothesis
+
+    p = tmp_path / "log.md"
+    p.write_text(TEMPLATE, encoding="utf-8")
+    append(p, row("validation", "base"))
+    check_final_allowed(p)
+    close_hypothesis(p, "2026-10-09", "rejected at discovery by the pre-registered rule")
+    with pytest.raises(FinalAlreadyRun, match="closed"):
+        check_final_allowed(p)
+    with pytest.raises(FinalAlreadyRun):
+        close_hypothesis(p, "2026-10-09", "twice")

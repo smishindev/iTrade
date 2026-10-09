@@ -87,3 +87,4 @@ and most neighbours CAGR > 0 on validation · executable signals ≥ 70% · max 
 | 19 | 2026-10-07 | brk_fractional | validation | 93 | 0.012 (-0.304 … 0.375) | 31.2% | 10.8% | 13.5 | run `brk_fractional_validation_f32f2f55`, exec 87.0%, costs 0.079R, v`22b3a82e` |
 | 20 | 2026-10-07 | rot_costs_x2 (diag) | validation | 81 | -0.052 (-0.285 … 0.203) | 37.0% | 20.0% | 4.4 | run `rot_costs_x2_validation_07b5d703`, exec 97.6%, costs 0.089R, v`22b3a82e` |
 | 21 | 2026-10-07 | brk_costs_x2 (diag) | validation | 94 | -0.182 (-0.442 … 0.125) | 28.7% | 15.2% | 8.2 | run `brk_costs_x2_validation_026eed8c`, exec 84.3%, costs 0.168R, v`22b3a82e` |
+| 22 | 2026-10-09 | — | closed | 0 | — | — | — | — | H2 closed: rejected by its early-rejection rule (P1.H2.14, 2026-10-08); final period unseen |

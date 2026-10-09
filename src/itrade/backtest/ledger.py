@@ -57,13 +57,32 @@ class FinalAlreadyRun(RuntimeError):
     pass
 
 
+def closed_rows(path: Path) -> list[list[str]]:
+    """Ledger rows whose period column is `closed` (the hypothesis was decided without a final)."""
+    return [r for r in _rows(path.read_text(encoding="utf-8")) if len(r) > 3 and r[3] == "closed"]
+
+
 def check_final_allowed(path: Path) -> None:
+    closed = closed_rows(path)
+    if closed:  # review P1.H3.06: an early rejection must also lock the unseen final period
+        raise FinalAlreadyRun(
+            f"this hypothesis is closed (ledger row #{closed[0][0]}: {closed[0][9]}); the final "
+            f"period stays unseen — a new hypothesis needs a new registration"
+        )
     done = final_runs(path)
     if done:
         raise FinalAlreadyRun(
             f"the final period was already run for this hypothesis (ledger row #{done[0][0]}, "
             f"variant {done[0][2]}); it runs once — a new hypothesis needs a new registration"
         )
+
+
+def close_hypothesis(path: Path, date: str, reason: str) -> int:
+    """Append the `closed` row that locks the final period of a decided hypothesis."""
+    if closed_rows(path):
+        raise FinalAlreadyRun("this hypothesis is already closed")
+    row = LedgerRow(date, "—", "closed", 0, "—", "—", "—", "—", reason)
+    return append(path, row)
 
 
 def append(path: Path, row: LedgerRow) -> int:

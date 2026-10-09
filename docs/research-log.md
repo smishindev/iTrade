@@ -88,3 +88,4 @@ three hypotheses before the project is reconsidered).
 | 15 | 2026-10-07 | raw_close_indicators (diag) | validation | 286 | -0.146 (-0.243 … -0.042) | 51.4% | 7.4% | 72.4 | run `raw_close_indicators_validation_abef66b5`, exec 54.1%, costs 0.200R, v`843f5684` |
 | 16 | 2026-10-07 | costs_x2 (diag) | validation | 255 | -0.355 (-0.464 … -0.242) | 34.9% | 12.0% | 49.1 | run `costs_x2_validation_a32a5010`, exec 40.0%, costs 0.413R, v`843f5684` |
 | 17 | 2026-10-07 | no_stop (diag) | validation | 226 | -0.179 (-0.355 … -0.032) | 54.9% | 7.1% | 20.7 | run `no_stop_validation_abc839a3`, exec 53.5%, costs 0.191R, v`843f5684` |
+| 18 | 2026-10-09 | — | closed | 0 | — | — | — | — | H1 closed: rejected on validation by the owner (P1.A.29, 2026-10-07); final period unseen |
