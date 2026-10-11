@@ -21,7 +21,8 @@ public sealed class DatabaseTests(PostgresFixture pg)
             .ToListAsync();
         Assert.Contains("settings", tables);
         Assert.Contains("audit_events", tables);
-        Assert.Contains("jobs", tables);
+        Assert.Contains("job_runs", tables);
+        Assert.DoesNotContain("jobs", tables);
     }
 
     [Fact]

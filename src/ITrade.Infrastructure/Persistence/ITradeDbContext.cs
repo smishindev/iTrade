@@ -1,3 +1,4 @@
+using ITrade.Application.Jobs;
 using ITrade.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -16,7 +17,7 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
-    public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<JobRun> JobRuns => Set<JobRun>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -28,6 +29,7 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
         configurationBuilder.Properties<HoldingPlaceId>().HaveConversion<HoldingPlaceIdConverter>();
         configurationBuilder.Properties<TransactionId>().HaveConversion<TransactionIdConverter>();
         configurationBuilder.Properties<OrderId>().HaveConversion<OrderIdConverter>();
+        configurationBuilder.Properties<TradeDate>().HaveConversion<TradeDateConverter>();
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -47,13 +49,15 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.Property(a => a.Payload).HasColumnType("jsonb");
             e.HasIndex(a => a.OccurredAt);
         });
-        modelBuilder.Entity<Job>(e =>
+        modelBuilder.Entity<JobRun>(e =>
         {
-            e.HasKey(j => j.Name);
+            e.HasKey(j => new { j.Name, j.TradeDate });
             e.Property(j => j.Name).HasMaxLength(100);
-            e.Property(j => j.LastStatus).HasMaxLength(20);
+            e.Property(j => j.Status).HasConversion<string>().HasMaxLength(20);
         });
     }
+
+    private sealed class TradeDateConverter() : ValueConverter<TradeDate, LocalDate>(d => d.Value, v => new TradeDate(v));
 
     private sealed class QuantityConverter() : ValueConverter<Quantity, decimal>(q => q.Value, v => new Quantity(v));
 
@@ -92,14 +96,23 @@ public sealed class AuditEvent
     public required string Payload { get; init; }
 }
 
-/// <summary>A background job's bookkeeping, so missed runs can catch up (P2.4.05).</summary>
-public sealed class Job
+/// <summary>
+/// One daily job on one trade date (P2.4.05). The key (name, trade date) is what lets missed sessions
+/// catch up and keeps a finished date from running twice.
+/// </summary>
+public sealed class JobRun
 {
     public required string Name { get; init; }
 
-    public Instant? LastRunAt { get; set; }
+    public required TradeDate TradeDate { get; init; }
 
-    public string? LastStatus { get; set; }
+    public JobRunStatus Status { get; set; }
 
-    public Instant? NextDueAt { get; set; }
+    public int Attempts { get; set; }
+
+    public string? Error { get; set; }
+
+    public Instant StartedAt { get; set; }
+
+    public Instant? FinishedAt { get; set; }
 }

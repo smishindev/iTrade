@@ -60,30 +60,43 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_events", (string)null);
                 });
 
-            modelBuilder.Entity("ITrade.Infrastructure.Persistence.Job", b =>
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.JobRun", b =>
                 {
                     b.Property<string>("Name")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
-                    b.Property<Instant?>("LastRunAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_run_at");
+                    b.Property<LocalDate>("TradeDate")
+                        .HasColumnType("date")
+                        .HasColumnName("trade_date");
 
-                    b.Property<string>("LastStatus")
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<Instant?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<Instant>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasColumnName("last_status");
+                        .HasColumnName("status");
 
-                    b.Property<Instant?>("NextDueAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("next_due_at");
+                    b.HasKey("Name", "TradeDate")
+                        .HasName("pk_job_runs");
 
-                    b.HasKey("Name")
-                        .HasName("pk_jobs");
-
-                    b.ToTable("jobs", (string)null);
+                    b.ToTable("job_runs", (string)null);
                 });
 
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.Setting", b =>

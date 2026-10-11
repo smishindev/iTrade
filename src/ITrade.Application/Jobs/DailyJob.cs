@@ -1,0 +1,49 @@
+using ITrade.Domain;
+using NodaTime;
+
+namespace ITrade.Application.Jobs;
+
+/// <summary>
+/// Work done once per trading session (imports, valuations, checks). If the application was off when a
+/// session's job was due, the job runs for that session at the next start (P2.4.05).
+/// </summary>
+public interface IDailyJob
+{
+    /// <summary>Stable name; it is the key of the job's runs in the database.</summary>
+    string Name { get; }
+
+    /// <summary>New York time on the trade date from which the job may run.</summary>
+    LocalTime DueAt { get; }
+
+    /// <summary>
+    /// Does the work for one session. Must be idempotent: after a crash in the middle the same date runs
+    /// again, and a repeat must not duplicate anything.
+    /// </summary>
+    Task RunAsync(TradeDate day, CancellationToken cancellationToken);
+}
+
+public enum JobRunStatus
+{
+    Running,
+    Succeeded,
+    Failed,
+}
+
+/// <summary>What is recorded about one job on one trade date.</summary>
+public sealed record JobRunState(TradeDate Date, JobRunStatus Status, int Attempts, Instant StartedAt);
+
+/// <summary>The record of job runs (table `job_runs`).</summary>
+public interface IJobRunStore
+{
+    /// <summary>The first trade date the job ever ran for; null for a job that never ran.</summary>
+    Task<TradeDate?> FirstDateAsync(string job, CancellationToken cancellationToken);
+
+    /// <summary>Runs of the job for trade dates from <paramref name="from"/> on.</summary>
+    Task<IReadOnlyList<JobRunState>> RunsFromAsync(string job, TradeDate from, CancellationToken cancellationToken);
+
+    /// <summary>Marks the date as running and counts one more attempt.</summary>
+    Task BeginAsync(string job, TradeDate day, Instant now, CancellationToken cancellationToken);
+
+    /// <summary>Marks the date as succeeded (no error) or failed.</summary>
+    Task FinishAsync(string job, TradeDate day, Instant now, string? failure, CancellationToken cancellationToken);
+}
