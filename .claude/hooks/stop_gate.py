@@ -3,6 +3,7 @@
 Python (ruff + pytest, in python/) runs when python/, config/ or tools/ changed.
 C# (dotnet build) runs for each spike under spikes/ that changed, if the SDK is installed; the solution
 (ITrade.slnx: build + unit and architecture tests) runs when src/, tests/ or solution settings changed.
+Web (web/: prettier check, eslint, tsc, vitest) runs when web/ changed and `npm install` was done.
 On failure exits 2 so Claude sees the output and keeps working. Skips when it already
 blocked once this turn (stop_hook_active) to avoid loops.
 """
@@ -95,6 +96,32 @@ def solution_checks(root: Path, changed: list[str]) -> list[str]:
     return failures
 
 
+WEB_CHECKS = (  # npm arguments, in web/
+    ("format check", ["run", "--silent", "format:check"]),
+    ("lint", ["run", "--silent", "lint"]),
+    ("type check", ["run", "--silent", "typecheck"]),
+    ("tests", ["test", "--silent"]),
+)
+
+
+def web_checks(root: Path, changed: list[str]) -> list[str]:
+    npm = shutil.which("npm")
+    web = root / "web"
+    if not npm or not (web / "node_modules").exists():
+        return []
+    if not any(p.startswith("web/") for p in changed):
+        return []
+    failures = []
+    for name, args in WEB_CHECKS:
+        result = subprocess.run(
+            [npm, *args], cwd=web, capture_output=True, text=True, timeout=600,
+            encoding="utf-8", errors="replace",  # node tools print UTF-8 whatever the console code page
+        )
+        if result.returncode != 0:
+            failures.append(f"web {name} failed:\n" + tail(result.stdout + result.stderr))
+    return failures
+
+
 def main() -> None:
     payload = read_input()
     if payload.get("stop_hook_active"):
@@ -107,6 +134,7 @@ def main() -> None:
         failures += python_checks(root)
     failures += dotnet_checks(root, changed)
     failures += solution_checks(root, changed)
+    failures += web_checks(root, changed)
 
     if failures:
         print("Quality gate (stop hook) — fix before finishing:\n\n" + "\n\n".join(failures), file=sys.stderr)

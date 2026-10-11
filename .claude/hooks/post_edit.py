@@ -2,6 +2,7 @@
 
 Python: ruff format + ruff check --fix; report remaining lint errors and look-ahead smells.
 C#: `dotnet format whitespace` on the edited file (needs a .csproj above it).
+Web (web/): prettier on the edited file; eslint on .ts/.tsx, remaining problems are reported.
 All feedback is non-blocking context for Claude.
 """
 
@@ -24,6 +25,10 @@ SIGNAL_DIRS = (
     "python/src/itrade/strategies/", "python/src/itrade/backtest/", "python/src/itrade/signals/"
 )
 PYTHON_DIR = "python"  # the Python project (pyproject.toml, .venv) since P2.1.01
+WEB_DIR = "web"  # the React project (package.json, node_modules) since P2.5.01
+WEB_FORMATTED = (".ts", ".tsx", ".js", ".css", ".html", ".json", ".md")
+WEB_LINTED = (".ts", ".tsx")
+WEB_SKIPPED = ("web/node_modules/", "web/dist/", "web/coverage/")
 
 
 def ruff_cmd(root: Path) -> list[str]:
@@ -62,6 +67,38 @@ def format_csharp(file_path: str, root: Path) -> None:
         context("PostToolUse", "dotnet format failed:\n" + (result.stdout + result.stderr)[-2000:])
 
 
+def web_tool(root: Path, name: str) -> str | None:
+    """A tool installed by `npm install` in web/ (None before the first install)."""
+    bin_dir = root / WEB_DIR / "node_modules" / ".bin"
+    for exe in (bin_dir / f"{name}.cmd", bin_dir / name):
+        if exe.exists():
+            return str(exe)
+    return None
+
+
+def format_web(file_path: str, root: Path, rel: str) -> None:
+    prettier = web_tool(root, "prettier")
+    if prettier is None:
+        return
+    run = {
+        "cwd": root / WEB_DIR, "capture_output": True, "text": True, "timeout": 120,
+        "encoding": "utf-8", "errors": "replace",  # node tools print UTF-8 whatever the console code page
+    }
+    notes = []
+    fmt = subprocess.run(
+        [prettier, "--write", "--ignore-unknown", "--log-level", "warn", file_path], **run
+    )
+    if fmt.returncode != 0:
+        notes.append("prettier failed:\n" + (fmt.stdout + fmt.stderr)[-2000:])
+    eslint = web_tool(root, "eslint")
+    if eslint is not None and rel.endswith(WEB_LINTED):
+        lint = subprocess.run([eslint, "--max-warnings", "0", file_path], **run)
+        if lint.returncode != 0:
+            notes.append("eslint found issues:\n" + (lint.stdout + lint.stderr)[-3000:])
+    if notes:
+        context("PostToolUse", "\n".join(notes))
+
+
 def main() -> None:
     payload = read_input()
     tool_input = payload.get("tool_input", {}) or {}
@@ -70,6 +107,10 @@ def main() -> None:
     rel = rel_path(file_path, root) if file_path else None
     if rel and rel.endswith(".cs"):
         format_csharp(file_path, root)
+        return
+    if rel and rel.startswith(WEB_DIR + "/"):
+        if rel.endswith(WEB_FORMATTED) and not rel.startswith(WEB_SKIPPED):
+            format_web(file_path, root, rel)
         return
     if not rel or not rel.endswith(".py") or rel.startswith(".claude/"):
         return

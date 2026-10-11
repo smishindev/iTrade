@@ -25,7 +25,11 @@ free data ingest, statistics. **Python never trades.**
 - Python project in `python/` (since P2.1.01): from there `uv sync` · `uv run pytest` · `uv run ruff check src tests tools`
   · `uv run ruff format src tests tools` · `uv run itrade ingest|quality|costs|sql` (see README);
   from the repo root the same with `uv run --directory python …`.
-- Add dependencies with `uv add` (in `python/`), never `pip install`. (.NET commands are added in phase 2.)
+- Add dependencies with `uv add` (in `python/`), never `pip install`.
+- .NET (repo root): `dotnet build ITrade.slnx` · `dotnet test tests/ITrade.UnitTests` · `dotnet test tests/ITrade.ArchitectureTests`
+  · `dotnet test tests/ITrade.IntegrationTests` (needs Docker) · `dotnet run --project src/ITrade.Host` (a running Host locks the
+  Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password`.
+- Web (in `web/`, Node 24): `npm ci` · `npm run dev` · `npm run check` (= `format:check`, `lint`, `test`, `build`).
 
 ## Working rules
 - **Stay inside the current phase** (`config/project.toml`, names in docs/GATES.md). Next: phase 2 (foundation) once
@@ -52,8 +56,9 @@ free data ingest, statistics. **Python never trades.**
   `src/ITrade.Broker.IBKR/` and `spikes/ibkr-feasibility/`, live ports 4001/7496 before phase 8 (v3 numbering;
   becomes phase 6 in task P2.6.03 with the owner's consent);
   blocks deleting raw data, reading `.env`, `pip install`.
-- PostToolUse: ruff format/fix + look-ahead flags on Python; `dotnet format whitespace` on C#.
-- Stop: ruff + pytest when src/tests/config/tools changed; `dotnet build` for changed spikes. A failure sends you back.
+- PostToolUse: ruff format/fix + look-ahead flags on Python; `dotnet format whitespace` on C#; prettier + eslint on `web/`.
+- Stop: ruff + pytest when python/config/tools changed; `dotnet build` for changed spikes; solution build + unit and
+  architecture tests when src/tests changed; prettier check, eslint, tsc and vitest when `web/` changed. A failure sends you back.
 - Status line shows phase, roadmap progress and the next task; SessionStart injects the same.
 - If a hook blocks you, do not work around it — explain to the user what it protects.
 - Spike/broker run logs go to `spikes/**/out/` (git-ignored); only anonymised fixtures are committed.
