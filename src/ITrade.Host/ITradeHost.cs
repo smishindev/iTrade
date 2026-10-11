@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using ITrade.Host.Auth;
 using ITrade.Host.Health;
 using ITrade.Host.Logging;
 using ITrade.Infrastructure.Persistence;
@@ -30,7 +31,9 @@ public static partial class ITradeHost
     private const int LogRetentionDays = 90;
     private const long LogFileSizeLimitBytes = 50 * 1024 * 1024;
 
-    public static WebApplication Build(string[] args)
+    /// <param name="args">Command-line settings.</param>
+    /// <param name="configureServices">Last word on the services (tests replace the clock).</param>
+    public static WebApplication Build(string[] args, Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -59,28 +62,34 @@ public static partial class ITradeHost
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddITradeDatabase(connectionString);
         builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+        builder.Services.AddOwnerAuth();
+        configureServices?.Invoke(builder.Services);
 
         var app = builder.Build();
         // The logger is this host's own (no static Log.Logger), so the request log needs it handed over.
         app.UseSerilogRequestLogging(
             requests => requests.Logger = app.Services.GetRequiredService<Serilog.ILogger>());
-        app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealth });
+        app.UseOwnerAuth();
+        app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealth }).AllowAnonymous();
+        app.MapOwnerAuth();
         return app;
     }
 
     /// <summary>Applies pending migrations, then starts listening.</summary>
     public static async Task StartAsync(WebApplication app, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(app);
-        await using (var scope = app.Services.CreateAsyncScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ITradeDbContext>();
-            await db.Database.MigrateAsync(cancellationToken);
-        }
-
+        await MigrateAsync(app, cancellationToken);
         await app.StartAsync(cancellationToken);
         var options = app.Services.GetRequiredService<ITradeOptions>();
         LogStarted(app.Logger, options.Mode, app.Urls, options.LogDir);
+    }
+
+    public static async Task MigrateAsync(WebApplication app, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ITradeDbContext>();
+        await db.Database.MigrateAsync(cancellationToken);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "iTrade started in {Mode} mode on {Urls}; logs in {LogDir}")]
