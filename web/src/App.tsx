@@ -1,9 +1,24 @@
-/** Placeholder until the shell (P2.5.02): proves the build, lint and test chain end to end. */
+import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider } from '@mui/material/styles'
+import Typography from '@mui/material/Typography'
+import { AppShell, type ShellStatus } from './shell/AppShell'
+import { theme } from './theme'
+
+/** Nothing is known about the server until the API client arrives (P2.5.04); the header says so. */
+const notConnected: ShellStatus = { mode: undefined, account: undefined, reconciliation: undefined }
+
 export function App() {
   return (
-    <main>
-      <h1>iTrade</h1>
-      <p>Платформа учёта портфеля. Интерфейс в разработке.</p>
-    </main>
+    <ThemeProvider theme={theme} defaultMode="system">
+      <CssBaseline enableColorScheme />
+      <AppShell status={notConnected} currentPath={window.location.pathname}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Overview
+        </Typography>
+        <Typography sx={{ color: 'text.secondary' }}>
+          Portfolio accounting platform. The screens are under construction.
+        </Typography>
+      </AppShell>
+    </ThemeProvider>
   )
 }

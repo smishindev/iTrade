@@ -15,4 +15,7 @@ Node 24 (see `.nvmrc`). From this folder:
 | `npm run format` | format with Prettier (`format:check` only checks)        |
 | `npm run check`  | everything a commit must pass: format, lint, test, build |
 
-Interface texts are in Russian (the owner's language); code, comments and identifiers are in English.
+Everything is in English: interface texts, code, comments (owner's decision, 2026-10-12).
+
+Components come from MUI (Material UI, MIT). Use its community components only; the paid data-grid
+features (row grouping, aggregation, Excel export) are not used — totals come from the server.
