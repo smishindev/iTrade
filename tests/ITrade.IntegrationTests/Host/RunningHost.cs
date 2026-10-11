@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ITrade.Host;
@@ -14,6 +15,7 @@ namespace ITrade.IntegrationTests.Host;
 internal sealed class RunningHost : IAsyncDisposable
 {
     private readonly List<HttpClient> _clients = [];
+    private readonly Dictionary<HttpClient, CookieContainer> _cookies = [];
 
     private RunningHost(WebApplication app, string dataDir)
     {
@@ -46,10 +48,11 @@ internal sealed class RunningHost : IAsyncDisposable
     public static async Task<RunningHost> StartAsync(
         string connectionString,
         Action<IServiceCollection>? configureServices = null,
-        Action<WebApplication>? configureApp = null)
+        Action<WebApplication>? configureApp = null,
+        params string[] settings)
     {
         var dataDir = NewDataDir();
-        var app = ITradeHost.Build(Args(connectionString, dataDir), configureServices);
+        var app = ITradeHost.Build(Args(connectionString, dataDir, settings), configureServices);
         configureApp?.Invoke(app);
         await ITradeHost.StartAsync(app);
         return new RunningHost(app, dataDir);
@@ -65,8 +68,12 @@ internal sealed class RunningHost : IAsyncDisposable
         };
         var client = new HttpClient(handler) { BaseAddress = BaseAddress };
         _clients.Add(client);
+        _cookies[client] = handler.CookieContainer;
         return client;
     }
+
+    /// <summary>The cookie jar of a client made by <see cref="NewClient"/> (to share it with a hub connection).</summary>
+    public CookieContainer CookiesOf(HttpClient client) => _cookies[client];
 
     public async Task SetOwnerSecretAsync(string secret)
     {

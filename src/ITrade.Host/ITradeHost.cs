@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using ITrade.Host.Auth;
+using ITrade.Host.Events;
 using ITrade.Host.Health;
 using ITrade.Host.Logging;
 using ITrade.Infrastructure.Persistence;
@@ -66,6 +67,7 @@ public static partial class ITradeHost
         builder.Services.AddITradeDatabase(connectionString);
         builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
         builder.Services.AddOwnerAuth();
+        builder.Services.AddEvents();
 
         // Every error leaves as RFC 9457 problem details, in every environment (P2.4.03).
         builder.Services.AddProblemDetails();
@@ -84,9 +86,11 @@ public static partial class ITradeHost
             requests => requests.Logger = app.Services.GetRequiredService<Serilog.ILogger>());
         app.UseExceptionHandler();
         app.UseStatusCodePages();
+        app.UseSameOriginForHubs();
         app.UseOwnerAuth();
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealth }).AllowAnonymous();
         app.MapOwnerAuth();
+        app.MapEvents();
         app.MapOpenApi(); // /openapi/v1.json — behind sign-in, like everything not marked anonymous
         return app;
     }
