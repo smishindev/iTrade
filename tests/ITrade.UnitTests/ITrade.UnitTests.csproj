@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ITrade.Domain\ITrade.Domain.csproj" />
     <ProjectReference Include="..\..\src\ITrade.Application\ITrade.Application.csproj" />
+    <ProjectReference Include="..\..\src\ITrade.Host\ITrade.Host.csproj" />
   </ItemGroup>
 
   <ItemGroup>

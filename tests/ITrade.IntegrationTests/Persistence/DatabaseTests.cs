@@ -6,7 +6,8 @@ using Npgsql;
 namespace ITrade.IntegrationTests.Persistence;
 
 /// <summary>P2.3.02–P2.3.04: migrations on a clean PostgreSQL 18, append-only audit journal, model conventions.</summary>
-public sealed class DatabaseTests(PostgresFixture pg) : IClassFixture<PostgresFixture>
+[Collection(PostgresTests.Name)]
+public sealed class DatabaseTests(PostgresFixture pg)
 {
     private static readonly Instant At = Instant.FromUtc(2026, 10, 9, 5, 0);
 

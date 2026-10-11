@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ITrade.Infrastructure.Persistence;
 
 public static class DbSetup
 {
     /// <summary>The one place the provider and naming are configured (Host, tests, design time).</summary>
-    public static DbContextOptionsBuilder<ITradeDbContext> Configure(
-        DbContextOptionsBuilder<ITradeDbContext> builder, string connectionString)
+    public static DbContextOptionsBuilder Configure(DbContextOptionsBuilder builder, string connectionString)
     {
         ArgumentNullException.ThrowIfNull(builder);
         return builder
@@ -15,8 +15,15 @@ public static class DbSetup
             .UseSnakeCaseNamingConvention();
     }
 
-    public static ITradeDbContext Create(string connectionString) =>
-        new(Configure(new DbContextOptionsBuilder<ITradeDbContext>(), connectionString).Options);
+    public static ITradeDbContext Create(string connectionString)
+    {
+        var builder = new DbContextOptionsBuilder<ITradeDbContext>();
+        Configure(builder, connectionString);
+        return new ITradeDbContext(builder.Options);
+    }
+
+    public static IServiceCollection AddITradeDatabase(this IServiceCollection services, string connectionString) =>
+        services.AddDbContext<ITradeDbContext>(options => Configure(options, connectionString));
 }
 
 /// <summary>

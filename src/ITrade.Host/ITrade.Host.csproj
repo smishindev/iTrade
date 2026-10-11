@@ -1,4 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup>  <UserSecretsId>9e176ec1-7c00-479f-8f14-66356838e083</UserSecretsId>
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>9e176ec1-7c00-479f-8f14-66356838e083</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -6,6 +9,10 @@
     <ProjectReference Include="..\ITrade.Application\ITrade.Application.csproj" />
     <ProjectReference Include="..\ITrade.Infrastructure\ITrade.Infrastructure.csproj" />
     <ProjectReference Include="..\ITrade.Broker.IBKR\ITrade.Broker.IBKR.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,8 @@
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
+using ITrade.Host;
 
-app.MapGet("/", () => "Hello World!");
-
-app.Run();
+var app = ITradeHost.Build(args);
+await using (app)
+{
+    await ITradeHost.StartAsync(app);
+    await app.WaitForShutdownAsync();
+}
