@@ -16,11 +16,16 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useState, type ReactNode } from 'react'
+import { Link, useLocation } from 'react-router'
+import type { TradingMode } from '../api/session'
 import { navigation } from './navigation'
 
 const drawerWidth = 232
 
-export type TradingMode = 'Paper' | 'Live'
+/** The menu item of a screen stays marked on the screen's own sub-pages. */
+function isCurrent(path: string, pathname: string): boolean {
+  return path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(`${path}/`)
+}
 
 /** What the header always shows. `undefined` means "not known yet" and is shown as such, never guessed. */
 export interface ShellStatus {
@@ -31,14 +36,14 @@ export interface ShellStatus {
 
 interface AppShellProps {
   status: ShellStatus
-  currentPath: string
   children: ReactNode
 }
 
 /** The frame of every screen: a header that never scrolls away, the menu of six screens, the content. */
-export function AppShell({ status, currentPath, children }: AppShellProps) {
+export function AppShell({ status, children }: AppShellProps) {
   const theme = useTheme()
   const wide = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true })
+  const { pathname } = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const menu = (
@@ -48,10 +53,13 @@ export function AppShell({ status, currentPath, children }: AppShellProps) {
         {navigation.map(({ path, label, icon: Icon }) => (
           <ListItemButton
             key={path}
-            component="a"
-            href={path}
-            selected={path === currentPath}
-            aria-current={path === currentPath ? 'page' : undefined}
+            component={Link}
+            to={path}
+            selected={isCurrent(path, pathname)}
+            aria-current={isCurrent(path, pathname) ? 'page' : undefined}
+            onClick={() => {
+              setMenuOpen(false)
+            }}
             sx={{ borderRadius: 1 }}
           >
             <ListItemIcon sx={{ minWidth: 40 }}>

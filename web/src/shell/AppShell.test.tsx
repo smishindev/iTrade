@@ -2,6 +2,7 @@ import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { setViewport } from '../test/setup'
 import { theme } from '../theme'
@@ -13,9 +14,11 @@ function renderShell(status: ShellStatus = unknown, currentPath = '/') {
   return render(
     <ThemeProvider theme={theme} defaultMode="light">
       <CssBaseline />
-      <AppShell status={status} currentPath={currentPath}>
-        <h1>Screen</h1>
-      </AppShell>
+      <MemoryRouter initialEntries={[currentPath]}>
+        <AppShell status={status}>
+          <h1>Screen</h1>
+        </AppShell>
+      </MemoryRouter>
     </ThemeProvider>,
   )
 }
@@ -87,6 +90,13 @@ describe('menu', () => {
       '/settings',
     ])
     expect(links.filter((link) => link.getAttribute('aria-current') === 'page')).toEqual([links[3]])
+  })
+
+  test('keeps a screen marked on its sub-pages, and Overview only on its own address', () => {
+    renderShell(unknown, '/positions/VOO/lots')
+
+    expect(screen.getByRole('link', { name: 'Positions' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
   })
 
   test('on a narrow screen opens from the header button', async () => {

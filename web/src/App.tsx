@@ -1,24 +1,16 @@
-import CssBaseline from '@mui/material/CssBaseline'
-import { ThemeProvider } from '@mui/material/styles'
-import Typography from '@mui/material/Typography'
-import { AppShell, type ShellStatus } from './shell/AppShell'
-import { theme } from './theme'
+import { createBrowserRouter } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
+import { createAppQueryClient } from './api/queryClient'
+import { AppProviders } from './AppProviders'
+import { routes } from './routes'
 
-/** Nothing is known about the server until the API client arrives (P2.5.04); the header says so. */
-const notConnected: ShellStatus = { mode: undefined, account: undefined, reconciliation: undefined }
+const queryClient = createAppQueryClient()
+const router = createBrowserRouter(routes)
 
 export function App() {
   return (
-    <ThemeProvider theme={theme} defaultMode="system">
-      <CssBaseline enableColorScheme />
-      <AppShell status={notConnected} currentPath={window.location.pathname}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Overview
-        </Typography>
-        <Typography sx={{ color: 'text.secondary' }}>
-          Portfolio accounting platform. The screens are under construction.
-        </Typography>
-      </AppShell>
-    </ThemeProvider>
+    <AppProviders queryClient={queryClient}>
+      <RouterProvider router={router} />
+    </AppProviders>
   )
 }
