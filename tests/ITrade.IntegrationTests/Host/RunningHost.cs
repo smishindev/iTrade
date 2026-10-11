@@ -44,10 +44,13 @@ internal sealed class RunningHost : IAsyncDisposable
     public static string NewDataDir() => Directory.CreateTempSubdirectory("itrade-host-").FullName;
 
     public static async Task<RunningHost> StartAsync(
-        string connectionString, Action<IServiceCollection>? configureServices = null)
+        string connectionString,
+        Action<IServiceCollection>? configureServices = null,
+        Action<WebApplication>? configureApp = null)
     {
         var dataDir = NewDataDir();
         var app = ITradeHost.Build(Args(connectionString, dataDir), configureServices);
+        configureApp?.Invoke(app);
         await ITradeHost.StartAsync(app);
         return new RunningHost(app, dataDir);
     }

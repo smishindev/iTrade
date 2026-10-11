@@ -8,6 +8,7 @@
     <!-- Tests (P2.1.04) -->
     <PackageVersion Include="CsCheck" Version="4.9.1" />
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <!-- pinned: Npgsql would pull an older Relational than the EF Core version above -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />

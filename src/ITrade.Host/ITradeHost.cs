@@ -28,6 +28,9 @@ public static partial class ITradeHost
     public const string ConnectionStringName = "ITrade";
     public const string DataDirVariable = "ITRADE_DATA_DIR";
 
+    /// <summary>Version of the HTTP API and name of its OpenAPI document; the web client is generated from it.</summary>
+    public const string ApiVersion = "v1";
+
     private const int LogRetentionDays = 90;
     private const long LogFileSizeLimitBytes = 50 * 1024 * 1024;
 
@@ -63,15 +66,28 @@ public static partial class ITradeHost
         builder.Services.AddITradeDatabase(connectionString);
         builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
         builder.Services.AddOwnerAuth();
+
+        // Every error leaves as RFC 9457 problem details, in every environment (P2.4.03).
+        builder.Services.AddProblemDetails();
+        builder.Services.Configure<RouteHandlerOptions>(routes => routes.ThrowOnBadRequest = false);
+        builder.Services.AddOpenApi(ApiVersion, openApi => openApi.AddDocumentTransformer((document, _, _) =>
+        {
+            document.Info.Title = "iTrade API";
+            document.Info.Version = ApiVersion;
+            return Task.CompletedTask;
+        }));
         configureServices?.Invoke(builder.Services);
 
         var app = builder.Build();
         // The logger is this host's own (no static Log.Logger), so the request log needs it handed over.
         app.UseSerilogRequestLogging(
             requests => requests.Logger = app.Services.GetRequiredService<Serilog.ILogger>());
+        app.UseExceptionHandler();
+        app.UseStatusCodePages();
         app.UseOwnerAuth();
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealth }).AllowAnonymous();
         app.MapOwnerAuth();
+        app.MapOpenApi(); // /openapi/v1.json — behind sign-in, like everything not marked anonymous
         return app;
     }
 
