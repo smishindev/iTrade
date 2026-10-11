@@ -23,6 +23,9 @@ public sealed class ITradeOptions
     /// <summary>How often the events hub tells the browser the server is alive.</summary>
     public int HeartbeatSeconds { get; init; } = 15;
 
+    /// <summary>How often the daily jobs are checked for sessions that became due.</summary>
+    public int JobsTickSeconds { get; init; } = 60;
+
     public string LogDir => Path.Combine(DataDir, "logs");
 
     /// <summary>The mode named in configuration; PAPER when absent. Anything but PAPER is refused for now.</summary>
@@ -59,9 +62,9 @@ public sealed class ITradeOptions
                 $"{Section}:DataDir must be an absolute path (see config/paths.toml), got '{options.DataDir}'.");
         }
 
-        if (options.HeartbeatSeconds <= 0)
+        if (options.HeartbeatSeconds <= 0 || options.JobsTickSeconds <= 0)
         {
-            throw new InvalidOperationException($"{Section}:HeartbeatSeconds must be positive.");
+            throw new InvalidOperationException($"{Section}:HeartbeatSeconds and {Section}:JobsTickSeconds must be positive.");
         }
 
         if (configuration.GetSection("Kestrel:Endpoints").GetChildren().Any())

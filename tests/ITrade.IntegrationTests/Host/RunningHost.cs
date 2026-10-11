@@ -115,6 +115,7 @@ internal sealed class RunningHost : IAsyncDisposable
     /// <summary>Stops the host (flushing its log) and returns every line it wrote to the log folder.</summary>
     public async Task<IReadOnlyList<string>> StopAndReadLogAsync()
     {
+        await App.StopAsync();
         await App.DisposeAsync();
         var lines = new List<string>();
         foreach (var file in Directory.GetFiles(Path.Combine(DataDir, "logs"), "itrade-*.json"))
@@ -132,6 +133,8 @@ internal sealed class RunningHost : IAsyncDisposable
             client.Dispose();
         }
 
+        // A graceful stop, as on Ctrl+C: background work finishes what it is recording.
+        await App.StopAsync();
         await App.DisposeAsync();
         Directory.Delete(DataDir, recursive: true);
     }

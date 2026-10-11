@@ -38,12 +38,17 @@ public interface IJobRunStore
     /// <summary>The first trade date the job ever ran for; null for a job that never ran.</summary>
     Task<TradeDate?> FirstDateAsync(string job, CancellationToken cancellationToken);
 
-    /// <summary>Runs of the job for trade dates from <paramref name="from"/> on.</summary>
-    Task<IReadOnlyList<JobRunState>> RunsFromAsync(string job, TradeDate from, CancellationToken cancellationToken);
+    /// <summary>The latest trade date the job finished successfully; null when there is none.</summary>
+    Task<TradeDate?> LastSucceededAsync(string job, CancellationToken cancellationToken);
 
-    /// <summary>Marks the date as running and counts one more attempt.</summary>
-    Task BeginAsync(string job, TradeDate day, Instant now, CancellationToken cancellationToken);
+    Task<JobRunState?> FindAsync(string job, TradeDate day, CancellationToken cancellationToken);
 
-    /// <summary>Marks the date as succeeded (no error) or failed.</summary>
+    /// <summary>
+    /// Marks the date as running and counts one more attempt. False when the date already succeeded —
+    /// it must not run again.
+    /// </summary>
+    Task<bool> BeginAsync(string job, TradeDate day, Instant now, CancellationToken cancellationToken);
+
+    /// <summary>Marks the date as succeeded (no failure text) or failed.</summary>
     Task FinishAsync(string job, TradeDate day, Instant now, string? failure, CancellationToken cancellationToken);
 }
