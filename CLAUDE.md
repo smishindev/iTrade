@@ -83,4 +83,5 @@ Work goes task by task through `docs/roadmap/` (rules: `docs/roadmap/README.md`,
 `/research-log <text>` · `/review-research` (quant-reviewer).
 Agent `execution-reviewer`: after any change to code that proposes, approves, sends or reconciles orders, before it is committed.
 Skills: `research-integrity` (strategy/backtest), `data-pipeline`, `cost-model`, `ibkr-api` (anything touching IBKR),
-`dotnet-conventions` (any C# in `src/` or `tests/`).
+`dotnet-conventions` (any C# in `src/` or `tests/`), `israeli-tax` (the Tax module, `[tax]` in `config/costs.toml`,
+any tax figure told to the owner).
