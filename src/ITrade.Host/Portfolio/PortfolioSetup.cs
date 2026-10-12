@@ -13,6 +13,8 @@ internal static class PortfolioSetup
         services.AddScoped<IInstrumentStore, InstrumentStore>();
         services.AddScoped<IHoldingPlaceStore, HoldingPlaceStore>();
         services.AddScoped<InstrumentCatalogue>();
+        services.AddScoped<ITransactionStore, TransactionStore>();
+        services.AddScoped<TransactionLedger>();
     }
 }
 

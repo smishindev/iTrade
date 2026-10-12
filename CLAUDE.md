@@ -14,8 +14,9 @@ Parquet snapshots in `D:\ITradeData` · official IBKR TWS API (C#) via IB Gatewa
 Python (`python/src/itrade/`) = the frozen research archive of phase 1, reference oracle, free data ingest,
 statistics. **Python never trades.**
 
-## Where things are now (phase 2 — foundation, plan v4; the phase itself is in `config/project.toml`)
-- `src/ITrade.Domain` money, time, ids, instruments, holding places · `src/ITrade.Application` use cases (daily jobs) ·
+## Where things are now (phase 3 — accounting, plan v4; the phase itself is in `config/project.toml`)
+- `src/ITrade.Domain` money, time, ids, instruments, holding places, transactions · `src/ITrade.Application` use cases
+  (daily jobs, instrument catalogue, transaction ledger) ·
   `src/ITrade.Infrastructure` EF Core / PostgreSQL · `src/ITrade.Broker.IBKR` (empty until phase 5) ·
   `src/ITrade.Host` API, sign-in, events hub, background jobs, serves the web interface · `tests/ITrade.*`
 - `web/` React interface (MUI, React Router, TanStack Query, generated API client) · `web/e2e` browser tests

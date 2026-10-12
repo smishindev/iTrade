@@ -193,6 +193,17 @@ public sealed record Transaction
     }
 
     /// <summary>
+    /// The same entry pointing at other entries. A repeated import builds its entries afresh, with new ids; when
+    /// the entry a new one hangs on is already in the ledger, the link is moved to the stored one.
+    /// </summary>
+    public Transaction Relinked(TransactionId? relatedTo, TransactionId? reverses) =>
+        relatedTo == RelatedTo && reverses == Reverses
+            ? this
+            : new Transaction(
+                Id, HoldingPlace, Kind, TradeDate, SettlementDate, Cash, Source, RecordedAt, Instrument, QuantityChange,
+                Price, ExternalId, relatedTo, reverses, Note);
+
+    /// <summary>
     /// True when the other entry states the same facts — what a repeated import compares. The id, the time of
     /// recording, the note and the links are the platform's own and are left out.
     /// </summary>
