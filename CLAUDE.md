@@ -26,6 +26,8 @@ free data ingest, statistics. **Python never trades.**
   · `uv run ruff format src tests tools` · `uv run itrade ingest|quality|costs|sql` (see README);
   from the repo root the same with `uv run --directory python …`.
 - Add dependencies with `uv add` (in `python/`), never `pip install`.
+- Everything at once: `python tools/ci.py` (Python, .NET with integration tests, web, browser tests; needs Docker) ·
+  `--fast` without Docker · `--only python|dotnet|web|e2e`. Run it before a phase gate.
 - .NET (repo root): `dotnet build ITrade.slnx` · `dotnet test tests/ITrade.UnitTests` · `dotnet test tests/ITrade.ArchitectureTests`
   · `dotnet test tests/ITrade.IntegrationTests` (needs Docker) · `dotnet run --project src/ITrade.Host` (a running Host locks the
   Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password`.
