@@ -7,7 +7,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 13 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: 103 of 106 tasks (the three open ones are the owner's, at IBKR);
-phase 3: 8 of 13.
+phase 3: 8 of 12 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993 — but they are empty: no
@@ -121,6 +121,8 @@ and the scope still name the accountant as the check — open question below.
 ### 10. Only IBKR is kept in the platform (12 October)
 Keren hishtalmut is not tracked. With one holding place whose entries all come from statements, the
 scheduled backup stays in phase 7: the ledger can be rebuilt by importing the statements again.
+On 13 October the owner dropped manual entry and CSV import for other places (P3.2.03) for the same
+reason, and gate G3 no longer asks for it; it comes back with a second holding place.
 
 ### 11. The books are append-only, in the database itself (12 October)
 A ledger row is never changed: a mistake is reversed, a line the broker corrected is recorded as the
@@ -236,9 +238,6 @@ Small steps, one task at a time (`/next-task`):
 
 ## Open questions for the owner
 
-- **P3.2.03, manual entry and CSV import "for other places":** with only IBKR in the platform, is
-  it needed at all? Gate G3 names it. Recommendation: drop it, and bring it back if a second holding
-  place appears.
 - **Gate G4 and the scope name the accountant as the check of the tax module.** Without a
   consultation, what replaces it? Recommendation: pass the gate on documented assumptions with
   hand-worked examples from written sources, and make a consultation mandatory before the first sale
