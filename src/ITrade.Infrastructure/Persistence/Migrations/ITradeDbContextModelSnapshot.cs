@@ -261,6 +261,10 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("external_id");
 
+                    b.Property<int>("ExternalRevision")
+                        .HasColumnType("integer")
+                        .HasColumnName("external_revision");
+
                     b.Property<Guid>("HoldingPlaceId")
                         .HasColumnType("uuid")
                         .HasColumnName("holding_place_id");
@@ -343,15 +347,31 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.HasIndex("InstrumentId", "TradeDate")
                         .HasDatabaseName("ix_transactions_instrument_id_trade_date");
 
-                    b.HasIndex("HoldingPlaceId", "Source", "ExternalId")
+                    b.HasIndex("HoldingPlaceId", "Source", "ExternalId", "ExternalRevision")
                         .IsUnique()
-                        .HasDatabaseName("ix_transactions_holding_place_id_source_external_id");
+                        .HasDatabaseName("ix_transactions_line_of_the_source");
 
                     b.ToTable("transactions", null, t =>
                         {
                             t.HasCheckConstraint("ck_transactions_changes_something", "quantity_change <> 0 OR cash_amount <> 0");
 
+                            t.HasCheckConstraint("ck_transactions_does_not_point_at_itself", "(reverses IS NULL OR reverses <> id) AND (related_to IS NULL OR related_to <> id)");
+
+                            t.HasCheckConstraint("ck_transactions_effects_fit_the_kind", "CASE kind WHEN 'Buy' THEN quantity_change * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) > 0 AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) < 0 WHEN 'Sell' THEN quantity_change * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) < 0 AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) > 0 WHEN 'Deposit' THEN quantity_change = 0 AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) > 0 WHEN 'Withdrawal' THEN quantity_change = 0 AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) < 0 WHEN 'CorporateAction' THEN true ELSE quantity_change = 0 AND cash_amount <> 0 END");
+
+                            t.HasCheckConstraint("ck_transactions_imported_entry_has_its_external_id", "(source = 'Manual' OR external_id IS NOT NULL) AND (external_id IS NULL OR btrim(external_id) <> '')");
+
+                            t.HasCheckConstraint("ck_transactions_instrument_fits_the_kind", "CASE WHEN kind IN ('Buy', 'Sell', 'Dividend', 'CorporateAction') THEN instrument_id IS NOT NULL WHEN kind IN ('TaxWithheld', 'Fee') THEN true ELSE instrument_id IS NULL END");
+
+                            t.HasCheckConstraint("ck_transactions_kind_is_known", "kind IN ('Buy', 'Sell', 'Dividend', 'TaxWithheld', 'Fee', 'Interest', 'FxConversion', 'Deposit', 'Withdrawal', 'CorporateAction')");
+
+                            t.HasCheckConstraint("ck_transactions_only_a_trade_has_a_price", "(kind IN ('Buy', 'Sell')) = (price IS NOT NULL) AND (price IS NULL OR price > 0)");
+
+                            t.HasCheckConstraint("ck_transactions_revision_belongs_to_an_external_id", "external_revision >= 0 AND (external_revision = 0 OR external_id IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_transactions_settles_on_or_after_the_trade", "settlement_date >= trade_date");
+
+                            t.HasCheckConstraint("ck_transactions_source_is_known", "source IN ('Manual', 'Flex', 'ApiExecution')");
                         });
                 });
 

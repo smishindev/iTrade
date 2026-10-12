@@ -7,10 +7,14 @@ public enum TransactionKind
 {
     Buy,
     Sell,
+
+    /// <summary>Cash paid on a holding. Normally comes in; a dividend the broker takes back goes out.</summary>
     Dividend,
 
-    /// <summary>Tax withheld at the source, e.g. the US tax on a dividend.</summary>
+    /// <summary>Tax withheld at the source, e.g. the US tax on a dividend. Normally goes out; a refund comes in.</summary>
     TaxWithheld,
+
+    /// <summary>A commission or another charge. Normally goes out; a rebate comes in.</summary>
     Fee,
 
     /// <summary>Interest the broker paid or charged on a cash balance.</summary>
@@ -25,7 +29,10 @@ public enum TransactionKind
     CorporateAction,
 }
 
-/// <summary>Where the record came from; with the external id it identifies a transaction for a repeated import.</summary>
+/// <summary>
+/// Where the record came from; with the external id it identifies a transaction for a repeated import. An entry
+/// that did not come from the owner's hand must carry the source's own id.
+/// </summary>
 public enum TransactionSource
 {
     /// <summary>Typed in by the owner or read from a statement file of a place without integration.</summary>
@@ -70,7 +77,8 @@ public sealed record Transaction
         string? externalId = null,
         TransactionId? relatedTo = null,
         TransactionId? reverses = null,
-        string? note = null)
+        string? note = null,
+        int externalRevision = 0)
     {
         if (id.Value == Guid.Empty || holdingPlace.Value == Guid.Empty)
         {
@@ -111,6 +119,20 @@ public sealed record Transaction
             throw new ArgumentException("The external id or the note is too long.", nameof(externalId));
         }
 
+        if (source != TransactionSource.Manual && externalKey is null)
+        {
+            // Without it nothing tells this line from itself in the next import: it would be recorded again.
+            throw new ArgumentException(
+                $"An entry from {source} needs the id it has in the source; only an entry typed in by hand has none.",
+                nameof(externalId));
+        }
+
+        if (externalRevision < 0 || (externalRevision > 0 && externalKey is null))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(externalRevision), externalRevision, "Only a line with an external id has revisions, counted from 0.");
+        }
+
         // A reversal carries the opposite effects of the entry it cancels; the rules apply to that entry.
         var direction = reverses is null ? 1 : -1;
         if (Problem(kind, instrument, quantityChange * direction, cash.Amount * direction, price, cash.Currency) is { } problem)
@@ -130,6 +152,7 @@ public sealed record Transaction
         QuantityChange = quantityChange;
         Price = price;
         ExternalId = externalKey;
+        ExternalRevision = externalRevision;
         RelatedTo = relatedTo;
         Reverses = reverses;
         Note = remark;
@@ -166,6 +189,12 @@ public sealed record Transaction
     /// <summary>The source's own identifier of the entry (a trade or transaction id of the statement).</summary>
     public string? ExternalId { get; }
 
+    /// <summary>
+    /// Which recording of the source's line this is: 0 the first time, one more each time the line is recorded
+    /// again after the earlier recording was reversed (the source corrected it). The platform's own counter.
+    /// </summary>
+    public int ExternalRevision { get; }
+
     /// <summary>The entry this one belongs to: the trade of a fee, the dividend of a withheld tax, the other leg of a conversion.</summary>
     public TransactionId? RelatedTo { get; }
 
@@ -201,11 +230,19 @@ public sealed record Transaction
             ? this
             : new Transaction(
                 Id, HoldingPlace, Kind, TradeDate, SettlementDate, Cash, Source, RecordedAt, Instrument, QuantityChange,
-                Price, ExternalId, relatedTo, reverses, Note);
+                Price, ExternalId, relatedTo, reverses, Note, ExternalRevision);
+
+    /// <summary>The same entry as another recording of its line in the source (see <see cref="ExternalRevision"/>).</summary>
+    public Transaction Revised(int externalRevision) =>
+        externalRevision == ExternalRevision
+            ? this
+            : new Transaction(
+                Id, HoldingPlace, Kind, TradeDate, SettlementDate, Cash, Source, RecordedAt, Instrument, QuantityChange,
+                Price, ExternalId, RelatedTo, Reverses, Note, externalRevision);
 
     /// <summary>
     /// True when the other entry states the same facts — what a repeated import compares. The id, the time of
-    /// recording, the note and the links are the platform's own and are left out.
+    /// recording, the note, the links and the revision are the platform's own and are left out.
     /// </summary>
     public bool SameFactsAs(Transaction other) =>
         other is not null
@@ -220,6 +257,22 @@ public sealed record Transaction
         && Price == other.Price
         && ExternalId == other.ExternalId
         && IsReversal == other.IsReversal;
+
+    /// <summary>
+    /// True when this entry is exactly the other one turned around: the same place, kind, dates, instrument,
+    /// price and currency, with the opposite change of shares and of cash. A reversal has to be this.
+    /// </summary>
+    public bool IsOppositeOf(Transaction other) =>
+        other is not null
+        && HoldingPlace == other.HoldingPlace
+        && Kind == other.Kind
+        && TradeDate == other.TradeDate
+        && SettlementDate == other.SettlementDate
+        && Instrument == other.Instrument
+        && Price == other.Price
+        && Cash.Currency == other.Cash.Currency
+        && Cash.Amount == -other.Cash.Amount
+        && QuantityChange == -other.QuantityChange;
 
     private static bool Fits(decimal value) => decimal.Round(value, Scale) == value;
 
@@ -254,11 +307,12 @@ public sealed record Transaction
         {
             TransactionKind.Buy => quantity > 0m && cash < 0m ? null : "shares come in and cash goes out",
             TransactionKind.Sell => quantity < 0m && cash > 0m ? null : "shares go out and cash comes in",
-            TransactionKind.Dividend => quantity == 0m && cash > 0m ? null : "cash comes in and the shares do not change",
             TransactionKind.Deposit => quantity == 0m && cash > 0m ? null : "cash comes in",
-            TransactionKind.TaxWithheld or TransactionKind.Fee or TransactionKind.Withdrawal =>
-                quantity == 0m && cash < 0m ? null : "cash goes out and the shares do not change",
-            TransactionKind.Interest or TransactionKind.FxConversion =>
+            TransactionKind.Withdrawal => quantity == 0m && cash < 0m ? null : "cash goes out",
+            // Either way: the broker's own adjustments (a dividend taken back, a tax refund, a rebate) carry the
+            // other sign and do not name the line they adjust, so they cannot be written as reversals.
+            TransactionKind.Dividend or TransactionKind.TaxWithheld or TransactionKind.Fee
+                or TransactionKind.Interest or TransactionKind.FxConversion =>
                 quantity == 0m && cash != 0m ? null : "cash moves and the shares do not change",
             TransactionKind.CorporateAction => quantity != 0m || cash != 0m ? null : "something has to change",
             _ => "unknown kind",

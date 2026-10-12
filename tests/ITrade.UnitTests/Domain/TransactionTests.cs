@@ -19,7 +19,7 @@ public sealed class TransactionTests
         Currency? currency = null, TransactionId? reverses = null, string? externalId = null) =>
         new(
             TransactionId.New(), Ibkr, kind, Traded, Settled, new Money(cash, currency ?? Currency.Usd),
-            TransactionSource.Flex, Recorded, instrument ? Voo : null, quantity,
+            externalId is null ? TransactionSource.Manual : TransactionSource.Flex, Recorded, instrument ? Voo : null, quantity,
             price is { } p ? new Price(p, currency ?? Currency.Usd) : null, externalId, reverses: reverses);
 
     [Fact]
@@ -42,9 +42,13 @@ public sealed class TransactionTests
             Entry(TransactionKind.Withdrawal, -500m),
             Entry(TransactionKind.CorporateAction, 0m, 4m, instrument: true), // a split adds shares, no cash
             Entry(TransactionKind.CorporateAction, 1.15m, instrument: true), // cash in lieu
+            // The broker's own adjustments carry the other sign and do not name the line they adjust.
+            Entry(TransactionKind.Dividend, -3.42m, instrument: true), // a dividend taken back
+            Entry(TransactionKind.TaxWithheld, 0.86m, instrument: true), // withheld tax refunded
+            Entry(TransactionKind.Fee, 0.10m), // a rebate
         };
 
-        Assert.Equal(15, entries.Length);
+        Assert.Equal(18, entries.Length);
         Assert.All(entries, e => Assert.False(e.IsReversal));
     }
 
@@ -55,12 +59,13 @@ public sealed class TransactionTests
     [InlineData(TransactionKind.Buy, "-1203.50", "2", true, null)] // no price
     [InlineData(TransactionKind.Sell, "-601.75", "-1", true, "601.75")]
     [InlineData(TransactionKind.Sell, "601.75", "1", true, "601.75")]
-    [InlineData(TransactionKind.Dividend, "-3.42", "0", true, null)]
+    [InlineData(TransactionKind.Dividend, "0", "0", true, null)]
     [InlineData(TransactionKind.Dividend, "3.42", "1", true, null)]
     [InlineData(TransactionKind.Dividend, "3.42", "0", false, null)]
     [InlineData(TransactionKind.Dividend, "3.42", "0", true, "600")] // only a trade has a price
-    [InlineData(TransactionKind.TaxWithheld, "0.86", "0", false, null)]
-    [InlineData(TransactionKind.Fee, "0.35", "0", false, null)]
+    [InlineData(TransactionKind.TaxWithheld, "0", "0", false, null)]
+    [InlineData(TransactionKind.TaxWithheld, "-0.86", "1", true, null)]
+    [InlineData(TransactionKind.Fee, "0", "0", false, null)]
     [InlineData(TransactionKind.Fee, "-0.35", "1", true, null)]
     [InlineData(TransactionKind.Interest, "0", "0", false, null)]
     [InlineData(TransactionKind.Interest, "0.12", "0", true, null)] // cash only: no instrument
@@ -98,9 +103,57 @@ public sealed class TransactionTests
         // A price in dollars with the cash in shekels: the two must be one currency.
         Assert.Throws<ArgumentException>(() => new Transaction(
             TransactionId.New(), Ibkr, TransactionKind.Buy, Traded, Settled, Money.Ils(-1203.50m),
-            TransactionSource.Flex, Recorded, Voo, 2m, new Price(601.75m, Currency.Usd)));
+            TransactionSource.Flex, Recorded, Voo, 2m, new Price(601.75m, Currency.Usd), "T-1"));
         Assert.Equal(100.123456m, Deposit(cash: 100.123456m).Cash.Amount);
         Assert.Null(Deposit(externalId: "  ", note: " ").ExternalId);
+    }
+
+    [Theory]
+    [InlineData(TransactionSource.Flex, null)]
+    [InlineData(TransactionSource.Flex, "  ")]
+    [InlineData(TransactionSource.ApiExecution, null)]
+    public void ImportedEntryWithoutTheSourcesOwnIdIsRefused(TransactionSource source, string? externalId)
+    {
+        // Nothing would tell such a line from itself in the next import: it would be recorded again each time.
+        var error = Assert.Throws<ArgumentException>(() => new Transaction(
+            TransactionId.New(), Ibkr, TransactionKind.Dividend, Traded, Traded, Money.Usd(3.42m), source, Recorded, Voo,
+            externalId: externalId));
+        Assert.Contains("needs the id it has in the source", error.Message, StringComparison.Ordinal);
+
+        var deposit = Entry(TransactionKind.Deposit, 1000m, externalId: "D-1");
+        Assert.Throws<ArgumentException>(() => deposit.Reversal(TransactionId.New(), Recorded, "cancelled by the broker", source));
+    }
+
+    [Fact]
+    public void RevisionCountsTheRecordingsOfOneLineAndIsNotOneOfItsFacts()
+    {
+        var first = Entry(TransactionKind.Deposit, 1000m, externalId: "D-1");
+
+        var second = first.Revised(1);
+
+        Assert.Equal((0, 1), (first.ExternalRevision, second.ExternalRevision));
+        Assert.True(first.SameFactsAs(second));
+        Assert.Same(first, first.Revised(0));
+        Assert.Equal(1, second.Relinked(TransactionId.New(), null).ExternalRevision);
+        Assert.Throws<ArgumentOutOfRangeException>(() => first.Revised(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Entry(TransactionKind.Deposit, 1000m).Revised(1)); // no line to revise
+    }
+
+    [Fact]
+    public void OnlyTheExactOppositeOfAnEntryCanReverseIt()
+    {
+        var buy = Entry(TransactionKind.Buy, -1203.50m, 2m, instrument: true, price: 601.75m, externalId: "T-1");
+        Transaction Reversing(decimal cash = 1203.50m, decimal quantity = -2m, LocalDate? traded = null, Currency? currency = null) =>
+            new(TransactionId.New(), Ibkr, TransactionKind.Buy, traded ?? Traded, Settled, new Money(cash, currency ?? Currency.Usd),
+                TransactionSource.Manual, Recorded, Voo, quantity, new Price(601.75m, currency ?? Currency.Usd), reverses: buy.Id);
+
+        Assert.True(buy.Reversal(TransactionId.New(), Recorded, "entered twice").IsOppositeOf(buy));
+        Assert.True(Reversing().IsOppositeOf(buy));
+        Assert.False(Reversing(cash: 1203.49m).IsOppositeOf(buy));
+        Assert.False(Reversing(quantity: -1m).IsOppositeOf(buy));
+        Assert.False(Reversing(traded: Traded.PlusDays(-1)).IsOppositeOf(buy));
+        Assert.False(Reversing(currency: Currency.Ils).IsOppositeOf(buy));
+        Assert.False(buy.IsOppositeOf(buy));
     }
 
     [Fact]

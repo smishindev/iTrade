@@ -101,6 +101,41 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             {
                 table.HasCheckConstraint("ck_transactions_settles_on_or_after_the_trade", "settlement_date >= trade_date");
                 table.HasCheckConstraint("ck_transactions_changes_something", "quantity_change <> 0 OR cash_amount <> 0");
+                // A row of the ledger can never be corrected or removed, so the rules of the domain type
+                // (Transaction) are repeated here: a wrong row must not get in by any way at all.
+                table.HasCheckConstraint(
+                    "ck_transactions_kind_is_known",
+                    "kind IN ('Buy', 'Sell', 'Dividend', 'TaxWithheld', 'Fee', 'Interest', 'FxConversion', 'Deposit', " +
+                    "'Withdrawal', 'CorporateAction')");
+                table.HasCheckConstraint("ck_transactions_source_is_known", "source IN ('Manual', 'Flex', 'ApiExecution')");
+                table.HasCheckConstraint(
+                    "ck_transactions_imported_entry_has_its_external_id",
+                    "(source = 'Manual' OR external_id IS NOT NULL) AND (external_id IS NULL OR btrim(external_id) <> '')");
+                table.HasCheckConstraint(
+                    "ck_transactions_revision_belongs_to_an_external_id",
+                    "external_revision >= 0 AND (external_revision = 0 OR external_id IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "ck_transactions_does_not_point_at_itself",
+                    "(reverses IS NULL OR reverses <> id) AND (related_to IS NULL OR related_to <> id)");
+                table.HasCheckConstraint(
+                    "ck_transactions_only_a_trade_has_a_price",
+                    "(kind IN ('Buy', 'Sell')) = (price IS NOT NULL) AND (price IS NULL OR price > 0)");
+                table.HasCheckConstraint(
+                    "ck_transactions_instrument_fits_the_kind",
+                    "CASE WHEN kind IN ('Buy', 'Sell', 'Dividend', 'CorporateAction') THEN instrument_id IS NOT NULL " +
+                    "WHEN kind IN ('TaxWithheld', 'Fee') THEN true ELSE instrument_id IS NULL END");
+                // For a reversal the signs are those of the entry it cancels, turned around.
+                table.HasCheckConstraint(
+                    "ck_transactions_effects_fit_the_kind",
+                    "CASE kind " +
+                    "WHEN 'Buy' THEN quantity_change * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) > 0 " +
+                    "AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) < 0 " +
+                    "WHEN 'Sell' THEN quantity_change * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) < 0 " +
+                    "AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) > 0 " +
+                    "WHEN 'Deposit' THEN quantity_change = 0 AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) > 0 " +
+                    "WHEN 'Withdrawal' THEN quantity_change = 0 AND cash_amount * (CASE WHEN reverses IS NULL THEN 1 ELSE -1 END) < 0 " +
+                    "WHEN 'CorporateAction' THEN true " +
+                    "ELSE quantity_change = 0 AND cash_amount <> 0 END");
             });
             e.HasKey(t => t.Id);
             e.Property(t => t.Sequence).UseIdentityAlwaysColumn();
@@ -120,7 +155,10 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.HasIndex(t => new { t.HoldingPlaceId, t.TradeDate });
             e.HasIndex(t => new { t.InstrumentId, t.TradeDate });
             // What a repeated import recognises an entry by; entries typed in by hand have no external id.
-            e.HasIndex(t => new { t.HoldingPlaceId, t.Source, t.ExternalId }).IsUnique();
+            // The revision lets a line be recorded again after its earlier recording was reversed.
+            e.HasIndex(t => new { t.HoldingPlaceId, t.Source, t.ExternalId, t.ExternalRevision })
+                .IsUnique()
+                .HasDatabaseName("ix_transactions_line_of_the_source");
             // An entry is reversed at most once.
             e.HasIndex(t => t.Reverses).IsUnique();
         });

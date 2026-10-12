@@ -88,6 +88,9 @@ public sealed class TransactionRow
 
     public string? ExternalId { get; init; }
 
+    /// <summary>Which recording of the source's line this is; more than 0 only after a reversal and a correction.</summary>
+    public int ExternalRevision { get; init; }
+
     public TransactionId? RelatedTo { get; init; }
 
     public TransactionId? Reverses { get; init; }
@@ -99,7 +102,7 @@ public sealed class TransactionRow
     public Transaction ToDomain() => new(
         Id, HoldingPlaceId, Kind, TradeDate, SettlementDate, new Money(CashAmount, CashCurrency), Source, RecordedAt,
         InstrumentId, QuantityChange, Price is { } price ? new Price(price, CashCurrency) : null, ExternalId, RelatedTo,
-        Reverses, Note);
+        Reverses, Note, ExternalRevision);
 
     public static TransactionRow From(Transaction transaction)
     {
@@ -118,6 +121,7 @@ public sealed class TransactionRow
             CashCurrency = transaction.Cash.Currency,
             Source = transaction.Source,
             ExternalId = transaction.ExternalId,
+            ExternalRevision = transaction.ExternalRevision,
             RelatedTo = transaction.RelatedTo,
             Reverses = transaction.Reverses,
             RecordedAt = transaction.RecordedAt,
