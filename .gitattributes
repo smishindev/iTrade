@@ -7,3 +7,5 @@ web/openapi/** text eol=lf
 web/src/api/generated/** text eol=lf
 # Generated catalogue: its generator's --check compares the text.
 config/instruments.csv text eol=lf
+# Answers recorded from real services are kept byte for byte; a test checks their SHA-256.
+tests/**/Fixtures/** -text

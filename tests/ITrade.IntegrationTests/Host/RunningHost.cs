@@ -40,6 +40,7 @@ internal sealed class RunningHost : IAsyncDisposable
         "--ITrade:Port=0",
         $"--ITrade:DataDir={dataDir}",
         $"--ConnectionStrings:{ITradeHost.ConnectionStringName}={connectionString}",
+        "--ITrade:UpdateFxRates=false", // a test never reaches the network; one that needs rates brings a source
         .. extra,
     ];
 

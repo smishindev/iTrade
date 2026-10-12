@@ -26,6 +26,12 @@ public sealed class ITradeOptions
     /// <summary>How often the daily jobs are checked for sessions that became due.</summary>
     public int JobsTickSeconds { get; init; } = 60;
 
+    /// <summary>
+    /// Whether the daily job fetches exchange rates from the Bank of Israel. On for the owner; the tests switch
+    /// it off — they never reach the network — and give the job a source of their own where they need one.
+    /// </summary>
+    public bool UpdateFxRates { get; init; } = true;
+
     /// <summary>The log folder, with the separators of this system whatever the setting used.</summary>
     public string LogDir => Path.GetFullPath(Path.Combine(DataDir, "logs"));
 

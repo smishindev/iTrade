@@ -48,6 +48,8 @@ runs in PAPER mode. To get rid of the browser's certificate warning: `dotnet dev
 | `dotnet run --project src/ITrade.Host` | the application (interface + API); stop it before building |
 | `dotnet run --project src/ITrade.Host -- check` | is everything in place to start? (interface, database, password) — changes nothing |
 | `dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv` | load the instrument catalogue; running it again changes nothing |
+| `dotnet run --project src/ITrade.Host -- update-fx-rates` | bring the Bank of Israel USD/ILS rates up to today (the daily job does the same; needs the internet). If the bank changed a rate that is already stored, it says so and stores nothing; after checking the bank's page, run the line it prints: `... update-fx-rates --accept-changes <code> "<what you checked>"` |
+| `dotnet run --project src/ITrade.Host -- retry-job <job> <yyyy-MM-dd>` | let a daily job that `check` shows as blocked be tried again |
 | `cd web; npm run dev` | interface with hot reload on `http://127.0.0.1:5173`, next to a running Host |
 | `.\deploy\backup.ps1` | back up the database to `<data folder>\backups` |
 | `.\deploy\restore.ps1 -File <dump> -Verify` | check a backup by restoring it into a temporary database |

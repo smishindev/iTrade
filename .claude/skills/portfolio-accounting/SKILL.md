@@ -9,12 +9,13 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03)
+## What exists (P3.1.01 – P3.1.03, P3.3.01)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
 | Where it is held | `HoldingPlace` (broker, study fund, other; read automatically or by hand). In use: IBKR only — the owner decided on 2026-10-12 not to keep keren hishtalmut in the platform; the `StudyFund` kind stays in the code unused | `holding_places` |
 | What happened | `Transaction`; `TransactionLedger` (`RecordAsync`, `ReverseAsync`) | `transactions` |
+| Exchange rates | `FxRate`, `AppliedFxRate`; `FxRates` (`UpdateAsync`, `OnAsync`), job `fx-rates`; source `BankOfIsraelRates` | `fx_rates` |
 | What is held | `PortfolioBooks.From(ledger, asOf)` → `Position`, `Lot`, `Disposal`, `CashBalance`; `PortfolioBooksReader` | none — computed from the ledger every time |
 
 ## The ledger
@@ -108,10 +109,42 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   trade, a second currency for one instrument, entries out of the ledger's order. Entries after the
   date asked for cannot break the books of that date.
 
-## Rules for what comes next (FX, prices, valuation, reconciliation)
+## Exchange rates (`FxRates`, P3.3.01)
+- **The rate is the Bank of Israel representative rate** of the dollar in shekels (PLAN §6), read from the
+  bank's public service: one rate per published day since 2005, none on weekends and Israeli holidays.
+  `FxRate` says "1 USD = rate ILS" and carries its date and source; at most six decimals are kept, a finer
+  rate is refused, never rounded.
+- **`fx_rates` is append-only** (database triggers, as for the ledger). An update reads the last 14 days
+  again and stops (`FxRatesDisagreeException`, nothing stored) when the source states another rate for a
+  stored date, or a new rate moves more than 8% from the nearest earlier rate known — in the answer or
+  stored — or has none within 7 days to be judged by (the largest real move since 2005 is 3.76%). The
+  message carries a **code of exactly that finding**. Only the owner gets past it, after
+  looking at the bank's own page: `update-fx-rates --accept-changes <code> "<what was checked>"`. The
+  source is read again; if it says anything else by then, or nothing is left to accept, nothing is
+  accepted. A changed rate is stored as the next **revision** of its date and an unusual one as the first
+  rate of its date, each with the reason; the old rate stays; reads give the latest revision. The daily
+  job never accepts anything, and neither does Claude.
+- A stored rate the source leaves out of an answer is kept and reported (`NotRepeated`); it stops nothing.
+  A rate that arrives late for an earlier date is added and named (`Late`): that date used a carried rate
+  until then. Every update that stored or noticed something writes an audit event in the same step as the
+  rates (`fx-rates.updated`, `fx-rates.noted`, `fx-rates.changes-accepted`) — the daily job too; `check`
+  shows the latest note for two weeks.
+- **`FxRates.OnAsync(date)` is the one way to get a rate**, and it returns an `AppliedFxRate`:
+  the rate of the day; or the latest earlier one, **carried forward** (`DaysCarried`) over a weekend or a
+  holiday; and **provisional** (`IsProvisional`) while no later rate is stored — today before the
+  afternoon publication, or rates that were not updated — because that figure can still change. There
+  is no rate for a date after today, and none when the latest earlier one is more than 7 days old (the
+  source's longest silence): it throws instead of returning an old rate. "Not provisional" is as final
+  as a rate gets, not a promise — a late or revised rate can still change the answer for a past date.
+- **Keep the `AppliedFxRate` next to every amount converted with it** and show its marks: once only the
+  shekel amount is left, nothing says how good the rate was. A provisional figure is said to be so in words.
+- **For tax a carried rate is not automatically right**: which date's rate applies to a trade on a day
+  without one is an open assumption (`israeli-tax`), and a provisional rate is never good enough for a
+  tax figure. Tax code states the rule it uses and does not take `OnAsync` for granted.
 - **Currencies do not add up.** Cash is kept per currency; a value in shekels exists only through an
-  `FxRate` that carries its date and source (Bank of Israel representative rate). A day without a rate
-  or without a price is **flagged**, never filled silently; a carried-forward value says so.
+  `FxRate`. A day without a rate or without a price is **flagged**, never filled silently.
+
+## Rules for what comes next (prices, valuation, reconciliation)
 - **Prices from the free data pipeline are for valuation only** — never for tax, never for an order.
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
 - **Returns**: a contribution is not a gain. Time-weighted and money-weighted returns state their

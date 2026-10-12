@@ -76,6 +76,17 @@ Broker code is reviewed by the `execution-reviewer` agent; load the `ibkr-api` s
 - One Host per database: `InstanceLock` (a PostgreSQL advisory lock) makes a second one refuse to start.
 - The session lasts 12 hours from sign-in, without sliding renewal; sign-out and a new password end every
   session, including open event connections.
+- A daily job (`IDailyJob`) is idempotent and throws when it cannot do its work: the scheduler retries hourly, and
+  after five failures the date is blocked and holds back the later ones. `check` shows a stuck date with its cause;
+  the owner releases it with `retry-job <job> <date>`. Do not swallow a failure to keep a job green.
+  The one exception is something outside that is merely away (no network, a service down): throw
+  `TemporaryFailureException` — the date is retried hourly for as long as it takes and is never blocked. A fault in
+  what was received is not temporary.
+- Outgoing calls: only the Bank of Israel rates service so far (`AddHttpClient`, a timeout, a size limit, no data
+  about the owner). A new outgoing call is named in the task and gets a switch like `ITrade:UpdateFxRates`, which
+  the test Hosts turn off (`RunningHost.Args`, `tests/ITrade.E2EHost`).
+- An answer from outside is parsed strictly — columns by name, invariant culture, plausible ranges — and anything
+  unexpected is refused: a wrong number stored is worse than a failed job.
 - A background service never lets an exception escape `ExecuteAsync` (that would stop the Host), and treats
   `OperationCanceledException` as a stop only when its own stopping token is cancelled — a timeout is a failure.
 - `dotnet run --project src/ITrade.Host -- check` builds the Host as a normal start does and reports what is

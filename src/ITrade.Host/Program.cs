@@ -1,5 +1,7 @@
 using ITrade.Host;
 using ITrade.Host.Auth;
+using ITrade.Host.Fx;
+using ITrade.Host.Jobs;
 using ITrade.Host.Portfolio;
 
 if (args is [SetPasswordCommand.Name, .. var rest])
@@ -24,6 +26,25 @@ if (args is [ImportInstrumentsCommand.Name, ..])
 
     await using var cli = ITradeHost.Build(importArgs);
     return await ImportInstrumentsCommand.RunAsync(cli, file, Console.Out);
+}
+
+if (args is [UpdateFxRatesCommand.Name, .. var fxArgs])
+{
+    var (accepted, hostArgs) = UpdateFxRatesCommand.Parse(fxArgs);
+    await using var cli = ITradeHost.Build(hostArgs);
+    return await UpdateFxRatesCommand.RunAsync(cli, accepted, Console.Out);
+}
+
+if (args is [RetryJobCommand.Name, ..])
+{
+    if (args is not [_, var job, var date, .. var retryArgs] || job.StartsWith('-') || date.StartsWith('-'))
+    {
+        await Console.Error.WriteLineAsync($"Usage: {RetryJobCommand.Name} <job> <yyyy-MM-dd>, e.g. {RetryJobCommand.Name} fx-rates 2026-10-12");
+        return 2;
+    }
+
+    await using var cli = ITradeHost.Build(retryArgs);
+    return await RetryJobCommand.RunAsync(cli, job, date, Console.Out);
 }
 
 try

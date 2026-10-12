@@ -33,6 +33,7 @@ await using var app = ITradeHost.Build(
     $"--ITrade:Port={port}",
     $"--ITrade:DataDir={dataDir}",
     $"--ConnectionStrings:{ITradeHost.ConnectionStringName}={postgres.GetConnectionString()}",
+    "--ITrade:UpdateFxRates=false", // the browser tests never reach the network
 ]);
 await ITradeHost.MigrateAsync(app);
 await using (var scope = app.Services.CreateAsyncScope())

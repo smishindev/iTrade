@@ -10,6 +10,9 @@ namespace ITrade.Domain;
 /// </summary>
 public sealed record FxRate
 {
+    /// <summary>Digits after the decimal point a stored rate keeps (`numeric(12,6)`); official rates have three or four.</summary>
+    public const int Scale = 6;
+
     public FxRate(Currency from, Currency to, decimal rate, LocalDate date, string source)
     {
         if (from == to)
@@ -55,4 +58,50 @@ public sealed record FxRate
 
         throw new InvalidOperationException($"A {From}/{To} rate cannot convert {amount.Currency}.");
     }
+}
+
+/// <summary>
+/// The rate to use on a date: the one the source published for that date, or — on a weekend or a holiday of
+/// the source — the latest earlier one, carried forward. A carried rate says so; it is never passed off as the
+/// rate of the day. Keep this next to every amount converted with it: once only the converted amount is left,
+/// nothing says how good the rate was.
+/// </summary>
+public sealed record AppliedFxRate
+{
+    public AppliedFxRate(FxRate rate, LocalDate on, bool isProvisional = false)
+    {
+        ArgumentNullException.ThrowIfNull(rate);
+        if (rate.Date > on)
+        {
+            throw new ArgumentException($"A rate of {rate.Date:R} cannot be used on the earlier {on:R}.", nameof(rate));
+        }
+
+        if (isProvisional && rate.Date == on)
+        {
+            throw new ArgumentException("The rate of the day itself is not provisional.", nameof(isProvisional));
+        }
+
+        Rate = rate;
+        On = on;
+        IsProvisional = isProvisional;
+    }
+
+    public FxRate Rate { get; }
+
+    /// <summary>The date the rate is used on.</summary>
+    public LocalDate On { get; }
+
+    /// <summary>Calendar days between the date the rate was published for and the date it is used on.</summary>
+    public int DaysCarried => Period.DaysBetween(Rate.Date, On);
+
+    public bool IsCarriedForward => DaysCarried > 0;
+
+    /// <summary>
+    /// True for a carried rate while no later rate is known: the source may still publish one for this date
+    /// (today, before the afternoon), or the rates were not updated. Such a figure is expected to change. False
+    /// for the rate of the day and for a gap the source has moved past (a later rate exists) — which is as final
+    /// as a rate gets, though not a promise: a source can publish late for a date it skipped, and an amount that
+    /// must not move afterwards (a tax figure) keeps the rate it was computed with.
+    /// </summary>
+    public bool IsProvisional { get; }
 }

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using ITrade.Host.Auth;
 using ITrade.Host.Events;
+using ITrade.Host.Fx;
 using ITrade.Host.Health;
 using ITrade.Host.Jobs;
 using ITrade.Host.Logging;
@@ -73,6 +74,7 @@ public static partial class ITradeHost
         builder.Services.AddEvents();
         builder.Services.AddDailyJobs();
         builder.Services.AddPortfolio();
+        builder.Services.AddFxRates(options);
 
         // Every error leaves as RFC 9457 problem details, in every environment (P2.4.03).
         builder.Services.AddProblemDetails();

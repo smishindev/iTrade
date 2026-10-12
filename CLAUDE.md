@@ -15,9 +15,9 @@ Python (`python/src/itrade/`) = the frozen research archive of phase 1, referenc
 statistics. **Python never trades.**
 
 ## Where things are now (phase 3 — accounting, plan v4; the phase itself is in `config/project.toml`)
-- `src/ITrade.Domain` money, time, ids, instruments, holding places, transactions · `src/ITrade.Application` use cases
-  (daily jobs, instrument catalogue, transaction ledger) ·
-  `src/ITrade.Infrastructure` EF Core / PostgreSQL · `src/ITrade.Broker.IBKR` (empty until phase 5) ·
+- `src/ITrade.Domain` money, time, ids, instruments, holding places, transactions, books (lots, positions, cash) ·
+  `src/ITrade.Application` use cases (daily jobs, instrument catalogue, transaction ledger, books, exchange rates) ·
+  `src/ITrade.Infrastructure` EF Core / PostgreSQL, Bank of Israel rates · `src/ITrade.Broker.IBKR` (empty until phase 5) ·
   `src/ITrade.Host` API, sign-in, events hub, background jobs, serves the web interface · `tests/ITrade.*`
 - `web/` React interface (MUI, React Router, TanStack Query, generated API client) · `web/e2e` browser tests
 - `deploy/` PostgreSQL in Docker, backup and restore scripts · `tools/ci.py` everything at once · `tools/roadmap.py`
@@ -41,6 +41,10 @@ statistics. **Python never trades.**
   changes nothing). Tests run the Host in-process as "Testing"; only `check` and a real start exercise the owner's launch.
   `dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv` loads the instrument catalogue
   (repeatable); the catalogue itself is generated: `uv run python tools/make_instrument_catalogue.py` in `python/`.
+  `dotnet run --project src/ITrade.Host -- update-fx-rates` brings the Bank of Israel USD/ILS rates up to today (what the
+  daily job `fx-rates` does; needs the internet; `--accept-changes <code> "<why>"` is the owner's step when the bank
+  changed a stored rate — never run it for the owner) · `-- retry-job <job> <yyyy-MM-dd>` releases a daily job that `check`
+  shows as blocked.
 - Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·
   `.\deploy\restore.ps1 -File <dump> -Verify` (restores into a temporary database and removes it). Restore never
   overwrites an existing database; switching the Host to a restored one is the owner's step.
@@ -57,6 +61,9 @@ statistics. **Python never trades.**
 - Only `ExecutionService` sends orders; on unknown order state reconcile, never resend.
 - The ledger (`transactions`) is append-only and written only through `TransactionLedger`; a mistake is reversed,
   never edited. Positions, lots and balances are derived from it.
+- Exchange rates (`fx_rates`) are append-only too and come only through `FxRates`: a rate the bank changed waits
+  for the owner's explicit acceptance and is then a new revision. A converted amount keeps its `AppliedFxRate`
+  (carried forward? provisional?).
 - Tax and accounting rules do not wait for the accountant (owner, 2026-10-12): choose, record as an assumption with
   source and date, label the result unverified.
 - Money is `decimal`/`numeric`, never floating point, in C# and SQL. Times in UTC; schedules in America/New_York.
@@ -66,7 +73,8 @@ statistics. **Python never trades.**
   Never call a result "profit" before final-period + live evidence.
 - Each task: goal, allowed change area, invariants, required tests, expected result. Strategy, risk,
   broker adapter and DB schema changes go in separate commits.
-- Tests must not need the network (mark exceptions `@pytest.mark.network`).
+- Tests must not need the network (mark exceptions `@pytest.mark.network`). The Host calls out only to the Bank of
+  Israel's public rates service; test Hosts run with `ITrade:UpdateFxRates=false` and bring a stand-in source.
 - Data files are never edited by hand; fix code and re-ingest.
 - Fee and tax numbers are assumptions: when changing them, add source + date in a comment.
 - Do not rewrite text files with Windows PowerShell `Get-Content`/`Set-Content` (it corrupts UTF-8); use Edit or Python.
