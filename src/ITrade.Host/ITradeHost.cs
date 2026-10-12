@@ -78,6 +78,8 @@ public static partial class ITradeHost
         {
             document.Info.Title = "iTrade API";
             document.Info.Version = ApiVersion;
+            // The web client calls its own origin; an address here would only change with the port.
+            document.Servers?.Clear();
             return Task.CompletedTask;
         }));
         configureServices?.Invoke(builder.Services);

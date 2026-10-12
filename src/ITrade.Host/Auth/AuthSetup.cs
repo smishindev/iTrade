@@ -77,7 +77,7 @@ internal static class AuthSetup
 
     public static void MapOwnerAuth(this IEndpointRouteBuilder routes)
     {
-        var auth = routes.MapGroup("/api/auth");
+        var auth = routes.MapGroup("/api/auth").WithTags("Auth");
 
         // Also hands out the antiforgery token; it is bound to the user, so the client asks again after sign-in.
         auth.MapGet("/session", (HttpContext context, IAntiforgery antiforgery) =>
@@ -85,12 +85,12 @@ internal static class AuthSetup
             var tokens = antiforgery.GetAndStoreTokens(context);
             return new SessionResponse(
                 context.User.Identity?.IsAuthenticated == true, tokens.RequestToken!, AntiforgeryHeader);
-        }).AllowAnonymous();
+        }).AllowAnonymous().WithName("GetSession");
 
         auth.MapPost("/login", async (
             LoginRequest request, HttpContext context, OwnerAccounts accounts, IClock clock, CancellationToken ct) =>
         {
-            var result = await accounts.LoginAsync(request.Password ?? "", ct);
+            var result = await accounts.LoginAsync(request.Password, ct);
             switch (result.Outcome)
             {
                 case LoginOutcome.Success:
@@ -110,13 +110,23 @@ internal static class AuthSetup
                     return Results.Problem(
                         statusCode: StatusCodes.Status401Unauthorized, title: "The password is not correct.");
             }
-        }).AllowAnonymous();
+        })
+            .AllowAnonymous()
+            .WithName("Login")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         auth.MapPost("/logout", async (HttpContext context) =>
         {
             await context.SignOutAsync();
             return Results.NoContent();
-        });
+        })
+            .WithName("Logout")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized);
     }
 
     private static async Task RejectSessionsOfAnOlderPassword(CookieValidatePrincipalContext context)
@@ -138,6 +148,6 @@ internal static class AuthSetup
     }
 }
 
-internal sealed record LoginRequest(string? Password);
+internal sealed record LoginRequest(string Password);
 
 internal sealed record SessionResponse(bool Authenticated, string AntiforgeryToken, string AntiforgeryHeader);

@@ -2,3 +2,6 @@
 # Shell scripts must keep LF or `sh` fails on Windows checkouts.
 .githooks/* text eol=lf
 *.sh text eol=lf
+# The API snapshot and the client generated from it are compared byte by byte.
+web/openapi/** text eol=lf
+web/src/api/generated/** text eol=lf

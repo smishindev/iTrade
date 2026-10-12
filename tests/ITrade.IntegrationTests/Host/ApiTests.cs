@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ITrade.Host;
 using ITrade.Host.Auth;
 using ITrade.IntegrationTests.Persistence;
@@ -13,6 +15,7 @@ namespace ITrade.IntegrationTests.Host;
 public sealed class ApiTests(PostgresFixture pg)
 {
     private const string Detail = "boom-detail-that-must-stay-inside";
+    private const string UpdateVariable = "ITRADE_UPDATE_OPENAPI";
 
     private static string NewSecret() => Guid.NewGuid().ToString("N");
 
@@ -52,6 +55,43 @@ public sealed class ApiTests(PostgresFixture pg)
         Assert.True(paths.TryGetProperty("/api/auth/login", out var loginPath));
         Assert.True(loginPath.TryGetProperty("post", out _));
         Assert.True(paths.TryGetProperty("/api/auth/logout", out _));
+    }
+
+    /// <summary>
+    /// The web client is generated from web/openapi/v1.json. This test keeps that file equal to what the Host
+    /// serves: after an API change run it once with ITRADE_UPDATE_OPENAPI=1, then `npm run gen:api` in web/.
+    /// </summary>
+    [Fact]
+    public async Task OpenApiDocumentInTheRepositoryIsCurrent()
+    {
+        await using var host = await RunningHost.StartAsync(await pg.NewEmptyDatabaseAsync());
+        var secret = NewSecret();
+        await host.SetOwnerSecretAsync(secret);
+        using var login = await RunningHost.LoginAsync(host.Client, secret);
+        var served = await host.Client.GetStringAsync(
+            new Uri($"/openapi/{ITradeHost.ApiVersion}.json", UriKind.Relative));
+        var current = JsonNode.Parse(served)!.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            NewLine = "\n",
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }) + "\n";
+        var path = Repository.PathTo("web", "openapi", $"{ITradeHost.ApiVersion}.json");
+
+        if (Environment.GetEnvironmentVariable(UpdateVariable) == "1")
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, current);
+            return;
+        }
+
+        var committed = File.Exists(path)
+            ? (await File.ReadAllTextAsync(path)).Replace("\r\n", "\n", StringComparison.Ordinal)
+            : "";
+        Assert.True(
+            committed == current,
+            $"The API changed: {path} is out of date. Run this test once with {UpdateVariable}=1, " +
+            "then `npm run gen:api` in web/, and commit both files.");
     }
 
     [Fact]
