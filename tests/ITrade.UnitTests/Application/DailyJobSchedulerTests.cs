@@ -146,6 +146,99 @@ public sealed class DailyJobSchedulerTests : IDisposable
     }
 
     [Fact]
+    public async Task BlockedDateRunsAgainAtOnceWhenTheOwnerAsksAndThenLetsTheLaterDatesThrough()
+    {
+        _fails = _ => true;
+        for (var attempt = 0; attempt < DailyJobScheduler.MaxAttempts; attempt++)
+        {
+            _clock.Advance(attempt == 0 ? Duration.Zero : DailyJobScheduler.RetryDelay);
+            Assert.Equal(JobRunOutcome.Failed, Assert.Single(await PassAsync()).Outcome);
+        }
+
+        // Minutes after the fifth failure: blocked, and without the owner it would stay so.
+        _clock.AdvanceMinutes(5);
+        Assert.Equal(JobRunOutcome.Blocked, Assert.Single(await PassAsync()).Outcome);
+        var stuck = Assert.Single(await _store.ListUnfinishedAsync(CancellationToken.None));
+        Assert.Equal((JobName, Day(5)), (stuck.Job, stuck.Run.Date));
+
+        // The cause is gone and the owner says so: the date runs now, not after the hour of waiting.
+        _fails = _ => false;
+        Assert.True(await _store.RetryAsync(JobName, Day(5), CancellationToken.None));
+        Assert.Equal([new JobRunResult(JobName, Day(5), JobRunOutcome.Succeeded)], await PassAsync());
+
+        _clock.Reset(Utc(7, 23)); // and the sessions after it are no longer held back
+        var later = await PassAsync();
+        Assert.Equal([Day(6), Day(7)], later.Select(r => r.Date));
+        Assert.Empty(await _store.ListUnfinishedAsync(CancellationToken.None));
+        // A date that is done, or was never run, is not something to retry.
+        Assert.False(await _store.RetryAsync(JobName, Day(5), CancellationToken.None));
+        Assert.False(await _store.RetryAsync(JobName, Day(9), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SourceThatIsAwayIsTriedEveryHourForAsLongAsItTakesAndNeverBlocksTheDate()
+    {
+        // A day without the internet must not end with a job only the owner can release.
+        _failure = _ => new TemporaryFailureException("The rates service could not be reached.", new HttpRequestException("No such host is known."));
+        for (var hour = 0; hour < 3 * DailyJobScheduler.MaxAttempts; hour++)
+        {
+            var result = Assert.Single(await PassAsync());
+            Assert.Equal(JobRunOutcome.Failed, result.Outcome);
+            Assert.Equal("The rates service could not be reached. (HttpRequestException: No such host is known.)", result.Failure);
+            Assert.Equal(JobRunOutcome.Waiting, Assert.Single(await PassAsync()).Outcome); // not every minute either
+            _clock.Advance(DailyJobScheduler.RetryDelay);
+        }
+
+        Assert.Equal(1, _store.Runs[(JobName, Day(5))].Attempts);
+
+        // The network is back on Tuesday evening: the date runs, and so does the session that came due meanwhile.
+        _failure = _ => null;
+        _clock.Reset(Utc(6, 23));
+        var results = await PassAsync();
+        Assert.Equal([Day(5), Day(6)], results.Select(r => r.Date));
+        Assert.All(results, r => Assert.Equal(JobRunOutcome.Succeeded, r.Outcome));
+    }
+
+    [Fact]
+    public async Task TemporaryFailuresDoNotGiveBackTheAttemptsThatRealFaultsUsed()
+    {
+        _fails = _ => true; // four real faults
+        for (var attempt = 0; attempt < DailyJobScheduler.MaxAttempts - 1; attempt++)
+        {
+            await PassAsync();
+            _clock.Advance(DailyJobScheduler.RetryDelay);
+        }
+
+        _fails = _ => false;
+        _failure = _ => new TemporaryFailureException("away"); // then the network goes, for a while
+        for (var hour = 0; hour < 3; hour++)
+        {
+            await PassAsync();
+            _clock.Advance(DailyJobScheduler.RetryDelay);
+        }
+
+        Assert.Equal(DailyJobScheduler.MaxAttempts - 1, _store.Runs[(JobName, Day(5))].Attempts);
+
+        _failure = _ => null;
+        _fails = _ => true; // and the fifth real fault blocks the date, as it always did
+        Assert.Equal(JobRunOutcome.Failed, Assert.Single(await PassAsync()).Outcome);
+        _clock.Advance(DailyJobScheduler.RetryDelay);
+        Assert.Equal(JobRunOutcome.Blocked, Assert.Single(await PassAsync()).Outcome);
+    }
+
+    [Fact]
+    public async Task RetryGivesAFailingDateItsAttemptsBackButNoMoreThanThat()
+    {
+        _fails = _ => true;
+        await PassAsync();
+        Assert.True(await _store.RetryAsync(JobName, Day(5), CancellationToken.None));
+
+        Assert.Equal(JobRunOutcome.Failed, Assert.Single(await PassAsync()).Outcome); // at once, not after the delay
+        Assert.Equal(JobRunOutcome.Waiting, Assert.Single(await PassAsync()).Outcome); // and then the usual waiting again
+        Assert.Equal(1, _store.Runs[(JobName, Day(5))].Attempts);
+    }
+
+    [Fact]
     public async Task RunInterruptedByACrashIsRepeatedAtOnce()
     {
         _store.Runs[(JobName, Day(5))] = new JobRunState(Day(5), JobRunStatus.Running, 1, Utc(5, 22, 30));
@@ -258,14 +351,36 @@ public sealed class DailyJobSchedulerTests : IDisposable
             return Task.FromResult(true);
         }
 
-        public Task FinishAsync(string job, TradeDate day, Instant now, string? failure, CancellationToken cancellationToken)
+        public Task FinishAsync(
+            string job, TradeDate day, Instant now, string? failure, bool temporary, CancellationToken cancellationToken)
         {
-            Runs[(job, day)] = Runs[(job, day)] with
+            var run = Runs[(job, day)];
+            Runs[(job, day)] = run with
             {
                 Status = failure is null ? JobRunStatus.Succeeded : JobRunStatus.Failed,
+                Attempts = failure is not null && temporary ? Math.Max(1, run.Attempts - 1) : run.Attempts,
             };
             return Task.CompletedTask;
         }
+
+        public Task<bool> RetryAsync(string job, TradeDate day, CancellationToken cancellationToken)
+        {
+            if (Runs.GetValueOrDefault((job, day)) is not { Status: not JobRunStatus.Succeeded } run)
+            {
+                return Task.FromResult(false);
+            }
+
+            Runs[(job, day)] = run with { Attempts = 0 };
+            return Task.FromResult(true);
+        }
+
+        public Task<IReadOnlyList<(string Job, JobRunState Run, string? Failure)>> ListUnfinishedAsync(
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<(string Job, JobRunState Run, string? Failure)>>(Runs
+                .Where(r => r.Value.Status != JobRunStatus.Succeeded)
+                .OrderBy(r => r.Key.Day)
+                .Select(r => (r.Key.Job, r.Value, (string?)null))
+                .ToList());
 
         private IEnumerable<TradeDate> Dates(string job, Func<JobRunStatus, bool> status) =>
             Runs.Where(r => r.Key.Job == job && status(r.Value.Status)).Select(r => r.Key.Day);

@@ -124,8 +124,9 @@ public sealed class DailyJobScheduler(IServiceScopeFactory scopes, IExchangeCale
             return new JobRunResult(name, day, JobRunOutcome.Blocked);
         }
 
-        // An interrupted run (still "running" after a crash) is repeated at once; a failed one waits.
-        if (earlier is { Status: JobRunStatus.Failed } && now < earlier.StartedAt + RetryDelay)
+        // An interrupted run (still "running" after a crash) is repeated at once; a failed one waits -
+        // unless the owner asked for it again (`retry-job` sets the attempts back to none).
+        if (earlier is { Status: JobRunStatus.Failed, Attempts: > 0 } && now < earlier.StartedAt + RetryDelay)
         {
             return new JobRunResult(name, day, JobRunOutcome.Waiting);
         }
@@ -137,9 +138,16 @@ public sealed class DailyJobScheduler(IServiceScopeFactory scopes, IExchangeCale
 
         var job = scope.ServiceProvider.GetServices<IDailyJob>().Single(j => j.Name == name);
         string? failure = null;
+        var temporary = false;
         try
         {
             await job.RunAsync(day, cancellationToken);
+        }
+        catch (TemporaryFailureException e)
+        {
+            // Something outside was away. The message says what; the stack of a dropped connection says nothing.
+            failure = e.InnerException is null ? e.Message : $"{e.Message} ({e.InnerException.GetType().Name}: {e.InnerException.Message})";
+            temporary = true;
         }
 #pragma warning disable CA1031 // any failure of a job is recorded with the run; the scheduler carries on
         // Only a stop of the application is a cancellation. A timeout inside the job (an HTTP call that gives
@@ -154,7 +162,7 @@ public sealed class DailyJobScheduler(IServiceScopeFactory scopes, IExchangeCale
 
         // The work is done (or has failed): record it even if the application is stopping right now,
         // otherwise a finished date would run again at the next start.
-        await store.FinishAsync(name, day, clock.GetCurrentInstant(), failure, CancellationToken.None);
+        await store.FinishAsync(name, day, clock.GetCurrentInstant(), failure, temporary, CancellationToken.None);
         return new JobRunResult(
             name, day, failure is null ? JobRunOutcome.Succeeded : JobRunOutcome.Failed, failure);
     }

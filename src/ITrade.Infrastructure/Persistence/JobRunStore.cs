@@ -53,16 +53,38 @@ public sealed class JobRunStore(ITradeDbContext db) : IJobRunStore
     }
 
     public async Task FinishAsync(
-        string job, TradeDate day, Instant now, string? failure, CancellationToken cancellationToken)
+        string job, TradeDate day, Instant now, string? failure, bool temporary, CancellationToken cancellationToken)
     {
         var status = failure is null ? JobRunStatus.Succeeded : JobRunStatus.Failed;
+        var forgiven = failure is not null && temporary ? 1 : 0;
         await db.JobRuns
             .Where(r => r.Name == job && r.TradeDate == day)
             .ExecuteUpdateAsync(
                 run => run
                     .SetProperty(r => r.Status, status)
                     .SetProperty(r => r.FinishedAt, (Instant?)now)
-                    .SetProperty(r => r.Error, failure),
+                    .SetProperty(r => r.Error, failure)
+                    // Not below one: a failed date with no attempts is one the owner asked to run at once.
+                    .SetProperty(r => r.Attempts, r => r.Attempts - forgiven < 1 ? 1 : r.Attempts - forgiven),
                 cancellationToken);
+    }
+
+    public async Task<bool> RetryAsync(string job, TradeDate day, CancellationToken cancellationToken)
+    {
+        // The cause stays written down until the next attempt begins.
+        var rows = await db.JobRuns
+            .Where(r => r.Name == job && r.TradeDate == day && r.Status != JobRunStatus.Succeeded)
+            .ExecuteUpdateAsync(run => run.SetProperty(r => r.Attempts, 0), cancellationToken);
+        return rows == 1;
+    }
+
+    public async Task<IReadOnlyList<(string Job, JobRunState Run, string? Failure)>> ListUnfinishedAsync(
+        CancellationToken cancellationToken)
+    {
+        var runs = await db.JobRuns.AsNoTracking()
+            .Where(r => r.Status != JobRunStatus.Succeeded)
+            .OrderBy(r => r.Name).ThenBy(r => r.TradeDate)
+            .ToListAsync(cancellationToken);
+        return runs.ConvertAll(r => (r.Name, new JobRunState(r.TradeDate, r.Status, r.Attempts, r.StartedAt), r.Error));
     }
 }

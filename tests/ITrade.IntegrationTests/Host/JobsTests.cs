@@ -117,7 +117,7 @@ public sealed class JobsTests(PostgresFixture pg)
 
         Assert.True(await store.BeginAsync("job", Day(5), now, CancellationToken.None));
         Assert.True(await store.BeginAsync("job", Day(5), now, CancellationToken.None)); // interrupted, started again
-        await store.FinishAsync("job", Day(5), now, null, CancellationToken.None);
+        await store.FinishAsync("job", Day(5), now, null, temporary: false, CancellationToken.None);
 
         Assert.False(await store.BeginAsync("job", Day(5), now, CancellationToken.None));
         var state = await store.FindAsync("job", Day(5), CancellationToken.None);
