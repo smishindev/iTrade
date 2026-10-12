@@ -69,9 +69,9 @@ public sealed class LedgerTests(PostgresFixture pg)
         var second = await w.Ledger.RecordAsync(Statement(w), CancellationToken.None);
         var third = await w.Ledger.RecordAsync(Statement(w), CancellationToken.None);
 
-        Assert.Equal((7, 0, 0), (first.Added, first.AlreadyRecorded, first.Conflicts.Count));
-        Assert.Equal((0, 7, 0), (second.Added, second.AlreadyRecorded, second.Conflicts.Count));
-        Assert.Equal((0, 7, 0), (third.Added, third.AlreadyRecorded, third.Conflicts.Count));
+        Assert.Equal((7, 0, 0), (first.Added, first.AlreadyRecorded, first.NotRecorded.Count));
+        Assert.Equal((0, 7, 0), (second.Added, second.AlreadyRecorded, second.NotRecorded.Count));
+        Assert.Equal((0, 7, 0), (third.Added, third.AlreadyRecorded, third.NotRecorded.Count));
         var ledger = await w.Store.ListAsync(w.Ibkr, CancellationToken.None);
         Assert.Equal(
             ["D-1", "FX-1", "FX-1:in", "T-1", "T-1:fee", "DIV-1", "DIV-1:tax"],
@@ -111,7 +111,7 @@ public sealed class LedgerTests(PostgresFixture pg)
         var result = await w.Ledger.RecordAsync(changed, CancellationToken.None);
 
         Assert.Equal((0, 6), (result.Added, result.AlreadyRecorded));
-        Assert.Contains("Flex DIV-1", Assert.Single(result.Conflicts), StringComparison.Ordinal);
+        Assert.Contains("Flex DIV-1", Assert.Single(result.NotRecorded), StringComparison.Ordinal);
         var dividend = await w.Store.FindByExternalIdAsync(w.Ibkr, TransactionSource.Flex, "DIV-1", CancellationToken.None);
         Assert.Equal(3.42m, dividend!.Cash.Amount);
     }
@@ -160,6 +160,93 @@ public sealed class LedgerTests(PostgresFixture pg)
         var result = await w.Ledger.RecordAsync([Entry(w, TransactionKind.Deposit, 1000m, "D-1")], CancellationToken.None);
         Assert.Equal(1, result.Added);
         Assert.Single(await w.Store.ListAsync(w.Ibkr, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LineTheBrokerCorrectedIsRecordedAgainAfterItsOldRecordingIsReversed()
+    {
+        // The way a report of a changed line tells the owner to go, to its end, against the real unique index.
+        await using var w = await NewAsync();
+        Transaction[] Corrected()
+        {
+            var statement = Statement(w);
+            statement[3] = Entry(w, TransactionKind.Buy, -1203.605m, "T-1", quantity: 2m, price: 601.8025m, instrument: true);
+            statement[4] = Entry(w, TransactionKind.Fee, -0.350753m, "T-1:fee", instrument: true, relatedTo: statement[3].Id);
+            return statement;
+        }
+
+        await w.Ledger.RecordAsync(Statement(w), CancellationToken.None);
+        var reported = await w.Ledger.RecordAsync(Corrected(), CancellationToken.None);
+        Assert.Equal((0, 6, 1), (reported.Added, reported.AlreadyRecorded, reported.NotRecorded.Count));
+        var old = (await w.Store.FindByExternalIdAsync(w.Ibkr, TransactionSource.Flex, "T-1", CancellationToken.None))!;
+        Assert.Contains($"reverse the entry {old.Id}", reported.NotRecorded[0], StringComparison.Ordinal);
+
+        await w.Ledger.ReverseAsync(old.Id, "the broker corrected the price", CancellationToken.None);
+        var recorded = await w.Ledger.RecordAsync(Corrected(), CancellationToken.None);
+        var again = await w.Ledger.RecordAsync(Corrected(), CancellationToken.None);
+
+        Assert.Equal((2, 5, 0), (recorded.Added, recorded.AlreadyRecorded, recorded.NotRecorded.Count));
+        Assert.Equal((0, 7, 0), (again.Added, again.AlreadyRecorded, again.NotRecorded.Count));
+        var buy = (await w.Store.FindByExternalIdAsync(w.Ibkr, TransactionSource.Flex, "T-1", CancellationToken.None))!;
+        var fee = (await w.Store.FindByExternalIdAsync(w.Ibkr, TransactionSource.Flex, "T-1:fee", CancellationToken.None))!;
+        Assert.Equal((-1203.605m, 1, 1, buy.Id), (buy.Cash.Amount, buy.ExternalRevision, fee.ExternalRevision, fee.RelatedTo!.Value));
+        var ledger = await w.Store.ListAsync(w.Ibkr, CancellationToken.None);
+        Assert.Equal(11, ledger.Count); // 7 lines, 2 reversals, 2 recorded again
+        Assert.Equal(2m, ledger.Sum(t => t.QuantityChange));
+        Assert.Equal(110.184656m - 0.10m, ledger.Where(t => t.Cash.Currency == Currency.Usd).Sum(t => t.Cash.Amount));
+
+        // A reversed line that the source still states unchanged is reported, not passed off as recorded.
+        await w.Ledger.ReverseAsync(buy.Id, "the broker cancelled the trade", CancellationToken.None);
+        var cancelled = await w.Ledger.RecordAsync(Corrected(), CancellationToken.None);
+        Assert.Equal((0, 5, 2), (cancelled.Added, cancelled.AlreadyRecorded, cancelled.NotRecorded.Count));
+        Assert.Contains("was reversed (the broker cancelled the trade)", cancelled.NotRecorded[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConversionIsCancelledWholeAndNotByOneLeg()
+    {
+        await using var w = await NewAsync();
+        await w.Ledger.RecordAsync(Statement(w), CancellationToken.None);
+        var sold = (await w.Store.FindByExternalIdAsync(w.Ibkr, TransactionSource.Flex, "FX-1", CancellationToken.None))!;
+        var bought = (await w.Store.FindByExternalIdAsync(w.Ibkr, TransactionSource.Flex, "FX-1:in", CancellationToken.None))!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => w.Ledger.ReverseAsync(bought.Id, "wrong rate", CancellationToken.None));
+        Assert.Equal(7, (await w.Store.ListAsync(w.Ibkr, CancellationToken.None)).Count);
+
+        await w.Ledger.ReverseAsync(sold.Id, "wrong rate", CancellationToken.None);
+
+        var ledger = await w.Store.ListAsync(w.Ibkr, CancellationToken.None);
+        Assert.Equal(4000m, ledger.Where(t => t.Cash.Currency == Currency.Ils).Sum(t => t.Cash.Amount)); // the deposit is back in shekels
+        Assert.Equal(110.184656m - 1311.475409m, ledger.Where(t => t.Cash.Currency == Currency.Usd).Sum(t => t.Cash.Amount));
+    }
+
+    [Fact]
+    public async Task LedgerIsWrittenOnItsOwnAndInsideATransactionABatchIsStillAllOrNothing()
+    {
+        await using var w = await NewAsync();
+
+        // Other unsaved changes of the same unit of work would be saved with the first row, or lost with a refused one.
+        w.Db.Settings.Add(new Setting { Key = "test", Value = "1" });
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            w.Ledger.RecordAsync([Entry(w, TransactionKind.Deposit, 1m, "D-0")], CancellationToken.None));
+        w.Db.ChangeTracker.Clear();
+
+        await using (var outer = await w.Db.Database.BeginTransactionAsync())
+        {
+            await w.Ledger.RecordAsync([Entry(w, TransactionKind.Deposit, 1000m, "D-1")], CancellationToken.None);
+            var unknownInstrument = new Transaction(
+                TransactionId.New(), w.Ibkr, TransactionKind.Dividend, Traded, Traded, Money.Usd(1m), TransactionSource.Flex,
+                _clock.GetCurrentInstant(), InstrumentId.New(), externalId: "DIV-9");
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                w.Ledger.RecordAsync([Entry(w, TransactionKind.Deposit, 2000m, "D-2"), unknownInstrument], CancellationToken.None));
+
+            // The caller carries on and commits: the refused batch must not have left its first half behind.
+            await outer.CommitAsync();
+        }
+
+        var deposit = Assert.Single(await w.Store.ListAsync(w.Ibkr, CancellationToken.None));
+        Assert.Equal("D-1", deposit.ExternalId);
+        Assert.Empty(w.Db.ChangeTracker.Entries());
     }
 
     [Fact]

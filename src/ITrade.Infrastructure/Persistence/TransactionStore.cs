@@ -13,8 +13,10 @@ public sealed class TransactionStore(ITradeDbContext db) : ITransactionStore
     public async Task<Transaction?> FindByExternalIdAsync(
         HoldingPlaceId holdingPlace, TransactionSource source, string externalId, CancellationToken cancellationToken)
     {
-        var row = await db.Transactions.AsNoTracking().SingleOrDefaultAsync(
-            t => t.HoldingPlaceId == holdingPlace && t.Source == source && t.ExternalId == externalId, cancellationToken);
+        var row = await db.Transactions.AsNoTracking()
+            .Where(t => t.HoldingPlaceId == holdingPlace && t.Source == source && t.ExternalId == externalId)
+            .OrderByDescending(t => t.ExternalRevision)
+            .FirstOrDefaultAsync(cancellationToken);
         return row?.ToDomain();
     }
 
@@ -39,15 +41,28 @@ public sealed class TransactionStore(ITradeDbContext db) : ITransactionStore
         return rows.ConvertAll(r => r.ToDomain());
     }
 
-    public async Task AddAsync(IReadOnlyCollection<Transaction> entries, CancellationToken cancellationToken)
+    public async Task AddAsync(IReadOnlyList<Transaction> entries, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(entries);
+        if (db.ChangeTracker.HasChanges())
+        {
+            // Saving a ledger row saves everything the context tracks: the other changes would be written with
+            // the first row and, if a later row is refused, rolled back without anyone being told.
+            throw new InvalidOperationException(
+                "The ledger is written on its own: save or discard the other changes of this unit of work first.");
+        }
+
         var rows = entries.Select(TransactionRow.From).ToList();
-        // One database transaction: all the entries or none. Each row is sent on its own, in the order given,
-        // because that order becomes the ledger's order (EF Core is free to reorder the rows of one save).
-        var own = db.Database.CurrentTransaction is null
-            ? await db.Database.BeginTransactionAsync(cancellationToken)
-            : null;
+        // All the entries or none. Each row is sent on its own, in the order given, because that order becomes
+        // the ledger's order (EF Core is free to reorder the rows of one save). Inside a transaction of the
+        // caller the batch is a savepoint, so a refused batch leaves nothing of itself for the caller to commit.
+        var outer = db.Database.CurrentTransaction;
+        var own = outer is null ? await db.Database.BeginTransactionAsync(cancellationToken) : null;
+        if (outer is not null)
+        {
+            await outer.CreateSavepointAsync(Savepoint, cancellationToken);
+        }
+
         try
         {
             foreach (var row in rows)
@@ -60,6 +75,15 @@ public sealed class TransactionStore(ITradeDbContext db) : ITransactionStore
             {
                 await own.CommitAsync(cancellationToken);
             }
+            else
+            {
+                await outer!.ReleaseSavepointAsync(Savepoint, cancellationToken);
+            }
+        }
+        catch when (outer is not null)
+        {
+            await outer.RollbackToSavepointAsync(Savepoint, CancellationToken.None);
+            throw;
         }
         finally
         {
@@ -76,4 +100,6 @@ public sealed class TransactionStore(ITradeDbContext db) : ITransactionStore
             }
         }
     }
+
+    private const string Savepoint = "ledger_batch";
 }
