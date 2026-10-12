@@ -60,6 +60,7 @@ runs in PAPER mode. To get rid of the browser's certificate warning: `dotnet dev
 | `dotnet run --project src/ITrade.Host -- check` | is everything in place to start? (interface, database, password) — changes nothing |
 | `dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv` | load the instrument catalogue; running it again changes nothing |
 | `dotnet run --project src/ITrade.Host -- update-fx-rates` | bring the Bank of Israel USD/ILS rates up to today (the daily job does the same; needs the internet). If the bank changed a rate that is already stored, it says so and stores nothing; after checking the bank's page, run the line it prints: `... update-fx-rates --accept-changes <code> "<what you checked>"` |
+| `uv run --directory python itrade ingest --universe etf_pullback_v1`, then `dotnet run --project src/ITrade.Host -- import-prices` | refresh the market data and load the closing prices (as traded, finished sessions only) the platform values the portfolio with; running it again adds nothing. Run the ingest after the New York close (23:00 in Israel) to get the day's close |
 | `dotnet run --project src/ITrade.Host -- retry-job <job> <yyyy-MM-dd>` | let a daily job that `check` shows as blocked be tried again |
 | `cd web; npm run dev` | interface with hot reload on `http://127.0.0.1:5173`, next to a running Host |
 | `.\deploy\backup.ps1` | back up the database to `<data folder>\backups` |

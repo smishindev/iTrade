@@ -7,9 +7,10 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 12 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: 103 of 106 tasks (the three open ones are the owner's, at IBKR);
-phase 3: 4 of 12.
+phase 3: 5 of 12.
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
-lots and positions derived from it, official exchange rates since 2005 — but they are empty: no
+lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
+funds since 1993 — but they are empty: no
 statement has been imported yet, because the broker account is not funded and the statement service
 is not available before that. No real money has moved through the platform. Mode is PAPER.
 
@@ -24,8 +25,8 @@ stays locked. On 9 October the owner approved plan v4: the money goes into a bro
 platform becomes an accounting and execution-with-approval tool. Phase 2 built the foundation:
 .NET 10 Host on loopback HTTPS with sign-in, PostgreSQL 18, daily jobs with catch-up, a React shell,
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
-ledger, FIFO lots and positions, and the Bank of Israel exchange rates. Next come closing prices and
-valuation; the statement import and the reconciliation wait for the funded account.
+ledger, FIFO lots and positions, the Bank of Israel exchange rates and closing prices as traded.
+Next comes valuation; the statement import and the reconciliation wait for the funded account.
 
 ---
 
@@ -37,13 +38,13 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 235 unit, 5 architecture, 93 integration on a real PostgreSQL 18 (Testcontainers) |
-| Python tests | ✅ | 60 (`uv run pytest`, no network) |
+| .NET tests | ✅ | 270 unit, 5 architecture, 98 integration on a real PostgreSQL 18 (Testcontainers) |
+| Python tests | ✅ | 316 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
 | One Host per database | ✅ | a second instance refused by the instance lock (integration test; seen on the real database on 12 October) |
 | Sign-in, lockout, session end | ✅ | integration tests and browser tests; the owner's password is set on the working database |
-| Working database | ✅ | 8 migrations applied; backup `itrade-20261012-112827Z.dump` taken before the phase-3 migrations |
+| Working database | ✅ | 10 migrations applied; backups before each schema change, the latest `itrade-20261012-194000Z.dump` |
 | Backup and restore | ✅ | `backup.ps1`, then `restore.ps1 -Verify` into a temporary database (phase 2 gate) |
 | Instrument catalogue | ✅ | 29 ETFs imported; importing again: 29 unchanged |
 | Ledger: repeated import, reversal, corrected line | ✅ tests only | unit and PostgreSQL tests, 7 deliberate breakages caught. **No real statement imported yet** — the table is empty |
@@ -53,7 +54,10 @@ read in the code.
 | Daily job `fx-rates` in the real Host | ✅ | the Host was started and the job succeeded for session 2026-10-12 |
 | A changed rate waits for the owner | ✅ tests only | never happened for real; 26 deliberate breakages of the rates code caught |
 | Stuck job is visible and can be released | ✅ | `check` and `retry-job` in tests; `retry-job` run for real with nothing to retry |
-| Market data | ✅ | 33 curated series, last bars 5–6 October 2026; every warning reviewed in [docs/data-notes.md](docs/data-notes.md) |
+| Closing prices | ✅ | 185,273 closes of 29 funds and 8,482 exchange sessions, 1993-01-29 … 2026-10-09, in the working database; a second import: 0 new. The ingest ran while New York was open: the half-formed bar of 12 October was left out for every fund |
+| A price for any date says what it is | ✅ tests only | the session's own, carried over a closed day, missing, unavailable; nothing values a position with it yet. 88 deliberate breakages of the prices code caught |
+| Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
+| Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 9 October (EWC up to 6 October: its bar of the open session failed the quality check). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
 | Statement (Flex) import | ❌ not built | waits for a funded account (see *Waiting on the owner*) |
 | Valuation, returns, reconciliation | ❌ not built | phase 3, next tasks |
@@ -127,7 +131,15 @@ gave wrong lots with right totals), and across three rounds in the rates (a sing
 the bank would have stopped updates for good; accepting a change would have accepted more than the
 owner saw). All were fixed before the code was committed.
 
-### 13. The statement import waits for the funded account (12 October)
+### 13. Prices as traded, sessions from the exchange calendar (12 October)
+The vendor's close is adjusted back in time after every split; the books hold the shares really held
+on a date, so the platform stores the price really paid that day. The first version passed every
+test and was sent back by the reviewer: a bar fetched while the session was open was stored as a
+close (the owner's evening is the middle of the New York session), and "was the exchange open" was
+guessed from the prices themselves. Now only finished sessions are exported, the export carries the
+exchange's calendar, and changes of stored prices are judged by size as well as by number.
+
+### 14. The statement import waits for the funded account (12 October)
 Flex queries live in a part of the IBKR portal that appears only after the first deposit, and the
 demo account has no reports. The steps for the owner are written on the card of P3.2.01.
 
@@ -144,8 +156,9 @@ Ordered roughly by how much they would hurt.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
    applies to a trade. The formula for the real gain on a dollar security is not chosen yet. Gate G4
    cannot be passed as written (decision 9).
-3. **The session calendar has no holidays** (`WeekdayCalendar`). Harmless for the rates job; not
-   good enough for settlement dates or anything that decides about money.
+3. **The session calendar of the daily jobs has no holidays** (`WeekdayCalendar`). Harmless for the
+   rates job; not good enough for settlement dates or anything that decides about money. The real
+   sessions are in `market_sessions` now, but only as far as the last import of prices.
 4. **The Host connects as the database owner**, who could switch the append-only triggers off.
 5. **Books "as of a date" do not remember what was known then.** A later reversal, a late fee or a
    late exchange rate changes a past date's figure. A closed tax year will need figures that keep
@@ -158,7 +171,18 @@ Ordered roughly by how much they would hurt.
 9. **`check` stays `OK` while the rates job merely cannot reach the bank**: the age of the rates
    becomes a remark on day 5 and a problem on day 8.
 10. **Backups are manual.**
-11. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
+11. **Prices are refreshed by hand**, with two commands, after the New York close; nothing runs the
+    data pipeline by itself. `check` shows the age of the prices and who is behind.
+12. **A stored session cannot be withdrawn.** If the calendar library calls a day of an unscheduled
+    closure a session, every fund reads "missing" for that day, and once the library is corrected
+    the imports are refused until a migration deals with it.
+13. **An export made from an older data folder passes as new** (it gets a fresh date); it can put
+    back up to 20 price corrections of at most 2% each.
+14. **The currency of a price comes from the catalogue, not from the vendor.** Every fund is in
+    dollars; the first one that is not needs the quote currency at ingest.
+15. **Nothing values a position yet**, so two rules exist only on paper: a carried close must not be
+    used across a split, and a missing price makes the total "not valued" (card of P3.4.01).
+16. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
 
 ---
@@ -167,10 +191,10 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.3.02 — closing prices** from the curated snapshots, for valuation only.
-2. **P3.4.01 — value of the portfolio on a date**, in dollars and shekels, with the rate's marks.
-3. **P3.4.02 — returns** (time-weighted and money-weighted) against the index.
-4. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
+1. **P3.4.01 — value of the portfolio on a date**, in dollars and shekels, with the marks of the
+   price and of the rate.
+2. **P3.4.02 — returns** (time-weighted and money-weighted) against the index.
+3. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
    → **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
 
 ## Waiting on the owner
@@ -179,6 +203,9 @@ Small steps, one task at a time (`/next-task`):
   Mobile for two-factor sign-in (P0.2.03). The statement import and the reconciliation cannot start
   before this.
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
+- **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is
+  wanted: `uv run --directory python itrade ingest --universe etf_pullback_v1`, then
+  `dotnet run --project src/ITrade.Host -- import-prices`. The first run brings 12 October and EWC.
 
 ## Open questions for the owner
 

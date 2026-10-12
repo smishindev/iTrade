@@ -59,7 +59,47 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     failed = [r.ticker for r in results if not r.promoted]
     if failed:
         print(f"\nNot promoted (curated data unchanged): {', '.join(failed)}")
-    return 1 if failed else 0
+    # The platform values the portfolio from this table; keep it in step with the curated data.
+    exported = _export_closes()
+    return 1 if failed or exported else 0
+
+
+def _export_closes() -> int:
+    from itrade.data.closes import ClosesError, export_closes
+
+    try:
+        export = export_closes(Store())
+    except (ClosesError, FileNotFoundError) as exc:
+        print(f"\nClosing prices were NOT exported (the old table stays): {exc}")
+        return 1
+    print(
+        f"\nClosing prices as traded: {export.rows} rows, {len(export.tickers)} tickers, "
+        f"{export.sessions} sessions up to {export.last_session}\n"
+        f"  -> {export.path}\n  sha256 {export.sha256}"
+    )
+    about = export.tickers
+    dropped = sorted(t for t, a in about.items() if a["unfinished_dropped"])
+    if dropped:
+        print(
+            "  Fetched before the close, last bar left out (the next ingest brings it): "
+            + ", ".join(dropped)
+        )
+    behind = sorted(
+        f"{t} ({a['last']})" for t, a in about.items() if a["last"] < export.last_session
+    )
+    if behind:
+        print("  Behind the last session, last close in brackets: " + ", ".join(behind))
+    gaps = sorted(
+        f"{t} ({len(a['missing_sessions'])})" for t, a in about.items() if a["missing_sessions"]
+    )
+    if gaps:
+        print("  Sessions without a price, their number in brackets: " + ", ".join(gaps))
+    print("  Load them into the platform: dotnet run --project src/ITrade.Host -- import-prices")
+    return 0
+
+
+def cmd_export_closes(args: argparse.Namespace) -> int:
+    return _export_closes()
 
 
 def cmd_quality(args: argparse.Namespace) -> int:
@@ -439,6 +479,12 @@ def build_parser() -> argparse.ArgumentParser:
     dv.add_argument("--universe", default="etf_pullback_v1")
     dv.add_argument("--since", type=int, default=2005)
     dv.set_defaults(func=cmd_dividends)
+
+    ec = sub.add_parser(
+        "export-closes",
+        help="closing prices as traded, for the platform's valuation (ingest does it too)",
+    )
+    ec.set_defaults(func=cmd_export_closes)
 
     cal = sub.add_parser("calendar", help="export the exchange session calendar to Parquet")
     cal.add_argument("--calendar", default="XNYS")

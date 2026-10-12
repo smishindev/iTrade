@@ -14,13 +14,24 @@ source.fetch() -> <data>/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable,
 
 ## Commands
 - `uv run --directory python itrade ingest [TICKERS...] [-v]` — fetch, snapshot, validate, promote. Exit 1 if any ticker was not promoted.
+  Without `--universe` it is the nine research tickers from 2005. **The platform's instrument catalogue is
+  `--universe etf_pullback_v1`** (29 funds, full history): that is the ingest whose prices the platform needs. The two
+  share SPY, VT, IEF, TLT and GLD, and whichever ran last decides how far back their curated series reach.
 - `uv run --directory python itrade quality [TICKERS...] -v` — re-validate curated files.
+- `uv run --directory python itrade export-closes` — closing prices **as traded** for the platform's valuation
+  (`<data>/derived/closing-prices/`: prices, the exchange's sessions they cover, manifest with the SHA-256 of
+  both); `ingest` does it at its end. Only finished sessions are exported — a bar fetched before the close
+  (+30 minutes) is left out and comes with the next ingest. Then
+  `dotnet run --project src/ITrade.Host -- import-prices` loads them into the database.
 - `uv run --directory python itrade sql "<query>"` — DuckDB; view `bars(date, open, high, low, close, adj_close, volume, dividends, splits, ticker)`.
 - In Python: `Store().read_bars("SPY")`.
 
 ## Rules
 - Never edit or delete anything in `<data>` (hooks block it). Fix the code, re-ingest.
 - `close` from Yahoo is split-adjusted only; use `adj_close` for returns, `close` for share counts and order sizing.
+  It is adjusted **back in time**: valuing shares held on a past date needs the price as traded then —
+  `itrade.data.closes` undoes the adjustment (a whole cent, a fraction of a dollar before 2001, or 3–4 decimals;
+  anything else stops the export).
 - USD/ILS is `ILS=X` (ILS per 1 USD). Use its `close` only; its OHLC is noisy.
 - Each curated file must trace back to a raw snapshot via `manifest.json` (`raw_snapshot`, `raw_sha256`).
 

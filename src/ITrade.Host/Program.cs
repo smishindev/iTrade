@@ -3,6 +3,7 @@ using ITrade.Host.Auth;
 using ITrade.Host.Fx;
 using ITrade.Host.Jobs;
 using ITrade.Host.Portfolio;
+using ITrade.Host.Prices;
 
 if (args is [SetPasswordCommand.Name, .. var rest])
 {
@@ -33,6 +34,13 @@ if (args is [UpdateFxRatesCommand.Name, .. var fxArgs])
     var (accepted, hostArgs) = UpdateFxRatesCommand.Parse(fxArgs);
     await using var cli = ITradeHost.Build(hostArgs);
     return await UpdateFxRatesCommand.RunAsync(cli, accepted, Console.Out);
+}
+
+if (args is [ImportPricesCommand.Name, .. var priceArgs])
+{
+    var (file, acceptedCode, hostArgs) = ImportPricesCommand.Parse(priceArgs);
+    await using var cli = ITradeHost.Build(hostArgs);
+    return await ImportPricesCommand.RunAsync(cli, file, acceptedCode, Console.Out);
 }
 
 if (args is [RetryJobCommand.Name, ..])

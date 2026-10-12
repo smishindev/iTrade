@@ -16,6 +16,9 @@ public sealed class PostgresFixture : IAsyncLifetime
             .WithDatabase("itrade")
             .WithUsername("itrade")
             .WithPassword(Secret)
+            // Many tests take a database of their own, and each database keeps its pooled connections open for
+            // a while after the test: more than the server's default of 100 once there were about a hundred tests.
+            .WithCommand("-c", "max_connections=500")
             .Build();
     }
 

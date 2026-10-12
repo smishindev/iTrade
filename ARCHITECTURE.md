@@ -126,7 +126,7 @@ Every changing request needs the antiforgery header `X-XSRF-TOKEN`. Five failure
 
 **Commands** of the same executable (`dotnet run --project src/ITrade.Host -- <command>`):
 `check [--offline]`, `set-password`, `import-instruments <file>`, `update-fx-rates`,
-`retry-job <job> <date>`. A command builds the Host but does not start it.
+`import-prices [file]`, `retry-job <job> <date>`. A command builds the Host but does not start it.
 
 **Tests run the Host in-process as "Testing".** That hid two broken real launches in phase 2, so
 `check` exists, CI runs it, and anything that depends on the difference is run for real before it is
@@ -145,6 +145,9 @@ called done.
 | `holding_places` | where money is held | in use: IBKR only |
 | `transactions` | the accounting ledger | **append-only**; CHECKs and a trigger repeat the domain rules |
 | `fx_rates` | official exchange rates, with revisions | **append-only**; 5332 rates since 2005 |
+| `closing_prices` | closes as traded, with revisions | **append-only**; 185,273 prices of 29 funds since 1993; only for a day that is a session |
+| `market_sessions` | the days an exchange calendar was open | **append-only**; 8,482 sessions of XNYS since 1993, from the exports of prices |
+| `price_imports` | which export of prices was imported, and when | **append-only**; an export older than the latest is refused |
 
 Conventions: snake_case; money, quantities and prices `numeric(18,6)`, rates `numeric(12,6)`, never
 float; instants `timestamptz` (UTC), dates `date`; typed ids `uuid` (v7). One configuration point
@@ -155,7 +158,7 @@ the owner role. A ledger mistake is reversed by a new entry; a rate the bank cor
 revision; nothing is edited. Because a wrong row is permanent, the rules of the domain types are
 repeated as CHECK constraints and triggers, each tested with a planted violation.
 
-**Migrations** (`src/ITrade.Infrastructure/Persistence/Migrations`, eight so far) are applied by the
+**Migrations** (`src/ITrade.Infrastructure/Persistence/Migrations`, ten so far) are applied by the
 Host at start. One that is on `origin/main` is frozen — a schema change is a new migration, in its own
 commit. `dotnet ef database update|drop` is not used.
 
@@ -176,6 +179,12 @@ statement / manual entry ──► TransactionLedger.RecordAsync ──► trans
                                                                      │
 Bank of Israel ──► FxRates.UpdateAsync ──► fx_rates ──► FxRates.OnAsync(date) ──► AppliedFxRate
                                                          (carried forward? provisional?)
+
+curated bars ──► itrade export-closes ──► prices + sessions + manifest ──► import-prices
+(Python)         (split adjustment undone,     (SHA-256 of both tables)          │
+                  finished sessions only)                                        ▼
+                 ClosingPrices.OnAsync(instrument, date) ──► PriceOnDate   closing_prices,
+                 (of the session / carried / missing / unavailable)        market_sessions
 ```
 
 - **Ledger.** One entry is one signed effect on shares and/or cash at one holding place. A line of a
@@ -185,6 +194,13 @@ Bank of Israel ──► FxRates.UpdateAsync ──► fx_rates ──► FxRate
   assumption, a parameter, named in the result. What the ledger cannot mean is refused.
 - **Rates.** A stored rate is never overwritten. A change by the bank, or a new rate that moves
   more than 8% from the one before, waits for the owner's acceptance by code.
+- **Prices.** For valuation only. The vendor adjusts its closes back in time for splits; the books
+  hold the shares really held on a date, so the platform stores the price as traded that day — and
+  only of a session that was over when the data was fetched. Whether the exchange was open on a day
+  comes from the exchange calendar the export carries, not from the prices: a closed day carries the
+  last close, a session without a price is a gap that is said, never filled with an older price. Many
+  or large changes of stored prices, and a new close far from the one before it, wait for the
+  owner's acceptance by code.
 
 The rules in full are the `portfolio-accounting` skill. Tax figures (phase 4) follow `israeli-tax`:
 every number there is an unverified assumption until a specialist confirms it.
@@ -223,6 +239,9 @@ Interface texts are English; components come from MUI.
 with a manifest and SHA-256), `costs/` (the reference cost model, IBKR Tiered), `strategies/` and
 `backtest/` (the frozen archive of phase 1: three hypotheses, all rejected). **Python never trades**
 and holds no broker code. Curated prices are for valuation only — never for tax, never for an order.
+The platform reads them through one export: `data/closes.py` writes the closes as traded, the
+exchange's sessions they cover and a manifest that vouches for both tables, and the Host imports
+that. Nothing runs the pipeline by itself yet.
 
 ---
 

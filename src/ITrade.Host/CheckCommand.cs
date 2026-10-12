@@ -1,5 +1,6 @@
 using ITrade.Application.Fx;
 using ITrade.Application.Jobs;
+using ITrade.Application.Prices;
 using ITrade.Host.Auth;
 using ITrade.Host.Jobs;
 using ITrade.Infrastructure.Persistence;
@@ -11,7 +12,8 @@ namespace ITrade.Host;
 /// <summary>
 /// `ITrade.Host check [--offline]`: builds the Host exactly as a normal start does — same environment, settings
 /// and service checks — and says whether it can run: the interface is in place, the database answers, the
-/// owner's password is set, no daily job is stuck and the exchange rates are fresh. It changes nothing (no migration is applied) and does not listen on any port.
+/// owner's password is set, no daily job is stuck, and how fresh the exchange rates and the closing prices
+/// are. It changes nothing (no migration is applied) and does not listen on any port.
 /// `--offline` skips the database, so the check can run where there is none (the CI script).
 /// </summary>
 internal static class CheckCommand
@@ -126,7 +128,10 @@ internal static class CheckCommand
         }
     }
 
-    /// <summary>What the daily jobs left behind: a date that is stuck, and how fresh the exchange rates are.</summary>
+    /// <summary>
+    /// What the daily jobs left behind: a date that is stuck, how fresh the exchange rates are — and how fresh
+    /// the closing prices, which no job brings.
+    /// </summary>
     private static async Task CheckDailyWorkAsync(
         IServiceProvider services, Action<string, string> line, Action<string, string> problem)
     {
@@ -195,6 +200,38 @@ internal static class CheckCommand
             {
                 line("exchange rates", age > 4 ? $"{text} - older than a long weekend; is the daily job running?" : text);
             }
+        }
+
+        // Closing prices come from the data pipeline, which nothing runs by itself: their age is shown, never
+        // a reason to refuse a start - without a fresh price a valuation says "unavailable", it does not guess.
+        var prices = services.GetRequiredService<IClosingPriceStore>();
+        var marketToday = ITrade.Domain.TradeDate.Of(now).Value;
+        var lastSession = await prices.LatestSessionOnOrBeforeAsync(ClosingPrices.Calendar, marketToday, CancellationToken.None);
+        var lastCloses = await prices.LatestPerInstrumentAsync(CancellationToken.None);
+        // The funds of the catalogue are the pipeline's universe etf_pullback_v1; its plain ingest fetches other ones.
+        const string refresh = $"uv run --directory python itrade ingest --universe etf_pullback_v1, then dotnet run --project src/ITrade.Host -- {Prices.ImportPricesCommand.Name}";
+        if (lastSession is null)
+        {
+            line("closing prices", lastCloses.Count == 0
+                ? $"none stored yet - {refresh}"
+                : $"stored without the sessions of the exchange, so only a session's own close can be used - {refresh}");
+            return;
+        }
+
+        var daysOld = Period.DaysBetween(lastSession.Value, marketToday);
+        line("closing prices", daysOld > ClosingPrices.MostDaysCarriedUnconfirmed
+            ? $"up to session {lastSession.Value:R}, {daysOld} day(s) old - too old to value today with: {refresh}"
+            : $"up to session {lastSession.Value:R}, {daysOld} day(s) old");
+        // An instrument whose last close is of an earlier session has no price from then on: said here, so it
+        // is not first met as a hole in a valuation.
+        var behind = (await services.GetRequiredService<ITrade.Application.Portfolio.IInstrumentStore>().ListAsync(CancellationToken.None))
+            .Where(i => lastCloses.TryGetValue(i.Id, out var last) && last < lastSession.Value)
+            .Select(i => $"{i.Ticker} ({lastCloses[i.Id]:R})")
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        if (behind.Count > 0)
+        {
+            line("closing prices", $"behind, last close in brackets: {string.Join(", ", behind)} - no price to value them with after that");
         }
     }
 }

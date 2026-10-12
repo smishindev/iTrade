@@ -1,0 +1,68 @@
+{
+  "calendar": "XNYS",
+  "exported_at": "2026-01-07T06:00:00+00:00",
+  "file": "closing-prices.csv",
+  "first_session": "2025-12-29",
+  "last_session": "2026-01-06",
+  "price": "close as traded on the session (the vendor's split adjustment undone): a whole cent, a fraction of a dollar as quoted before 2001, or 3-4 decimals",
+  "rows": 8,
+  "sessions": 6,
+  "sessions_file": "closing-prices-sessions.csv",
+  "sessions_sha256": "82d509a5ad67cbeedf579f09984a6ea3712c651f1d12f50bcd443bed12ea2be8",
+  "sha256": "ee293aea5c6da4eb77b619a06ce07563f355f5878a2960a7f3e1d7f299becc30",
+  "source": "yfinance",
+  "tickers": {
+    "QQQ": {
+      "currency": null,
+      "fetched_at": "2026-01-07T03:00:00+00:00",
+      "finished_through": "2026-01-06",
+      "first": "2025-12-29",
+      "last": "2025-12-30",
+      "missing_sessions": [],
+      "raw_sha256": "816224612d82efff2e6fb4259c8a19c287dbc8848f1e564301a95799b9d4da8b",
+      "rows": 2,
+      "splits": {},
+      "unfinished_dropped": 0
+    },
+    "VT": {
+      "currency": "USD",
+      "fetched_at": "2026-01-07T03:00:00+00:00",
+      "finished_through": "2026-01-06",
+      "first": "2026-01-05",
+      "last": "2026-01-06",
+      "missing_sessions": [],
+      "raw_sha256": "cbac7f60a98a06c8a64c92be9816e8188fc9301d7e9371facde65f0cb8cff4af",
+      "rows": 2,
+      "splits": {},
+      "unfinished_dropped": 0
+    },
+    "XLC": {
+      "currency": "USD",
+      "fetched_at": "2026-01-07T03:00:00+00:00",
+      "finished_through": "2026-01-06",
+      "first": "2025-12-30",
+      "last": "2026-01-02",
+      "missing_sessions": [
+        "2025-12-31"
+      ],
+      "raw_sha256": "bfcea0cc99d8bab8dad51b763741f1adb3dfad1146d3bf454dcd7b857fd1f703",
+      "rows": 2,
+      "splits": {},
+      "unfinished_dropped": 0
+    },
+    "XLK": {
+      "currency": "USD",
+      "fetched_at": "2026-01-07T03:00:00+00:00",
+      "finished_through": "2026-01-06",
+      "first": "2026-01-05",
+      "last": "2026-01-06",
+      "missing_sessions": [],
+      "raw_sha256": "92090788b6b62ee8e5bf93c840c1ac7377ac6ab710c92565088954797ac5672a",
+      "rows": 2,
+      "splits": {
+        "2026-01-06": 2.0
+      },
+      "unfinished_dropped": 0
+    }
+  }
+}

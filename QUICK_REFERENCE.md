@@ -30,6 +30,7 @@ dotnet run --project src/ITrade.Host -- check                # can it start? cha
 dotnet run --project src/ITrade.Host -- set-password
 dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv
 dotnet run --project src/ITrade.Host -- update-fx-rates
+dotnet run --project src/ITrade.Host -- import-prices        # after: uv run --directory python itrade ingest --universe etf_pullback_v1
 dotnet run --project src/ITrade.Host -- retry-job fx-rates 2026-10-12
 
 # interface (in web/, Node 24)
@@ -43,7 +44,7 @@ npm run e2e        # Playwright against a real Host with a throw-away database
 uv sync
 uv run pytest
 uv run ruff check src tests tools
-uv run itrade ingest | quality | costs | sql
+uv run itrade ingest | quality | export-closes | costs | sql
 
 # database
 docker compose -f deploy/docker-compose.yml up -d
@@ -64,7 +65,7 @@ dotnet run --project src/ITrade.Host -- check
 
 It builds the Host exactly as a real start does and prints one line per thing: environment, mode,
 address, data folder, interface, database and pending migrations, owner password, daily jobs that
-are stuck, how old the exchange rates are. `OK` or `PROBLEMS: n` at the end; a line starting with
+are stuck, how old the exchange rates and the closing prices are. `OK` or `PROBLEMS: n` at the end; a line starting with
 `!` is a problem and says what to run.
 
 With the Host running: `curl.exe -k https://127.0.0.1:7120/health` → status, mode, database check.
@@ -76,6 +77,8 @@ Read only. Changes go through the Host; a hook blocks writing SQL from the shell
 ```powershell
 docker exec itrade-postgres psql -U itrade -d itrade -c "select name, trade_date, status, attempts, left(error, 120) from job_runs order by trade_date desc limit 10"
 docker exec itrade-postgres psql -U itrade -d itrade -c "select count(*), max(rate_date) from fx_rates"
+docker exec itrade-postgres psql -U itrade -d itrade -c "select count(*), count(distinct instrument_id), max(session) from closing_prices"
+docker exec itrade-postgres psql -U itrade -d itrade -c "select calendar, count(*), min(session), max(session) from market_sessions group by 1"
 docker exec itrade-postgres psql -U itrade -d itrade -c "select occurred_at, actor, kind from audit_events order by occurred_at desc limit 10"
 docker exec itrade-postgres psql -U itrade -d itrade -c 'select migration_id from \"__EFMigrationsHistory\" order by 1'
 ```
@@ -164,6 +167,16 @@ reported and left alone; a ticker change is a rename with its date.
 | Entries of one day come back in a different order | Ids made in one millisecond are not ordered; the ledger's order is `sequence` |
 | `db.Database.GetConnectionString()` has no password | Npgsql drops it after opening. Pass the connection string explicitly |
 | `ON DELETE RESTRICT` gives 23001, not 23503 | PostgreSQL's own code for a restrict violation |
+| A fund's price before a split looks halved in the vendor's data | The vendor adjusts `close` back in time. The platform uses the price as traded (`itrade export-closes`); never value past holdings with the curated `close` |
+| `import-prices` asks for an acceptance code | More than 20 stored prices changed, one changed by more than 2%, or a new close is more than 30% from the one before. An export gone wrong more often than a real price. Find out why before the owner accepts the code it prints |
+| `import-prices` refuses: the export was written before the one imported last | An older export would put corrected prices back. `itrade export-closes` again, then import |
+| `import-prices` refuses: fetched before that session ended | The data was fetched during New York trading hours (the evening in Israel) by something other than the current exporter, or on a half day before 16:00 New York. `itrade ingest` again after the close |
+| A fund's last bar is not in the export | It was fetched while the session was open; that bar is not a close. The next ingest after the close (23:30 in Israel) brings it |
+| A fund is "behind" right after an ingest during the session | Its half-formed bar failed the quality check (seen 12 October 2026: EWC, high/low did not bound the close), so nothing of that fetch was taken. Ingest again after the close |
+| `import-prices` says the export left out thousands of stored prices | The plain `itrade ingest` was run: it fetches the nine research tickers from 2005 and shortens the history of the ones the catalogue shares (SPY, IEF, TLT, GLD, VT). Nothing is lost - stored prices stay. The catalogue's funds are `--universe etf_pullback_v1` |
+| A price is "missing" for a day although the fund trades | The vendor has no bar for that session (the export's manifest lists them under `missing_sessions`), or the fund is behind - `check` names it |
+| `Cannot read the closing prices: ... not the one its manifest vouches for` | A table (prices or sessions) was changed after it was exported, or the export was caught half-written. `itrade export-closes` again |
+| The integration tests fail with `53300: too many clients` | Every test database keeps pooled connections for a while. The test server runs with `max_connections=500` (`PostgresFixture`) |
 | A rate or an amount prints as `3.055000` | That is the column's scale. Format with `0.######` where it is shown |
 | The job "succeeds" but the rate of today is missing | The bank publishes in the afternoon, Israel time. The figure is marked provisional until it arrives |
 | `update-fx-rates` says the bank now states another rate | Nothing was stored. After checking the bank's page, run the line it prints (`--accept-changes <code> "<why>"`) — the owner's step |

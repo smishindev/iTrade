@@ -45,7 +45,9 @@ statistics. **Python never trades.**
   (repeatable); the catalogue itself is generated: `uv run python tools/make_instrument_catalogue.py` in `python/`.
   `dotnet run --project src/ITrade.Host -- update-fx-rates` brings the Bank of Israel USD/ILS rates up to today (what the
   daily job `fx-rates` does; needs the internet; `--accept-changes <code> "<why>"` is the owner's step when the bank
-  changed a stored rate — never run it for the owner) · `-- retry-job <job> <yyyy-MM-dd>` releases a daily job that `check`
+  changed a stored rate — never run it for the owner) · `-- import-prices` loads the closing prices the Python
+  pipeline exported (`itrade ingest --universe etf_pullback_v1` — the catalogue's funds — or `itrade export-closes`;
+  `--accept-changes <code>` again is the owner's) · `-- retry-job <job> <yyyy-MM-dd>` releases a daily job that `check`
   shows as blocked.
 - Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·
   `.\deploy\restore.ps1 -File <dump> -Verify` (restores into a temporary database and removes it). Restore never
@@ -66,6 +68,10 @@ statistics. **Python never trades.**
 - Exchange rates (`fx_rates`) are append-only too and come only through `FxRates`: a rate the bank changed waits
   for the owner's explicit acceptance and is then a new revision. A converted amount keeps its `AppliedFxRate`
   (carried forward? provisional?).
+- Closing prices (`closing_prices`, append-only) are for valuation only and come only through `ClosingPrices`:
+  the price as traded, never the vendor's split-adjusted close, and only of a finished session. Whether the
+  exchange was open on a day is read from `market_sessions` (the exchange calendar), not guessed from the prices.
+  A value keeps its `PriceOnDate`; a missing or unavailable price is shown as such, never replaced by an older one.
 - Tax and accounting rules do not wait for the accountant (owner, 2026-10-12): choose, record as an assumption with
   source and date, label the result unverified.
 - Money is `decimal`/`numeric`, never floating point, in C# and SQL. Times in UTC; schedules in America/New_York.

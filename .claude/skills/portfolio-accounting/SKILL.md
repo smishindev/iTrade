@@ -9,13 +9,14 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03, P3.3.01)
+## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
 | Where it is held | `HoldingPlace` (broker, study fund, other; read automatically or by hand). In use: IBKR only — the owner decided on 2026-10-12 not to keep keren hishtalmut in the platform; the `StudyFund` kind stays in the code unused | `holding_places` |
 | What happened | `Transaction`; `TransactionLedger` (`RecordAsync`, `ReverseAsync`) | `transactions` |
 | Exchange rates | `FxRate`, `AppliedFxRate`; `FxRates` (`UpdateAsync`, `OnAsync`), job `fx-rates`; source `BankOfIsraelRates` | `fx_rates` |
+| Closing prices | `ClosingPrice`, `PriceOnDate`; `ClosingPrices` (`ImportAsync`, `OnAsync`); file `ClosingPricesFile` | `closing_prices`, `market_sessions`, `price_imports` |
 | What is held | `PortfolioBooks.From(ledger, asOf)` → `Position`, `Lot`, `Disposal`, `CashBalance`; `PortfolioBooksReader` | none — computed from the ledger every time |
 
 ## The ledger
@@ -144,8 +145,54 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 - **Currencies do not add up.** Cash is kept per currency; a value in shekels exists only through an
   `FxRate`. A day without a rate or without a price is **flagged**, never filled silently.
 
-## Rules for what comes next (prices, valuation, reconciliation)
-- **Prices from the free data pipeline are for valuation only** — never for tax, never for an order.
+## Closing prices (`ClosingPrices`, P3.3.02)
+- **For valuation only** — never for tax, never for an order. They come from the free data pipeline.
+- **The price as traded, not the vendor's adjusted close.** The vendor rewrites history after every split
+  (a 2:1 split halves all earlier closes); the ledger holds the shares really held on a date, so the price
+  must be the one really paid that day. The pipeline undoes the adjustment (`itrade export-closes`, also at
+  the end of every ingest; the catalogue's funds are `itrade ingest --universe etf_pullback_v1`). On the split day the price is already the new one — and the books apply the
+  split before the trades of that day, so shares and price agree.
+- **Only the close of a finished session.** A bar fetched while its session was open is the last trade so
+  far: the exporter leaves it out (session over = the exchange's close + 30 minutes, from the exchange
+  calendar), and the import refuses a close whose data was fetched before 16:00 New York time of its day.
+  The owner's evening is the middle of the New York session — this is the usual case, not a rare one.
+- **Sessions come from the exchange calendar, not from the prices.** The export carries every session of
+  XNYS from the first bar to the last finished session (`closing-prices-sessions.csv`); the platform keeps
+  them in `market_sessions`. That is what tells a closed exchange (carry Friday's close over the weekend)
+  from a gap in the data (say "missing") — also when the vendor gave *nobody* a price for a session.
+- **The export** is three files in `<data>/derived/closing-prices/`: the prices, the sessions, and a
+  manifest with the SHA-256 of both, the fetch time, currency and split days of each ticker. A value that
+  is not a quoted price (cents, a fraction of a dollar before 2001, 3–4 decimals) stops the export.
+- **`import-prices`** takes the tables only if they are exactly the ones the manifest vouches for, matches
+  tickers to the catalogue (others are skipped and named) and stores what is new. `closing_prices` is
+  append-only: a close the vendor corrected is the next revision. It is refused whole when the export is
+  older than the one imported last (it would undo corrections), when a close is of a day that is no
+  session, when the sessions contradict the stored ones, or when the export states another currency than
+  the instrument's. (The export takes its currency from the catalogue file, not from the vendor: this
+  catches a catalogue that disagrees with the database, not a vendor quoting in pence. Every fund is in
+  dollars today; the first one that is not needs the quote currency from the vendor.)
+- **What only the owner can accept** (by the code printed with the finding; never accept for the owner):
+  more than 20 revised prices; any stored price restated by more than 2%; a new close more than 30% away
+  from the close before it on a day the export names no split for (the largest real one-day move in the
+  stored history, split days aside, is 25.6%). Up to 20 revisions within 2% are recorded unasked and listed.
+- **`ClosingPrices.OnAsync(instrument, date)` is the one way to get a price**, and its `PriceOnDate` says
+  what it is: the session's own close; the last session's close **carried** over a day the calendar says
+  the exchange was closed; **missing** when the session the date goes by has no close for this instrument
+  — a gap is said, never filled with an older price; or **unavailable** (after today in New York, before
+  the instrument's first price, or more than 4 days past the last stored session). Past the last stored
+  session a carried close is **provisional**: the exchange may have been open since.
+- **Who is behind is said.** The import and `check` name the instruments whose last close is older than
+  the latest session — from then on they have no price.
+- **A value needs a price that exists.** A position whose price is missing or unavailable is shown as
+  not valued; it is not valued at an old price and not left out of a total without saying so.
+- **Known limits:** a session cannot be withdrawn - if the calendar library calls a day of an
+  unscheduled closure a session, every fund reads "missing" for it, and after the library is corrected the
+  imports are refused until a migration deals with it; an export made from an older data folder carries a
+  fresh date and passes the "not older" check (it can put back up to 20 corrections of at most 2%).
+- **Not yet handled, for the valuation (P3.4.01):** a carried close must not be used across a split (the
+  shares changed, the price did not); a dividend's ex-date dip is a real price move, not an error.
+
+## Rules for what comes next (valuation, reconciliation)
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
 - **Returns**: a contribution is not a gain. Time-weighted and money-weighted returns state their
   period, their cash flows and what they include (fees, withheld tax).
