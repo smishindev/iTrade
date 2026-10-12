@@ -1,5 +1,6 @@
 using CsCheck;
 using ITrade.Domain;
+using NodaTime;
 
 namespace ITrade.UnitTests.Domain;
 
@@ -92,12 +93,12 @@ public sealed class MoneyTests
     [Fact]
     public void FxConversionIsExplicitAndRoundTripsToTheMinorUnit()
     {
-        var rate = new FxRate(Currency.Usd, Currency.Ils, 3.05m, new DateOnly(2026, 10, 6), "Bank of Israel");
+        var rate = new FxRate(Currency.Usd, Currency.Ils, 3.05m, new LocalDate(2026, 10, 6), "Bank of Israel");
         Assert.Equal(Money.Ils(10_004m), rate.Convert(Money.Usd(3280m)));
         Assert.Throws<ArgumentException>(() => new FxRate(Currency.Usd, Currency.Usd, 1m, default, "x"));
         Gen.Select(Cash, Rate).Sample((usd, r) =>
         {
-            var fx = new FxRate(Currency.Usd, Currency.Ils, r, new DateOnly(2026, 1, 1), "test");
+            var fx = new FxRate(Currency.Usd, Currency.Ils, r, new LocalDate(2026, 1, 1), "test");
             var back = fx.Convert(fx.Convert(Money.Usd(usd)).RoundToMinor(MidpointRounding.AwayFromZero));
             return Math.Abs(back.Amount - usd) <= Currency.Usd.MinorUnit && back.Currency == Currency.Usd;
         });

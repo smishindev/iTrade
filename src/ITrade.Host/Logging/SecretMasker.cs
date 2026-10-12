@@ -5,7 +5,8 @@ namespace ITrade.Host.Logging;
 
 /// <summary>
 /// Removes secrets from text before it is written to a log. Two layers: the known secret values themselves
-/// (connection-string passwords), wherever they appear, and anything that looks like `password=…` / `"token":"…"`.
+/// (every configured password, token, secret or key), wherever they appear, and anything that looks like
+/// `password=…`, `access_token: …` or `"antiforgeryToken":"…"`.
 /// </summary>
 public sealed partial class SecretMasker
 {
@@ -27,11 +28,19 @@ public sealed partial class SecretMasker
             .ToArray();
     }
 
-    /// <summary>A masker that knows the passwords of every configured connection string.</summary>
+    /// <summary>
+    /// A masker that knows every secret of the configuration: the passwords inside connection strings and the
+    /// value of any setting whose name says it is one (`Flex:Token`, `Broker:ApiKey`, …), wherever it comes from.
+    /// </summary>
     public static SecretMasker For(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        return new SecretMasker(configuration.GetSection("ConnectionStrings").GetChildren().Select(c => Password(c.Value)));
+        var connectionStrings = configuration.GetSection("ConnectionStrings").GetChildren()
+            .Select(c => Password(c.Value));
+        var named = configuration.AsEnumerable()
+            .Where(setting => SecretName().IsMatch(setting.Key[(setting.Key.LastIndexOf(':') + 1)..]))
+            .Select(setting => setting.Value);
+        return new SecretMasker(connectionStrings.Concat(named));
     }
 
     public string Apply(string text)
@@ -56,9 +65,15 @@ public sealed partial class SecretMasker
         try
         {
             var parts = new DbConnectionStringBuilder { ConnectionString = connectionString };
-            return parts.TryGetValue("Password", out var password) || parts.TryGetValue("Pwd", out password)
-                ? password as string
-                : null;
+            foreach (var name in PasswordKeys)
+            {
+                if (parts.TryGetValue(name, out var password))
+                {
+                    return password as string;
+                }
+            }
+
+            return null;
         }
         catch (ArgumentException)
         {
@@ -66,12 +81,20 @@ public sealed partial class SecretMasker
         }
     }
 
+    /// <summary>The names a connection string may give its password (Npgsql accepts all three).</summary>
+    private static string[] PasswordKeys { get; } = ["Password", "Pwd", "Psw"];
+
     /// <summary>The value as it appears inside a JSON string of the log file.</summary>
     private static string JsonEscaped(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
 
+    // The secret word may be the end of a longer name (access_token, POSTGRES_PASSWORD, antiforgeryToken) and
+    // may be followed by more of it (passwordHash); then a separator, with or without (escaped) JSON quotes.
     [GeneratedRegex(
-        """(?i)\b(password|passwd|pwd|secret|token|api[_-]?key)(\\?"?\s*[=:]\s*\\?"?)[^\s;,"'\\]+""",
+        """(?i)((?:password|passwd|pwd|psw|secret|token|api[_-]?key)\w*)(\\?"?\s*[=:]\s*\\?"?)[^\s;,"'\\]+""",
         RegexOptions.CultureInvariant)]
     private static partial Regex KeyValue();
+
+    [GeneratedRegex("(?i)(password|passwd|pwd|psw|secret|token|api[_-]?key)$", RegexOptions.CultureInvariant)]
+    private static partial Regex SecretName();
 }

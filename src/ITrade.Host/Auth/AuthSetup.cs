@@ -16,7 +16,9 @@ internal static class AuthSetup
 {
     public const string AntiforgeryHeader = "X-XSRF-TOKEN";
 
-    private const string StampClaim = "itrade:stamp";
+    public const string StampClaim = "itrade:stamp";
+
+    public static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
 
     public static void AddOwnerAuth(this IServiceCollection services)
     {
@@ -27,8 +29,10 @@ internal static class AuthSetup
             cookie.Cookie.HttpOnly = true;
             cookie.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             cookie.Cookie.SameSite = SameSiteMode.Strict;
-            cookie.ExpireTimeSpan = TimeSpan.FromHours(12);
-            cookie.SlidingExpiration = true;
+            // Twelve hours from sign-in and not a minute more. No sliding renewal: an open tab polls the server,
+            // which would otherwise keep a session alive for ever.
+            cookie.ExpireTimeSpan = SessionLifetime;
+            cookie.SlidingExpiration = false;
             // An API answers with a status, not with a redirect to a login page.
             cookie.Events.OnRedirectToLogin = context => Status(context.Response, StatusCodes.Status401Unauthorized);
             cookie.Events.OnRedirectToAccessDenied = context => Status(context.Response, StatusCodes.Status403Forbidden);
@@ -118,8 +122,9 @@ internal static class AuthSetup
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
-        auth.MapPost("/logout", async (HttpContext context) =>
+        auth.MapPost("/logout", async (HttpContext context, OwnerAccounts accounts, CancellationToken ct) =>
         {
+            await accounts.EndAllSessionsAsync(ct);
             await context.SignOutAsync();
             return Results.NoContent();
         })

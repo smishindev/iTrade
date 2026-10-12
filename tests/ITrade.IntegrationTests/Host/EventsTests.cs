@@ -84,6 +84,31 @@ public sealed class EventsTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task OpenConnectionIsClosedWhenTheSessionEnds()
+    {
+        await using var host = await StartAsync();
+        var token = await SignInAsync(host);
+        await using var connection = Connect(host, host.Client, token);
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Closed += _ =>
+        {
+            closed.TrySetResult();
+            return Task.CompletedTask;
+        };
+        var firstBeat = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.On<JsonElement>(EventsHub.Heartbeat, _ => firstBeat.TrySetResult());
+        await connection.StartAsync();
+        await firstBeat.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        // The owner signs out in the browser: the connection opened under that session must not live on.
+        using var logout = await RunningHost.PostAsync(host.Client, "/api/auth/logout", null, token);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        await closed.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        Assert.Equal(HubConnectionState.Disconnected, connection.State);
+    }
+
+    [Fact]
     public async Task PageOfAnotherOriginIsRefusedEvenWithTheOwnersCookie()
     {
         await using var host = await StartAsync();

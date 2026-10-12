@@ -59,7 +59,8 @@ public sealed partial class ArchitectureRules
     [Fact]
     public void DomainHasNoClockNetworkDatabaseOrFiles()
     {
-        // Domain is pure: time comes in as a parameter (IClock lives in Application).
+        // Domain is pure: time comes in as a parameter (the clock is NodaTime.IClock, injected outside Domain),
+        // and dates are NodaTime types - System.DateOnly / TimeOnly carry no calendar or zone discipline.
         var clock = TypesIn(DomainNamespace())
             .SelectMany(t => t.Dependencies.OfType<MethodCallDependency>()
                 .Select(d => (Source: t.FullName, Member: d.TargetMember.FullName)))
@@ -67,7 +68,7 @@ public sealed partial class ArchitectureRules
             .Select(d => $"{d.Source} calls {d.Member}")
             .ToList();
         var io = Violations(TypesIn(DomainNamespace()), new Regex(
-            @"^(System\.Net\.Http\.|System\.IO\.(File|Directory|FileInfo|DirectoryInfo|Stream)\b|Microsoft\.EntityFrameworkCore\.|NodaTime\.SystemClock$)"));
+            @"^(System\.Net\.Http\.|System\.IO\.(File|Directory|FileInfo|DirectoryInfo|Stream)\b|Microsoft\.EntityFrameworkCore\.|NodaTime\.SystemClock$|System\.(DateOnly|TimeOnly)$)"));
         var bad = clock.Concat(io).ToList();
         Assert.True(bad.Count == 0, string.Join(Environment.NewLine, bad));
     }

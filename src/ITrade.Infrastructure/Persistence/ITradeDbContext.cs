@@ -8,8 +8,9 @@ namespace ITrade.Infrastructure.Persistence;
 
 /// <summary>
 /// The platform database (PLAN v4 §4). Conventions: snake_case names; money and quantities are numeric
-/// (never float): prices and quantities numeric(18,6), amounts numeric(18,4), FX rates numeric(12,6);
-/// instants are NodaTime <see cref="Instant"/> → timestamptz (UTC); typed ids → uuid.
+/// (never float) — every decimal is numeric(18,6) unless its column says otherwise (the tables of phase 3
+/// set amounts to numeric(18,4) and FX rates to numeric(12,6) where they are declared);
+/// instants are NodaTime <see cref="Instant"/> → timestamptz (UTC); trade dates → date; typed ids → uuid.
 /// </summary>
 public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) : DbContext(options)
 {

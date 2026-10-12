@@ -1,12 +1,16 @@
+using NodaTime;
+
 namespace ITrade.Domain;
 
 /// <summary>
 /// "1 <see cref="From"/> = <see cref="Rate"/> <see cref="To"/>" on a date, from a named source (e.g. the Bank of
-/// Israel representative rate, PLAN §6). Conversion is always explicit and exact; round afterwards if needed.
+/// Israel representative rate, PLAN §6). Conversion is always explicit. In the direction of the quote
+/// (<see cref="From"/> → <see cref="To"/>) it is a multiplication and exact; the other way divides, so the
+/// result carries as many digits as a decimal holds — round it where the amount is shown or booked.
 /// </summary>
 public sealed record FxRate
 {
-    public FxRate(Currency from, Currency to, decimal rate, DateOnly date, string source)
+    public FxRate(Currency from, Currency to, decimal rate, LocalDate date, string source)
     {
         if (from == to)
         {
@@ -32,7 +36,8 @@ public sealed record FxRate
 
     public decimal Rate { get; }
 
-    public DateOnly Date { get; }
+    /// <summary>The calendar date the source published the rate for (a date of the source's country, not UTC).</summary>
+    public LocalDate Date { get; }
 
     public string Source { get; }
 

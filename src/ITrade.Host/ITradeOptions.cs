@@ -26,7 +26,8 @@ public sealed class ITradeOptions
     /// <summary>How often the daily jobs are checked for sessions that became due.</summary>
     public int JobsTickSeconds { get; init; } = 60;
 
-    public string LogDir => Path.Combine(DataDir, "logs");
+    /// <summary>The log folder, with the separators of this system whatever the setting used.</summary>
+    public string LogDir => Path.GetFullPath(Path.Combine(DataDir, "logs"));
 
     /// <summary>The mode named in configuration; PAPER when absent. Anything but PAPER is refused for now.</summary>
     public static TradingMode ParseMode(string? value)

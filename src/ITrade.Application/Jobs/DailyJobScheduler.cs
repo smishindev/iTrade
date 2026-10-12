@@ -35,7 +35,7 @@ public sealed class DailyJobScheduler(IServiceScopeFactory scopes, IExchangeCale
 
     public const int MaxAttempts = 5;
 
-    private const int MaxFailureLength = 2000;
+    private const int MaxFailureLength = 4000;
 
     /// <summary>How far back to look for the latest session (longer than any exchange closure).</summary>
     private const int LookBackDays = 14;
@@ -142,10 +142,13 @@ public sealed class DailyJobScheduler(IServiceScopeFactory scopes, IExchangeCale
             await job.RunAsync(day, cancellationToken);
         }
 #pragma warning disable CA1031 // any failure of a job is recorded with the run; the scheduler carries on
-        catch (Exception e) when (e is not OperationCanceledException)
+        // Only a stop of the application is a cancellation. A timeout inside the job (an HTTP call that gives
+        // up throws TaskCanceledException too) is a failure like any other and must be recorded.
+        catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
 #pragma warning restore CA1031
         {
-            failure = $"{e.GetType().Name}: {e.Message}";
+            // Type, message, inner exceptions and stack: "see the inner exception" alone explains nothing later.
+            failure = e.ToString();
             failure = failure.Length <= MaxFailureLength ? failure : failure[..MaxFailureLength];
         }
 

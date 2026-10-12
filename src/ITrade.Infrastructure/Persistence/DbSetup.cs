@@ -23,7 +23,9 @@ public static class DbSetup
     }
 
     public static IServiceCollection AddITradeDatabase(this IServiceCollection services, string connectionString) =>
-        services.AddDbContext<ITradeDbContext>(options => Configure(options, connectionString));
+        services
+            .AddDbContext<ITradeDbContext>(options => Configure(options, connectionString))
+            .AddSingleton(_ => new InstanceLock(connectionString));
 }
 
 /// <summary>

@@ -2,6 +2,10 @@
 
   <PropertyGroup>
     <UserSecretsId>9e176ec1-7c00-479f-8f14-66356838e083</UserSecretsId>
+    <!-- The interface is plain files copied to wwwroot (below). The SDK's "static web assets" would add a manifest
+         that, in the Development environment only, makes the Host look for src/ITrade.Host/wwwroot and crash at
+         start when it is absent (found 2026-10-12: `dotnet run` failed while every test, run as "Testing", passed). -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
   <ItemGroup>

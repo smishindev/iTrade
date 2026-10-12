@@ -52,6 +52,29 @@ internal sealed class OwnerAccounts(ITradeDbContext db, IClock clock)
     }
 
     /// <summary>
+    /// Signing out ends every session of the owner, not only this browser's: a cookie copied elsewhere dies
+    /// with it, and so do open event connections.
+    /// </summary>
+    public async Task EndAllSessionsAsync(CancellationToken cancellationToken)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var rows = await db.Settings
+            .FromSql($"SELECT * FROM settings WHERE key = {Key} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        if (rows.SingleOrDefault() is not { } row)
+        {
+            return;
+        }
+
+        var now = clock.GetCurrentInstant();
+        row.Value = Format(Parse(row.Value) with { Stamp = Guid.NewGuid() });
+        row.UpdatedAt = now;
+        Audit(now, Owner, "auth.logout");
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Checks a password. The account row is locked for the check, so parallel attempts cannot slip past
     /// the failed-attempt limit; a locked account is refused without looking at the password.
     /// </summary>

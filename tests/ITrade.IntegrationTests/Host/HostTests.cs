@@ -123,6 +123,116 @@ public sealed class HostTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task FirstStartOnAnEmptyDatabaseLogsNoErrors()
+    {
+        var host = await RunningHost.StartAsync(await pg.NewEmptyDatabaseAsync());
+        try
+        {
+            using var response = await host.Client.GetAsync(new Uri("/health", UriKind.Relative));
+
+            var lines = await host.StopAndReadLogAsync();
+
+            Assert.Contains(lines, l => l.Contains("iTrade started", StringComparison.Ordinal));
+            var errors = lines.Where(l => l.Contains("\"@l\":\"Error\"", StringComparison.Ordinal)).ToList();
+            Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        }
+        finally
+        {
+            await host.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SecondHostOnTheSameDatabaseRefusesToStart()
+    {
+        var database = await pg.NewEmptyDatabaseAsync();
+        var first = await RunningHost.StartAsync(database);
+        try
+        {
+            await using var second = ITradeHost.Build(RunningHost.Args(database, RunningHost.NewDataDir()));
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => ITradeHost.StartAsync(second));
+
+            Assert.Contains("already running", refused.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await first.DisposeAsync();
+        }
+
+        // Once the first has stopped, the database is free again.
+        await using var next = await RunningHost.StartAsync(database);
+        using var health = await next.Client.GetAsync(new Uri("/health", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    /// <summary>
+    /// The owner starts the Host in the Development environment (`dotnet run`), where the framework checks the
+    /// service registrations at build time; every other test runs as "Testing". Nothing is started here and
+    /// no database is contacted.
+    /// </summary>
+    [Fact]
+    public async Task BuildsUnderTheDevelopmentEnvironmentWithItsStricterServiceChecks()
+    {
+        var dataDir = RunningHost.NewDataDir();
+        var args = RunningHost.Args(pg.ConnectionString, dataDir, "--environment=Development");
+
+        await using (var app = ITradeHost.Build(args))
+        {
+            Assert.Equal("Development", app.Environment.EnvironmentName);
+            await using var scope = app.Services.CreateAsyncScope();
+            Assert.NotNull(scope.ServiceProvider.GetRequiredService<ITrade.Application.Jobs.IJobRunStore>());
+        }
+
+        Directory.Delete(dataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task CheckCommandReportsWhatIsMissingWithoutChangingAnything()
+    {
+        var database = await pg.NewEmptyDatabaseAsync();
+        var webRoot = Directory.CreateTempSubdirectory("itrade-web-").FullName;
+        var dataDir = RunningHost.NewDataDir();
+        string[] args = [.. RunningHost.Args(database, dataDir), $"--webroot={webRoot}"];
+
+        // No interface and an empty database: one problem, and the empty database is only described.
+        using var before = new StringWriter();
+        Assert.Equal(1, await CheckCommand.RunAsync(args, before));
+        Assert.Contains("! interface", before.ToString(), StringComparison.Ordinal);
+        Assert.Contains("migration(s) will be applied at the next start", before.ToString(), StringComparison.Ordinal);
+        await using (var untouched = DbSetup.Create(database))
+        {
+            Assert.NotEmpty(await untouched.Database.GetPendingMigrationsAsync());
+        }
+
+        // With the interface built and the Host started once: only the password is missing.
+        await File.WriteAllTextAsync(Path.Combine(webRoot, "index.html"), "<!doctype html>");
+        await using (var app = ITradeHost.Build(args))
+        {
+            await ITradeHost.MigrateAsync(app);
+        }
+
+        using var noPassword = new StringWriter();
+        Assert.Equal(1, await CheckCommand.RunAsync(args, noPassword));
+        Assert.Contains("! owner password", noPassword.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("! interface", noPassword.ToString(), StringComparison.Ordinal);
+
+        // The offline form does not look at the database at all.
+        using var offline = new StringWriter();
+        string[] unreachable = [.. RunningHost.Args("Host=127.0.0.1;Port=1;Database=none;Username=none", dataDir), $"--webroot={webRoot}", CheckCommand.Offline];
+        Assert.Equal(0, await CheckCommand.RunAsync(unreachable, offline));
+        Assert.EndsWith("OK" + Environment.NewLine, offline.ToString(), StringComparison.Ordinal);
+
+        // A setting the Host refuses is reported, not thrown.
+        using var refused = new StringWriter();
+        Assert.Equal(1, await CheckCommand.RunAsync([.. args, "--ITrade:Mode=Live"], refused));
+        Assert.Contains("cannot be built", refused.ToString(), StringComparison.Ordinal);
+
+        Directory.Delete(webRoot, recursive: true);
+        Directory.Delete(dataDir, recursive: true);
+    }
+
+    [Fact]
     public void DataFolderInSettingsMatchesPathsToml()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);

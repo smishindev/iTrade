@@ -17,6 +17,14 @@ public sealed class AuthTests(PostgresFixture pg)
 
     private static string NewSecret() => Guid.NewGuid().ToString("N");
 
+    /// <summary>The system time moved forward by <see cref="Shift"/>: what the cookie's lifetime is measured with.</summary>
+    private sealed class ShiftedTime : TimeProvider
+    {
+        public TimeSpan Shift { get; set; }
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + Shift;
+    }
+
     /// <summary>A host on its own empty database, with the test clock.</summary>
     private async Task<RunningHost> StartAsync() => await RunningHost.StartAsync(
         await pg.NewEmptyDatabaseAsync(), services => services.AddSingleton<IClock>(_clock));
@@ -182,6 +190,59 @@ public sealed class AuthTests(PostgresFixture pg)
         using var withNew = await RunningHost.LoginAsync(host.NewClient(), changed);
         Assert.Equal(HttpStatusCode.Unauthorized, withOld.StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, withNew.StatusCode);
+    }
+
+    [Fact]
+    public async Task SignOutEndsACopiedSessionTooAndIsRecorded()
+    {
+        var database = await pg.NewEmptyDatabaseAsync();
+        await using var host = await RunningHost.StartAsync(database, services => services.AddSingleton<IClock>(_clock));
+        var secret = NewSecret();
+        await host.SetOwnerSecretAsync(secret);
+        using var login = await RunningHost.LoginAsync(host.Client, secret);
+        // The session cookie taken out of the browser, as a thief or a second device would hold it.
+        var copy = host.NewClient();
+        foreach (Cookie cookie in host.CookiesOf(host.Client).GetCookies(host.BaseAddress))
+        {
+            host.CookiesOf(copy).Add(host.BaseAddress, new Cookie(cookie.Name, cookie.Value, cookie.Path));
+        }
+
+        Assert.True((await RunningHost.SessionAsync(copy)).SignedIn);
+
+        var (_, token) = await RunningHost.SessionAsync(host.Client);
+        using var logout = await RunningHost.PostAsync(host.Client, "/api/auth/logout", null, token);
+
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        Assert.False((await RunningHost.SessionAsync(copy)).SignedIn);
+        using var again = await RunningHost.LoginAsync(host.NewClient(), secret);
+        Assert.Equal(HttpStatusCode.NoContent, again.StatusCode);
+        await using var db = DbSetup.Create(database);
+        Assert.Equal(1, await db.AuditEvents.CountAsync(a => a.Kind == "auth.logout"));
+    }
+
+    [Fact]
+    public async Task SessionEndsTwelveHoursAfterSignInEvenWhileTheTabKeepsAsking()
+    {
+        var time = new ShiftedTime();
+        await using var host = await RunningHost.StartAsync(await pg.NewEmptyDatabaseAsync(), services =>
+        {
+            services.AddSingleton<IClock>(_clock);
+            services.AddSingleton<TimeProvider>(time);
+        });
+        var secret = NewSecret();
+        await host.SetOwnerSecretAsync(secret);
+        using var login = await RunningHost.LoginAsync(host.Client, secret);
+
+        // An open tab asks the server all day long; that must not renew the session.
+        for (var hour = 1; hour <= 11; hour++)
+        {
+            time.Shift = TimeSpan.FromHours(hour);
+            Assert.True((await RunningHost.SessionAsync(host.Client)).SignedIn, $"signed out after {hour} h");
+        }
+
+        time.Shift = AuthSetup.SessionLifetime + TimeSpan.FromMinutes(1);
+
+        Assert.False((await RunningHost.SessionAsync(host.Client)).SignedIn);
     }
 
     [Fact]

@@ -20,6 +20,7 @@ public sealed class DailyJobSchedulerTests : IDisposable
     private readonly List<object> _scopes = [];
     private readonly DailyJobScheduler _scheduler;
     private Func<TradeDate, bool> _fails = _ => false;
+    private Func<TradeDate, Exception?> _failure = _ => null;
 
     public DailyJobSchedulerTests()
     {
@@ -33,6 +34,11 @@ public sealed class DailyJobSchedulerTests : IDisposable
             if (_fails(day))
             {
                 throw new InvalidOperationException($"no data for {day}");
+            }
+
+            if (_failure(day) is { } error)
+            {
+                throw error;
             }
         }));
         _scheduler = new DailyJobScheduler(
@@ -148,6 +154,45 @@ public sealed class DailyJobSchedulerTests : IDisposable
 
         Assert.Equal([Day(5)], _calls);
         Assert.Equal((JobRunStatus.Succeeded, 2), (_store.Runs[(JobName, Day(5))].Status, _store.Runs[(JobName, Day(5))].Attempts));
+    }
+
+    [Fact]
+    public async Task TimeoutInsideAJobIsAFailureNotAShutdown()
+    {
+        // An HTTP call that gives up throws TaskCanceledException although nobody is stopping the application.
+        _failure = _ => new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.");
+
+        var result = Assert.Single(await PassAsync());
+
+        Assert.Equal(JobRunOutcome.Failed, result.Outcome);
+        Assert.Contains("HttpClient.Timeout", result.Failure, StringComparison.Ordinal);
+        Assert.Equal(JobRunStatus.Failed, _store.Runs[(JobName, Day(5))].Status);
+    }
+
+    [Fact]
+    public async Task StoppingTheApplicationInterruptsTheRunAndLeavesItToBeRepeated()
+    {
+        using var stopping = new CancellationTokenSource();
+        _failure = _ =>
+        {
+            stopping.Cancel();
+            return new OperationCanceledException(stopping.Token);
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _scheduler.RunDueAsync(stopping.Token));
+
+        Assert.Equal(JobRunStatus.Running, _store.Runs[(JobName, Day(5))].Status);
+    }
+
+    [Fact]
+    public async Task FailureIsRecordedWithItsCause()
+    {
+        _failure = _ => new InvalidOperationException("saving failed", new FormatException("bad amount '12,5'"));
+
+        var result = Assert.Single(await PassAsync());
+
+        Assert.Contains("InvalidOperationException", result.Failure, StringComparison.Ordinal);
+        Assert.Contains("bad amount '12,5'", result.Failure, StringComparison.Ordinal);
     }
 
     [Fact]

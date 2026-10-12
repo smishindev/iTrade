@@ -102,9 +102,14 @@ public static partial class ITradeHost
         return app;
     }
 
-    /// <summary>Applies pending migrations, then starts listening.</summary>
+    /// <summary>
+    /// Makes sure no other Host works with this database, applies pending migrations, then starts listening.
+    /// </summary>
     public static async Task StartAsync(WebApplication app, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(app);
+        // Before anything is changed or started: this database has no other Host at work.
+        await app.Services.GetRequiredService<InstanceLock>().AcquireAsync(cancellationToken);
         await MigrateAsync(app, cancellationToken);
         await app.StartAsync(cancellationToken);
         var options = app.Services.GetRequiredService<ITradeOptions>();
@@ -165,6 +170,7 @@ public static partial class ITradeHost
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+            .Filter.ByExcluding(IsProbeForTheMigrationTable)
             .Enrich.FromLogContext()
             .Enrich.WithProperty("Mode", options.Mode.ToString())
             .WriteTo.Console(new MaskingFormatter(console, masker))
@@ -177,6 +183,18 @@ public static partial class ITradeHost
                 retainedFileCountLimit: null,
                 retainedFileTimeLimit: TimeSpan.FromDays(LogRetentionDays));
     }
+
+    /// <summary>
+    /// On a database that has no tables yet EF Core asks for its migration table before creating it and logs
+    /// the failed question as an error. It is the expected first step of the first start, not a fault: an
+    /// "ERR" there would only teach the owner to ignore errors. Every other failed command is still logged.
+    /// </summary>
+    private static bool IsProbeForTheMigrationTable(LogEvent logEvent) =>
+        logEvent.Level == LogEventLevel.Error
+        && logEvent.Properties.TryGetValue("SourceContext", out var source)
+        && source.ToString().Contains("Microsoft.EntityFrameworkCore.Database.Command", StringComparison.Ordinal)
+        && logEvent.Properties.TryGetValue("commandText", out var sql)
+        && sql.ToString().Contains("__EFMigrationsHistory", StringComparison.Ordinal);
 
     private static Task WriteHealth(HttpContext context, HealthReport report)
     {
