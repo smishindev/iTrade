@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+STEP_TIMEOUT_SECONDS = 1800
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,24 @@ STEPS = (
     Step("web", "eslint", ("npm", "run", "--silent", "lint"), "web"),
     Step("web", "unit tests", ("npm", "test", "--silent"), "web"),
     Step("web", "build", ("npm", "run", "--silent", "build"), "web"),
+    # The Host as the owner launches it (`dotnet run`: the Development environment, the real
+    # executable) with the interface just built - without a database and without listening.
+    # Every other test runs the Host in-process as "Testing"; on 2026-10-12 `dotnet run` crashed
+    # at start while all of them passed.
+    Step(
+        "web",
+        "the Host starts as the owner runs it",
+        (
+            "dotnet",
+            "run",
+            "--project",
+            "src/ITrade.Host",
+            "--",
+            "check",
+            "--offline",
+            "--ConnectionStrings:ITrade=Host=127.0.0.1;Port=1;Database=check;Username=check",
+        ),
+    ),
     Step("e2e", "browser tests", ("npm", "run", "--silent", "e2e"), "web", needs_docker=True),
 )
 PARTS = tuple(dict.fromkeys(step.part for step in STEPS))
@@ -99,15 +118,19 @@ def run(step: Step) -> tuple[bool, float, str]:
     if program is None:
         return False, 0.0, f"{step.command[0]} is not installed"
     started = time.monotonic()
-    result = subprocess.run(
-        [program, *step.command[1:]],
-        cwd=ROOT / step.cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=1800,
-    )
+    try:
+        result = subprocess.run(
+            [program, *step.command[1:]],
+            cwd=ROOT / step.cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=STEP_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        # A hung step is a failed step; the remaining ones still run and the summary is printed.
+        return False, time.monotonic() - started, f"timed out after {STEP_TIMEOUT_SECONDS} s"
     tail = "\n".join((result.stdout + result.stderr).strip().splitlines()[-25:])
     return result.returncode == 0, time.monotonic() - started, tail
 

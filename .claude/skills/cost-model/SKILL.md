@@ -30,7 +30,8 @@ conversion matter per contribution, not per signal.
 
 - A typical position is $150–650, so the **minimum commission dominates**: round trip ≈ $0.8–1.0.
 - That is **≈ 0.10–0.13R per trade** before slippage on a $300 position — a big share of any realistic edge.
-- Rule (PLAN §6): skip a signal when expected round-trip costs exceed **0.15R**. Never "fix" costs by raising risk.
+- Rule of that plan (`docs/archive/PLAN-v3.md` §6): skip a signal when expected round-trip costs exceed **0.15R**.
+  Never "fix" costs by raising risk.
 
 ## Changing assumptions
 Every change to `config/costs.toml` needs a comment with **source and date**

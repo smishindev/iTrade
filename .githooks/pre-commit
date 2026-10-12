@@ -14,8 +14,9 @@ if echo "$staged" | grep -Eq '^data/|(^|/)\.env|\.pem$|\.key$|appsettings\.Local
 fi
 
 # Real IBKR account numbers ("U"/"DU", optional letter, then 6-9 digits) must never be committed;
-# all-zero placeholders are fine.
-if git diff --cached -U0 | grep -E '^\+' | grep -E '\bD?U[A-Z]?[0-9]{6,9}\b' | grep -vqE '\bD?U[A-Z]?0{6,9}\b'; then
+# all-zero placeholders are fine. Every number is taken out of its line and judged on its own, so a real
+# one cannot hide on a line that also has a placeholder.
+if git diff --cached -U0 | grep -E '^\+' | grep -oE '\bD?U[A-Z]?[0-9]{6,9}\b' | grep -vqE '^D?U[A-Z]?0{6,9}$'; then
     echo "pre-commit: staged changes contain what looks like a real IBKR account number." >&2
     echo "Replace it with an all-zero placeholder (D)U0000000." >&2
     exit 1

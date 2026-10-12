@@ -1,5 +1,5 @@
 # All-in friction model. Every number here is an ASSUMPTION to verify against
-# the broker's current fee page before going live (phase 4 gate).
+# the broker's current fee page before the first real purchase (plan v4: gate G6).
 # Defaults model Interactive Brokers (IBKR Pro, tiered) for an Israeli resident.
 
 [commission]                     # US stocks/ETFs, per order

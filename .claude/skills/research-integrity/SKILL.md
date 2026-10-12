@@ -1,6 +1,6 @@
 ---
 name: research-integrity
-description: Rules for any backtest, strategy, signal, indicator or performance-metric work in iTrade (Python spike A in python/src/itrade/strategies and python/src/itrade/backtest, or the C# core in ITrade.Strategies / ITrade.Simulation). Load before writing or changing that code, before running a backtest, and before reporting any strategy result to the owner.
+description: Rules for any backtest, strategy, signal, indicator or performance-metric work in iTrade (the frozen Python research archive in python/src/itrade/strategies and python/src/itrade/backtest; research is frozen under plan v4 and needs a new scope from the owner). Load before writing or changing that code, before running a backtest, and before reporting any strategy result to the owner.
 ---
 
 # Research integrity
@@ -14,7 +14,9 @@ description: Rules for any backtest, strategy, signal, indicator or performance-
 
 A backtest that looks great is usually wrong. These rules catch the usual ways it happens:
 look-ahead, survivorship, missing costs, wrong fills, and multiple testing.
-The strategy spec is `docs/STRATEGY_ETF_PULLBACK_V1.md` (PLAN §5); it wins over this summary.
+The strategy specs are `docs/STRATEGY_ETF_PULLBACK_V1.md`, `docs/STRATEGY_ETF_TREND_V2.md` and
+`docs/STRATEGY_ETF_TOM_V3.md`; a spec wins over this summary. "PLAN §…" below means the plan of that time,
+`docs/archive/PLAN-v3.md`.
 
 ## Hard rules
 

@@ -15,11 +15,15 @@ the rest is here so new code looks like the code around it. `docs/PLAN.md` §3.1
 - Amounts stay exact; rounding happens only where asked and names its rule: `Money.RoundToMinor(rule)`,
   `FloorToMinor()`, `Price.FloorToTick` / `CeilToTick`, `Quantity.FloorTo`, `Quantity.Affordable(...)`.
   Round the way that is safe for the owner (a buy never rounds up past the money available).
-- Database precision: prices and quantities `numeric(18,6)`, amounts `numeric(18,4)`, FX `numeric(12,6)`.
+- Database precision: every `decimal` is `numeric(18,6)` by convention (`ITradeDbContext.ConfigureConventions`);
+  a table that needs another one says so on the column — amounts `numeric(18,4)`, FX rates `numeric(12,6)`.
+- `FxRate.Convert` is exact in the direction of the quote and divides the other way: round where the amount
+  is shown or booked, never in between.
 - Fee and tax numbers are assumptions: a change carries a source and a date in a comment.
 
 ## Time
-- NodaTime only. Instants are `Instant` (stored as `timestamptz`, UTC). No `DateTime`, no `DateTimeOffset`.
+- NodaTime only. Instants are `Instant` (stored as `timestamptz`, UTC); calendar dates are `LocalDate`
+  (stored as `date`). No `DateTime`, `DateTimeOffset` or `DateOnly`.
 - The clock is `NodaTime.IClock`, injected: `SystemClock` in the Host, `FakeClock` in tests. Domain code
   never reads a clock (architecture test).
 - A trading day is `TradeDate` — the New York calendar date, not a UTC date: `TradeDate.Of(instant)`.
@@ -58,6 +62,14 @@ Broker code is reviewed by the `execution-reviewer` agent; load the `ibkr-api` s
   change: refresh `web/openapi/v1.json` (integration test with `ITRADE_UPDATE_OPENAPI=1`), then
   `npm run gen:api` in `web/`.
 - The Host listens on `127.0.0.1` only. PAPER is the only mode until the pilot gate.
+- One Host per database: `InstanceLock` (a PostgreSQL advisory lock) makes a second one refuse to start.
+- The session lasts 12 hours from sign-in, without sliding renewal; sign-out and a new password end every
+  session, including open event connections.
+- A background service never lets an exception escape `ExecuteAsync` (that would stop the Host), and treats
+  `OperationCanceledException` as a stop only when its own stopping token is cancelled — a timeout is a failure.
+- `dotnet run --project src/ITrade.Host -- check` builds the Host as a normal start does and reports what is
+  missing, without changing anything. The tests run the Host in-process as "Testing"; the owner runs the real
+  executable in Development — anything that depends on that difference needs this check, not only a test.
 
 ## Logging and secrets
 - Log through `[LoggerMessage]` partial methods (CA1848 is an error); Serilog writes compact JSON.

@@ -33,7 +33,8 @@ function Get-ITradeDataDir {
 
 function Assert-DatabaseName {
     param([string]$Name)
-    if ($Name -notmatch '^[a-z][a-z0-9_]{0,50}$') {
+    # -cnotmatch: case-sensitive (plain -notmatch would let ITRADE through); \z: no trailing newline either.
+    if ($Name -cnotmatch '\A[a-z][a-z0-9_]{0,50}\z') {
         throw "Database name '$Name' is not allowed (lower-case letters, digits and _ only)."
     }
 }

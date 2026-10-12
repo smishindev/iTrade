@@ -91,9 +91,22 @@ def cmd_costs(args: argparse.Namespace) -> int:
     cfg = CostConfig.load()
     hs = args.half_spread_bps
     if hs is None and args.ticker:
-        hs = load_universe().get(args.ticker).half_spread_bps
+        try:
+            hs = load_universe().get(args.ticker).half_spread_bps
+        except KeyError:
+            # An index fund the owner asks about need not be in the research universe.
+            print(
+                f"{args.ticker} is not in config/universe.toml: using the default half-spread of "
+                f"{cfg.default_half_spread_bps:g} bps from config/costs.toml "
+                "(--half-spread-bps sets another).\n"
+            )
     shares = args.notional / args.price
     print(f"Order: ${args.notional:,.2f} = {shares:.4f} shares @ ${args.price:,.2f}")
+    whole = int(args.notional // args.price)
+    print(
+        f"Whole shares: {whole} = ${whole * args.price:,.2f}; "
+        f"left uninvested: ${args.notional - whole * args.price:,.2f}"
+    )
     print(f"{'':10}{'buy':>10}{'sell':>10}")
     buy = estimate_trade_cost(cfg, shares, args.price, BUY, half_spread_bps=hs)
     sell = estimate_trade_cost(cfg, shares, args.price, SELL, half_spread_bps=hs)

@@ -29,8 +29,12 @@ _Утверждён владельцем 9 октября 2026 (ворота G1,
 ## 2. Стек (без изменений)
 
 React 19 + TypeScript (`web/`) · C# / .NET 10 + ASP.NET Core (`src/ITrade.*`) · PostgreSQL 18 (Docker) ·
-официальный IBKR TWS API (C#) через IB Gateway + Flex Web Service для выписок. Python (`src/itrade/`) — загрузка
+официальный IBKR TWS API (C#) через IB Gateway + Flex Web Service для выписок. Python (`python/src/itrade/`) — загрузка
 данных, проверки, эталон для тестов, архив исследований; **Python не торгует**.
+
+Уточнения этапа 2 (решения владельца 12 октября 2026): интерфейс — на компонентах MUI (Material UI), тексты только на
+английском; маршруты — React Router, данные сервера — TanStack Query, клиент API генерируется из описания OpenAPI.
+Время в коде — NodaTime; журнал — Serilog (JSON); тесты — xUnit, Testcontainers, Vitest, Playwright.
 
 ## 3. Модули
 
@@ -52,7 +56,7 @@ React 19 + TypeScript (`web/`) · C# / .NET 10 + ASP.NET Core (`src/ITrade.*`) �
 | Проект | Ответственность | Может зависеть от |
 |---|---|---|
 | `ITrade.Domain` | типы и правила: деньги, количество, валюта, инструмент, транзакция, партия, налоговые расчёты как чистые функции | ничего |
-| `ITrade.Application` | сценарии (импорт, оценка, план, подтверждение, исполнение, сверка, отчёты); интерфейсы `IBrokerGateway`, `IClock`, хранилищ | Domain |
+| `ITrade.Application` | сценарии (импорт, оценка, план, подтверждение, исполнение, сверка, отчёты, ежедневные задания); интерфейсы `IBrokerGateway` и хранилищ; часы — `NodaTime.IClock` | Domain |
 | `ITrade.Infrastructure` | EF Core / PostgreSQL, импорт Flex и CSV, курс Банка Израиля, цены, файлы, бэкапы | Application, Domain |
 | `ITrade.Broker.IBKR` | **единственная** реализация `IBrokerGateway`; **единственное** место со ссылкой на IBApi | Application, Domain |
 | `ITrade.Host` | ASP.NET Core API, фоновые задания, отдача React, вход | все |

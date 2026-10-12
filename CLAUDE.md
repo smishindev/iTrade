@@ -35,7 +35,9 @@ statistics. **Python never trades.**
   `--fast` without Docker · `--only python|dotnet|web|e2e`. Run it before a phase gate.
 - .NET (repo root): `dotnet build ITrade.slnx` · `dotnet test tests/ITrade.UnitTests` · `dotnet test tests/ITrade.ArchitectureTests`
   · `dotnet test tests/ITrade.IntegrationTests` (needs Docker) · `dotnet run --project src/ITrade.Host` (a running Host locks the
-  Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password`.
+  Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password` ·
+  `dotnet run --project src/ITrade.Host -- check` (builds the Host as a real start does and reports what is missing;
+  changes nothing). Tests run the Host in-process as "Testing"; only `check` and a real start exercise the owner's launch.
 - Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·
   `.\deploy\restore.ps1 -File <dump> -Verify` (restores into a temporary database and removes it). Restore never
   overwrites an existing database; switching the Host to a restored one is the owner's step.

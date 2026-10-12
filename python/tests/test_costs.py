@@ -2,8 +2,25 @@ from __future__ import annotations
 
 import pytest
 
+from itrade.cli import main
 from itrade.costs import annual_drag_pct, capital_gains_tax, estimate_trade_cost, round_trip_bps
 from itrade.costs.model import BUY, SELL, commission_usd, fx_usd
+
+
+def test_costs_command_accepts_a_ticker_outside_the_universe(capsys):
+    # the owner asks about an index fund that the research universe does not list
+    assert main(["costs", "--notional", "1000", "--price", "600", "--ticker", "NOT-LISTED"]) == 0
+
+    out = capsys.readouterr().out
+    assert "NOT-LISTED is not in config/universe.toml" in out
+    assert "Whole shares: 1 = $600.00; left uninvested: $400.00" in out
+    assert "Round trip:" in out
+
+
+def test_costs_command_uses_the_half_spread_of_a_listed_ticker(capsys):
+    assert main(["costs", "--notional", "1000", "--price", "600", "--ticker", "SPY"]) == 0
+
+    assert "is not in config/universe.toml" not in capsys.readouterr().out
 
 
 def test_minimum_commission_applies_to_small_orders(cost_cfg):
