@@ -16,7 +16,14 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run format:check && npm run lint && npm test && npm run build"
+    "gen:api": "openapi-typescript openapi/v1.json --output src/api/generated/schema.d.ts",
+    "gen:api:check": "openapi-typescript openapi/v1.json --output src/api/generated/schema.d.ts --check",
+    "check": "npm run gen:api:check && npm run format:check && npm run lint && npm test && npm run build"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -24,6 +31,7 @@
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
     "@tanstack/react-query": "^5.104.2",
+    "openapi-fetch": "^0.17.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.4.0"
@@ -43,6 +51,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
     "jsdom": "^29.1.1",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.10",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.1",

@@ -97,6 +97,7 @@ def solution_checks(root: Path, changed: list[str]) -> list[str]:
 
 
 WEB_CHECKS = (  # npm arguments, in web/
+    ("API client check (run `npm run gen:api`)", ["run", "--silent", "gen:api:check"]),
     ("format check", ["run", "--silent", "format:check"]),
     ("lint", ["run", "--silent", "lint"]),
     ("type check", ["run", "--silent", "typecheck"]),

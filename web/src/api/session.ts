@@ -1,16 +1,13 @@
 import { queryOptions } from '@tanstack/react-query'
+import { api, required, type Schemas } from './client'
 import { getJson } from './http'
 
 export type TradingMode = 'Paper' | 'Live'
 
 /** `GET /api/auth/session`: whether the owner is signed in, plus the antiforgery token for changing requests. */
-export interface Session {
-  authenticated: boolean
-  antiforgeryToken: string
-  antiforgeryHeader: string
-}
+export type Session = Schemas['SessionResponse']
 
-/** `GET /health`: open without sign-in; tells the mode the server runs in. */
+/** `GET /health`: open without sign-in; tells the mode the server runs in. Not part of the OpenAPI document. */
 export interface Health {
   healthy: boolean
   mode: TradingMode | undefined
@@ -25,15 +22,9 @@ function field(body: unknown, name: string): unknown {
 export const sessionQuery = queryOptions({
   queryKey: ['session'],
   queryFn: async ({ signal }): Promise<Session> => {
-    const body = await getJson('/api/auth/session', signal)
-    const token = field(body, 'antiforgeryToken')
-    const header = field(body, 'antiforgeryHeader')
-    return {
-      // Anything but an explicit `true` counts as "not signed in".
-      authenticated: field(body, 'authenticated') === true,
-      antiforgeryToken: typeof token === 'string' ? token : '',
-      antiforgeryHeader: typeof header === 'string' ? header : '',
-    }
+    const session = required(await api.GET('/api/auth/session', { signal }))
+    // Anything but an explicit `true` counts as "not signed in", whatever the types promise.
+    return { ...session, authenticated: (session.authenticated as unknown) === true }
   },
 })
 

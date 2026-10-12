@@ -14,7 +14,8 @@ export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
 }
 
-async function problemTitle(response: Response): Promise<string> {
+/** The `title` of a problem-details answer, or the status text when the body is something else. */
+export async function problemTitle(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json()
     if (typeof body === 'object' && body !== null && 'title' in body) {
