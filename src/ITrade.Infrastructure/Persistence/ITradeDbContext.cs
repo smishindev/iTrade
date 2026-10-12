@@ -28,6 +28,8 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
 
     public DbSet<TransactionRow> Transactions => Set<TransactionRow>();
 
+    public DbSet<FxRateRow> FxRates => Set<FxRateRow>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
@@ -161,6 +163,22 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
                 .HasDatabaseName("ix_transactions_line_of_the_source");
             // An entry is reversed at most once.
             e.HasIndex(t => t.Reverses).IsUnique();
+        });
+        modelBuilder.Entity<FxRateRow>(e =>
+        {
+            e.ToTable("fx_rates", table =>
+            {
+                table.HasCheckConstraint("ck_fx_rates_rate_is_positive", "rate > 0");
+                table.HasCheckConstraint("ck_fx_rates_two_currencies", "base_currency <> quote_currency");
+                // A revision is the owner's decision and says why; so does a first rate the owner had to accept.
+                table.HasCheckConstraint(
+                    "ck_fx_rates_revision_says_why",
+                    "revision >= 0 AND (revision = 0 OR reason IS NOT NULL) AND (reason IS NULL OR btrim(reason) <> '')");
+            });
+            e.HasKey(r => new { r.BaseCurrency, r.QuoteCurrency, r.RateDate, r.Source, r.Revision });
+            e.Property(r => r.Source).HasMaxLength(50);
+            e.Property(r => r.Reason).HasMaxLength(FxRateStore.MaxReasonLength);
+            e.Property(r => r.Rate).HasPrecision(12, 6);
         });
     }
 

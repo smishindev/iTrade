@@ -85,6 +85,58 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("instrument_former_tickers", (string)null);
                 });
 
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.FxRateRow", b =>
+                {
+                    b.Property<string>("BaseCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("base_currency");
+
+                    b.Property<string>("QuoteCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("quote_currency");
+
+                    b.Property<LocalDate>("RateDate")
+                        .HasColumnType("date")
+                        .HasColumnName("rate_date");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("source");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<Instant>("FetchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fetched_at");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(12, 6)
+                        .HasColumnType("numeric(12,6)")
+                        .HasColumnName("rate");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("BaseCurrency", "QuoteCurrency", "RateDate", "Source", "Revision")
+                        .HasName("pk_fx_rates");
+
+                    b.ToTable("fx_rates", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_fx_rates_rate_is_positive", "rate > 0");
+
+                            t.HasCheckConstraint("ck_fx_rates_revision_says_why", "revision >= 0 AND (revision = 0 OR reason IS NOT NULL) AND (reason IS NULL OR btrim(reason) <> '')");
+
+                            t.HasCheckConstraint("ck_fx_rates_two_currencies", "base_currency <> quote_currency");
+                        });
+                });
+
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.HoldingPlaceRow", b =>
                 {
                     b.Property<Guid>("Id")
