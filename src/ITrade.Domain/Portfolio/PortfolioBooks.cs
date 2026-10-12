@@ -84,13 +84,18 @@ public sealed record CashBalance(HoldingPlaceId HoldingPlace, Money Amount);
 /// lots and the realised result of that instrument are incomplete while this list names it. Whoever computes a
 /// gain or a tax from <paramref name="Disposals"/> has to refuse such an instrument, not pass over it.
 /// </param>
+/// <param name="Splits">
+/// The splits and reverse splits applied up to the date, in the ledger's order. From the day of one on, a
+/// share is not the share it was the day before: a price of an earlier day does not value it.
+/// </param>
 public sealed record PortfolioBooks(
     LocalDate AsOf,
     LotMatching Method,
     IReadOnlyList<Position> Positions,
     IReadOnlyList<CashBalance> Cash,
     IReadOnlyList<Disposal> Disposals,
-    IReadOnlyList<Transaction> NotInTheLots)
+    IReadOnlyList<Transaction> NotInTheLots,
+    IReadOnlyList<Transaction> Splits)
 {
     /// <summary>
     /// Decimal places of a part of a lot or of a sale (the ledger itself keeps <see cref="Transaction.Scale"/>).
@@ -155,7 +160,8 @@ public sealed record PortfolioBooks(
             work.Apply(entry);
         }
 
-        return new PortfolioBooks(asOf, method, work.Positions(), work.Cash(), work.Disposals, work.NotInTheLots);
+        return new PortfolioBooks(
+            asOf, method, work.Positions(), work.Cash(), work.Disposals, work.NotInTheLots, work.Splits);
     }
 
     /// <summary>The books while they are being computed.</summary>
@@ -192,6 +198,8 @@ public sealed record PortfolioBooks(
         public List<Disposal> Disposals { get; } = [];
 
         public List<Transaction> NotInTheLots { get; } = [];
+
+        public List<Transaction> Splits { get; } = [];
 
         public void Apply(Transaction entry)
         {
@@ -340,6 +348,8 @@ public sealed record PortfolioBooks(
                 lots[i].Quantity = i == lots.Count - 1 ? total - given : Part(total, lots[i].Quantity, held);
                 given += lots[i].Quantity;
             }
+
+            Splits.Add(action);
         }
 
         private List<OpenLot> LotsOf(Transaction entry)

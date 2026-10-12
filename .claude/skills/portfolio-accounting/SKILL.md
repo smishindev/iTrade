@@ -9,7 +9,7 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02)
+## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02, P3.4.01)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
@@ -18,6 +18,7 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 | Exchange rates | `FxRate`, `AppliedFxRate`; `FxRates` (`UpdateAsync`, `OnAsync`), job `fx-rates`; source `BankOfIsraelRates` | `fx_rates` |
 | Closing prices | `ClosingPrice`, `PriceOnDate`; `ClosingPrices` (`ImportAsync`, `OnAsync`); file `ClosingPricesFile` | `closing_prices`, `market_sessions`, `price_imports` |
 | What is held | `PortfolioBooks.From(ledger, asOf)` → `Position`, `Lot`, `Disposal`, `CashBalance`; `PortfolioBooksReader` | none — computed from the ledger every time |
+| What it is worth | `PortfolioValue.Of(books, prices, rate)` → `PositionValue`, `PortfolioTotal`; `PortfolioValuation.AsOfAsync(date)` | none — worked out every time |
 
 ## The ledger
 - **One entry = one effect**: a change of the shares of one instrument and/or of the cash in one currency
@@ -189,10 +190,35 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   unscheduled closure a session, every fund reads "missing" for it, and after the library is corrected the
   imports are refused until a migration deals with it; an export made from an older data folder carries a
   fresh date and passes the "not older" check (it can put back up to 20 corrections of at most 2%).
-- **Not yet handled, for the valuation (P3.4.01):** a carried close must not be used across a split (the
-  shares changed, the price did not); a dividend's ex-date dip is a real price move, not an error.
+- A dividend's ex-date dip is a real price move, not an error: the dividend arrives as its own ledger entry.
 
-## Rules for what comes next (valuation, reconciliation)
+## The value on a date (`PortfolioValue`, P3.4.01)
+- **`PortfolioValuation.AsOfAsync(date)` is the one way to get a value**: the books of the trade date from
+  the ledger (all holding places), `ClosingPrices.OnAsync` for every instrument held, `FxRates.FindAsync`
+  for the rate. Nothing is stored; the figure is worked out from the ledger, prices and rates as they are
+  now — a later reversal, a revised price or a late rate changes the value of a past date.
+- **For looking at, never for tax.** The closes of session D are converted with the Bank of Israel rate of
+  calendar date D, set some hours before that close: this platform's convention, a named assumption.
+- **A position has a value only with a usable price** (`PositionValueState`): missing or unavailable price
+  → not valued; a close of a session **before a split the books have applied since** → not valued (new
+  shares × old price would be double or half the truth; the close of the split's own day is the new one).
+  Never valued at an older price, never at zero.
+- **A total is called a total only when nothing is left out.** `PortfolioTotal.Valued` is what could be
+  valued and converted; `Total` is null while `NotValued` (positions) or `NotConverted` (sums in another
+  currency, when there is no rate) is not empty. Show `Valued` as "partly valued", with what is missing.
+- **Amounts are added in their own currency and converted once**, exactly (dollars to shekels multiplies;
+  the other way divides). No rounding inside; round where the figure is shown.
+- **What is provisional is said**: `IsProvisional` on a total (a provisional close, or a provisional rate
+  that was used for it) and `PortfolioValue.Remarks(nameOf)` — the sentences to show next to the figures:
+  not valued and why, provisional price, provisional rate, no rate. Every position keeps its
+  `PriceOnDate`, the value its `AppliedFxRate`.
+- **Refused**: a price of another date or instrument than asked, a rate of another date, a price in
+  another currency than the position was bought in.
+- **Known limit:** if the vendor's prices already reflect a split that the ledger does not hold yet (the
+  statement import lags), old shares × new price shows half the value and nothing here can see it — the
+  reconciliation (P3.4.03) has to compare the split days of the price export with the ledger.
+
+## Rules for what comes next (returns, reconciliation)
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
 - **Returns**: a contribution is not a gain. Time-weighted and money-weighted returns state their
   period, their cash flows and what they include (fees, withheld tax).

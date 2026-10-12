@@ -185,6 +185,10 @@ curated bars ──► itrade export-closes ──► prices + sessions + manife
                   finished sessions only)                                        ▼
                  ClosingPrices.OnAsync(instrument, date) ──► PriceOnDate   closing_prices,
                  (of the session / carried / missing / unavailable)        market_sessions
+
+PortfolioValuation.AsOfAsync(date) = books of the date + a PriceOnDate per instrument + the AppliedFxRate
+                 ──► PortfolioValue: by holding place and in all, in dollars and in shekels
+                     (nothing stored; what could not be valued or converted is named, not guessed)
 ```
 
 - **Ledger.** One entry is one signed effect on shares and/or cash at one holding place. A line of a
@@ -201,6 +205,10 @@ curated bars ──► itrade export-closes ──► prices + sessions + manife
   last close, a session without a price is a gap that is said, never filled with an older price. Many
   or large changes of stored prices, and a new close far from the one before it, wait for the
   owner's acceptance by code.
+- **Value.** Worked out every time from the books, the prices and the rate of the date; for looking at,
+  never for tax. A position without a usable price - none, or one from before a split - has no value,
+  and a sum that leaves something out is not called the total. Amounts are added per currency and
+  converted once, without rounding. What is provisional is said in words.
 
 The rules in full are the `portfolio-accounting` skill. Tax figures (phase 4) follow `israeli-tax`:
 every number there is an unverified assumption until a specialist confirms it.

@@ -7,7 +7,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 12 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: 103 of 106 tasks (the three open ones are the owner's, at IBKR);
-phase 3: 5 of 12.
+phase 3: 6 of 12.
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993 — but they are empty: no
@@ -25,8 +25,9 @@ stays locked. On 9 October the owner approved plan v4: the money goes into a bro
 platform becomes an accounting and execution-with-approval tool. Phase 2 built the foundation:
 .NET 10 Host on loopback HTTPS with sign-in, PostgreSQL 18, daily jobs with catch-up, a React shell,
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
-ledger, FIFO lots and positions, the Bank of Israel exchange rates and closing prices as traded.
-Next comes valuation; the statement import and the reconciliation wait for the funded account.
+ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded and
+the value of the portfolio on a date. Next come returns; the statement import and the
+reconciliation wait for the funded account.
 
 ---
 
@@ -38,7 +39,7 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 270 unit, 5 architecture, 98 integration on a real PostgreSQL 18 (Testcontainers) |
+| .NET tests | ✅ | 279 unit, 5 architecture, 99 integration on a real PostgreSQL 18 (Testcontainers) |
 | Python tests | ✅ | 316 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
@@ -54,13 +55,14 @@ read in the code.
 | Daily job `fx-rates` in the real Host | ✅ | the Host was started and the job succeeded for session 2026-10-12 |
 | A changed rate waits for the owner | ✅ tests only | never happened for real; 26 deliberate breakages of the rates code caught |
 | Stuck job is visible and can be released | ✅ | `check` and `retry-job` in tests; `retry-job` run for real with nothing to retry |
-| Closing prices | ✅ | 185,273 closes of 29 funds and 8,482 exchange sessions, 1993-01-29 … 2026-10-09, in the working database; a second import: 0 new. The ingest ran while New York was open: the half-formed bar of 12 October was left out for every fund |
+| Closing prices | ✅ | 185,301 closes of 29 funds and 8,483 exchange sessions, 1993-01-29 … 2026-10-12, in the working database; a second import: 0 new. An ingest while New York was open left the half-formed bar of 12 October out for every fund; the one after the close brought it |
+| Value of the portfolio on a date | ✅ tests only | by holding place and in all, in dollars and shekels: a hand-worked example to the last digit, and through the real Host on PostgreSQL. The ledger is empty, so no real value exists yet. 34 deliberate breakages caught |
 | A price for any date says what it is | ✅ tests only | the session's own, carried over a closed day, missing, unavailable; nothing values a position with it yet. 88 deliberate breakages of the prices code caught |
 | Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
-| Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 9 October (EWC up to 6 October: its bar of the open session failed the quality check). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
+| Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
 | Statement (Flex) import | ❌ not built | waits for a funded account (see *Waiting on the owner*) |
-| Valuation, returns, reconciliation | ❌ not built | phase 3, next tasks |
+| Returns, reconciliation | ❌ not built | phase 3, next tasks |
 | Screens with data | ❌ not built | the shell and sign-in exist; six menu entries are placeholders until phase 6 |
 | Taxes, broker adapter, purchases | ❌ not built | phases 4, 5, 6 |
 | Scheduled backups | ❌ | manual until phase 7 — the owner's decision |
@@ -180,9 +182,15 @@ Ordered roughly by how much they would hurt.
     back up to 20 price corrections of at most 2% each.
 14. **The currency of a price comes from the catalogue, not from the vendor.** Every fund is in
     dollars; the first one that is not needs the quote currency at ingest.
-15. **Nothing values a position yet**, so two rules exist only on paper: a carried close must not be
-    used across a split, and a missing price makes the total "not valued" (card of P3.4.01).
-16. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
+15. **A split that is in the prices and not yet in the ledger halves a value without a word**
+    (the statement lags a day), and a purchase after a split the prices have not seen is valued at
+    the old price, marked only as provisional. The valuation cannot see either; the reconciliation
+    has to (card of P3.4.03).
+16. **The value of a past date is not remembered**: it is worked out again from the ledger, the
+    prices and the rates as they are now.
+17. **One fund (EWC) has no price after 6 October**: the pipeline takes a fetch whole or not at
+    all, and the vendor's newest bar is inconsistent.
+18. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
 
 ---
@@ -191,10 +199,8 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.4.01 — value of the portfolio on a date**, in dollars and shekels, with the marks of the
-   price and of the rate.
-2. **P3.4.02 — returns** (time-weighted and money-weighted) against the index.
-3. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
+1. **P3.4.02 — returns** (time-weighted and money-weighted) against the index.
+2. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
    → **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
 
 ## Waiting on the owner
@@ -205,7 +211,8 @@ Small steps, one task at a time (`/next-task`):
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is
   wanted: `uv run --directory python itrade ingest --universe etf_pullback_v1`, then
-  `dotnet run --project src/ITrade.Host -- import-prices`. The first run brings 12 October and EWC.
+  `dotnet run --project src/ITrade.Host -- import-prices`. Done on the evening of 12 October; EWC is
+  still behind (gap 17) - the next run should bring it.
 
 ## Open questions for the owner
 

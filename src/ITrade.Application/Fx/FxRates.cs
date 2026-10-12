@@ -58,6 +58,9 @@ public interface IFxRateStore
         CancellationToken cancellationToken);
 }
 
+/// <summary>The rate to use on a date, or — when there is none to use — the reason in words. One of the two is set.</summary>
+public sealed record FxRateOnDate(AppliedFxRate? Rate, string? WhyNone);
+
 /// <summary>An entry for the audit trail about an update of the rates: who, what kind, and the details as JSON.</summary>
 public sealed record FxRatesNote(string Actor, string Kind, string Payload)
 {
@@ -267,25 +270,35 @@ public sealed class FxRates(IFxRateSource source, IFxRateStore store, IClock clo
     /// </summary>
     public async Task<AppliedFxRate> OnAsync(LocalDate date, CancellationToken cancellationToken)
     {
+        var found = await FindAsync(date, cancellationToken);
+        return found.Rate ?? throw new InvalidOperationException(found.WhyNone);
+    }
+
+    /// <summary>
+    /// As <see cref="OnAsync"/>, for a caller that goes on without a rate — a valuation shows what it could not
+    /// convert instead of failing: the rate, or in words why there is none.
+    /// </summary>
+    public async Task<FxRateOnDate> FindAsync(LocalDate date, CancellationToken cancellationToken)
+    {
         var today = clock.GetCurrentInstant().InZone(Zones.Israel).Date;
         var pair = $"{source.BaseCurrency}/{source.QuoteCurrency}";
         if (date > today)
         {
-            throw new InvalidOperationException($"There is no {pair} rate for {date:R} yet: today is {today:R}.");
+            return new FxRateOnDate(null, $"There is no {pair} rate for {date:R} yet: today is {today:R}.");
         }
 
         var rate = await store.LatestOnOrBeforeAsync(
             source.BaseCurrency, source.QuoteCurrency, source.Name, date, cancellationToken);
         if (rate is null)
         {
-            throw new InvalidOperationException(
-                $"There is no {pair} rate ({source.Name}) on or before {date:R}. Update the rates first.");
+            return new FxRateOnDate(null, $"There is no {pair} rate ({source.Name}) on or before {date:R}. Update the rates first.");
         }
 
         var days = Period.DaysBetween(rate.Date, date);
         if (days > MaxDaysCarried)
         {
-            throw new InvalidOperationException(
+            return new FxRateOnDate(
+                null,
                 $"The latest {pair} rate ({source.Name}) before {date:R} is of {rate.Date:R} - {days} days earlier. " +
                 "A rate that old is not used: update the rates first.");
         }
@@ -293,7 +306,7 @@ public sealed class FxRates(IFxRateSource source, IFxRateStore store, IClock clo
         // The newest stored rate of all tells whether the source has published anything after the date.
         var newest = await store.LatestOnOrBeforeAsync(
             source.BaseCurrency, source.QuoteCurrency, source.Name, today, cancellationToken);
-        return new AppliedFxRate(rate, date, isProvisional: days > 0 && newest!.Date <= rate.Date);
+        return new FxRateOnDate(new AppliedFxRate(rate, date, isProvisional: days > 0 && newest!.Date <= rate.Date), null);
     }
 
     /// <summary>

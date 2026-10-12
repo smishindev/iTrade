@@ -18,7 +18,8 @@ statistics. **Python never trades.**
 
 ## Where things are now (phase 3 — accounting, plan v4; the phase itself is in `config/project.toml`)
 - `src/ITrade.Domain` money, time, ids, instruments, holding places, transactions, books (lots, positions, cash) ·
-  `src/ITrade.Application` use cases (daily jobs, instrument catalogue, transaction ledger, books, exchange rates) ·
+  `src/ITrade.Application` use cases (daily jobs, instrument catalogue, transaction ledger, books, exchange rates,
+  closing prices, value on a date) ·
   `src/ITrade.Infrastructure` EF Core / PostgreSQL, Bank of Israel rates · `src/ITrade.Broker.IBKR` (empty until phase 5) ·
   `src/ITrade.Host` API, sign-in, events hub, background jobs, serves the web interface · `tests/ITrade.*`
 - `web/` React interface (MUI, React Router, TanStack Query, generated API client) · `web/e2e` browser tests
@@ -72,6 +73,8 @@ statistics. **Python never trades.**
   the price as traded, never the vendor's split-adjusted close, and only of a finished session. Whether the
   exchange was open on a day is read from `market_sessions` (the exchange calendar), not guessed from the prices.
   A value keeps its `PriceOnDate`; a missing or unavailable price is shown as such, never replaced by an older one.
+- The value of the portfolio comes only through `PortfolioValuation`: a position without a usable price is not
+  valued, and a sum that leaves something out is not called the total (`PortfolioTotal.Total` is null then).
 - Tax and accounting rules do not wait for the accountant (owner, 2026-10-12): choose, record as an assumption with
   source and date, label the result unverified.
 - Money is `decimal`/`numeric`, never floating point, in C# and SQL. Times in UTC; schedules in America/New_York.
