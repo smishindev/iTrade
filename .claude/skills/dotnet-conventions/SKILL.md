@@ -56,7 +56,7 @@ Broker code is reviewed by the `execution-reviewer` agent; load the `ibkr-api` s
 - `audit_events` is append-only (database triggers). Write to it; never update or delete.
 - `transactions` — the accounting ledger — is append-only too (triggers reject UPDATE, DELETE, TRUNCATE). Write
   through `TransactionLedger`: `RecordAsync` (a repeated import adds nothing; an entry is known by holding place,
-  source and external id) and `ReverseAsync` (a mistake is cancelled by a reversal, then the right entry is
+  source, external id and revision; what it leaves out it reports) and `ReverseAsync` (a mistake is cancelled by a reversal, then the right entry is
   recorded). Amounts are signed effects; the order within a trade date is the order of recording (`sequence`).
   The accounting rules are in the `portfolio-accounting` skill.
 - A reference from a ledger row to another ledger row is mapped many-to-one with a unique index, not one-to-one:
