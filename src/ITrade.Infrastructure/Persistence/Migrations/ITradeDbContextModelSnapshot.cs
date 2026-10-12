@@ -239,6 +239,111 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("settings", (string)null);
                 });
 
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.TransactionRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("CashAmount")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("cash_amount");
+
+                    b.Property<string>("CashCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("cash_currency");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("external_id");
+
+                    b.Property<Guid>("HoldingPlaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("holding_place_id");
+
+                    b.Property<Guid?>("InstrumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instrument_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("price");
+
+                    b.Property<decimal>("QuantityChange")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("quantity_change");
+
+                    b.Property<Instant>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid?>("RelatedTo")
+                        .HasColumnType("uuid")
+                        .HasColumnName("related_to");
+
+                    b.Property<Guid?>("Reverses")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reverses");
+
+                    b.Property<LocalDate>("SettlementDate")
+                        .HasColumnType("date")
+                        .HasColumnName("settlement_date");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.Property<LocalDate>("TradeDate")
+                        .HasColumnType("date")
+                        .HasColumnName("trade_date");
+
+                    b.HasKey("Id")
+                        .HasName("pk_transactions");
+
+                    b.HasIndex("RelatedTo")
+                        .HasDatabaseName("ix_transactions_related_to");
+
+                    b.HasIndex("Reverses")
+                        .IsUnique()
+                        .HasDatabaseName("ix_transactions_reverses");
+
+                    b.HasIndex("HoldingPlaceId", "TradeDate")
+                        .HasDatabaseName("ix_transactions_holding_place_id_trade_date");
+
+                    b.HasIndex("InstrumentId", "TradeDate")
+                        .HasDatabaseName("ix_transactions_instrument_id_trade_date");
+
+                    b.HasIndex("HoldingPlaceId", "Source", "ExternalId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_transactions_holding_place_id_source_external_id");
+
+                    b.ToTable("transactions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_transactions_changes_something", "quantity_change <> 0 OR cash_amount <> 0");
+
+                            t.HasCheckConstraint("ck_transactions_settles_on_or_after_the_trade", "settlement_date >= trade_date");
+                        });
+                });
+
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.FormerTickerRow", b =>
                 {
                     b.HasOne("ITrade.Infrastructure.Persistence.InstrumentRow", null)
@@ -247,6 +352,34 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_instrument_former_tickers_instruments_instrument_id");
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.TransactionRow", b =>
+                {
+                    b.HasOne("ITrade.Infrastructure.Persistence.HoldingPlaceRow", null)
+                        .WithMany()
+                        .HasForeignKey("HoldingPlaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_transactions_holding_places_holding_place_id");
+
+                    b.HasOne("ITrade.Infrastructure.Persistence.InstrumentRow", null)
+                        .WithMany()
+                        .HasForeignKey("InstrumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_transactions_instruments_instrument_id");
+
+                    b.HasOne("ITrade.Infrastructure.Persistence.TransactionRow", null)
+                        .WithMany()
+                        .HasForeignKey("RelatedTo")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_transactions_transactions_related_to");
+
+                    b.HasOne("ITrade.Infrastructure.Persistence.TransactionRow", null)
+                        .WithOne()
+                        .HasForeignKey("ITrade.Infrastructure.Persistence.TransactionRow", "Reverses")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_transactions_transactions_reverses");
                 });
 #pragma warning restore 612, 618
         }

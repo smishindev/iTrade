@@ -52,6 +52,74 @@ public sealed class FormerTickerRow
     public required LocalDate Until { get; init; }
 }
 
+/// <summary>
+/// Table `transactions`: the accounting ledger. The domain type is <see cref="Transaction"/>. Rows are only
+/// ever inserted — the database rejects UPDATE, DELETE and TRUNCATE (migration Transactions).
+/// </summary>
+public sealed class TransactionRow
+{
+    public required TransactionId Id { get; init; }
+
+    public required HoldingPlaceId HoldingPlaceId { get; init; }
+
+    public TransactionKind Kind { get; init; }
+
+    public LocalDate TradeDate { get; init; }
+
+    public LocalDate SettlementDate { get; init; }
+
+    public InstrumentId? InstrumentId { get; init; }
+
+    public decimal QuantityChange { get; init; }
+
+    public decimal? Price { get; init; }
+
+    public decimal CashAmount { get; init; }
+
+    public required Currency CashCurrency { get; init; }
+
+    public TransactionSource Source { get; init; }
+
+    public string? ExternalId { get; init; }
+
+    public TransactionId? RelatedTo { get; init; }
+
+    public TransactionId? Reverses { get; init; }
+
+    public Instant RecordedAt { get; init; }
+
+    public string? Note { get; init; }
+
+    public Transaction ToDomain() => new(
+        Id, HoldingPlaceId, Kind, TradeDate, SettlementDate, new Money(CashAmount, CashCurrency), Source, RecordedAt,
+        InstrumentId, QuantityChange, Price is { } price ? new Price(price, CashCurrency) : null, ExternalId, RelatedTo,
+        Reverses, Note);
+
+    public static TransactionRow From(Transaction transaction)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        return new TransactionRow
+        {
+            Id = transaction.Id,
+            HoldingPlaceId = transaction.HoldingPlace,
+            Kind = transaction.Kind,
+            TradeDate = transaction.TradeDate,
+            SettlementDate = transaction.SettlementDate,
+            InstrumentId = transaction.Instrument,
+            QuantityChange = transaction.QuantityChange,
+            Price = transaction.Price?.Value,
+            CashAmount = transaction.Cash.Amount,
+            CashCurrency = transaction.Cash.Currency,
+            Source = transaction.Source,
+            ExternalId = transaction.ExternalId,
+            RelatedTo = transaction.RelatedTo,
+            Reverses = transaction.Reverses,
+            RecordedAt = transaction.RecordedAt,
+            Note = transaction.Note,
+        };
+    }
+}
+
 /// <summary>Table `holding_places`: where money is held. The domain type is <see cref="HoldingPlace"/>.</summary>
 public sealed class HoldingPlaceRow
 {

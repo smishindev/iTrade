@@ -27,6 +27,7 @@ public sealed class DatabaseTests(PostgresFixture pg)
         Assert.Contains("instruments", tables);
         Assert.Contains("instrument_former_tickers", tables);
         Assert.Contains("holding_places", tables);
+        Assert.Contains("transactions", tables);
     }
 
     [Fact]
@@ -150,6 +151,132 @@ public sealed class DatabaseTests(PostgresFixture pg)
         db.ChangeTracker.Clear();
         var places = await db.HoldingPlaces.OrderBy(h => h.Name).ToListAsync();
         Assert.Equal(["IBKR", "Keren hishtalmut"], places.Select(p => p.ToDomain().Name));
+    }
+
+    /// <summary>A database with one holding place and one instrument, and a buy with its fee in the ledger.</summary>
+    private async Task<(string Database, Transaction Buy, Transaction Fee)> LedgerWithABuyAsync()
+    {
+        var database = await pg.NewEmptyDatabaseAsync();
+        await using var db = DbSetup.Create(database);
+        await db.Database.MigrateAsync();
+        var place = new HoldingPlace(HoldingPlaceId.New(), "IBKR", HoldingPlaceKind.Broker, IntegrationKind.Broker);
+        var voo = Etf("VOO", 136155102);
+        db.HoldingPlaces.Add(HoldingPlaceRow.From(place));
+        db.Instruments.Add(InstrumentRow.From(voo));
+        var traded = new LocalDate(2026, 10, 12);
+        var buy = new Transaction(
+            TransactionId.New(), place.Id, TransactionKind.Buy, traded, traded.PlusDays(1), Money.Usd(-1203.505m),
+            TransactionSource.Flex, At, voo.Id, 2.000001m, new Price(601.752499m, Currency.Usd), "T-1001");
+        var fee = new Transaction(
+            TransactionId.New(), place.Id, TransactionKind.Fee, traded, traded.PlusDays(1), Money.Usd(-0.350753m),
+            TransactionSource.Flex, At, voo.Id, externalId: "T-1001:fee", relatedTo: buy.Id);
+        db.Transactions.AddRange(TransactionRow.From(buy), TransactionRow.From(fee));
+        await db.SaveChangesAsync();
+        return (database, buy, fee);
+    }
+
+    [Fact]
+    public async Task TransactionRoundTripsExactlyWithItsLinks()
+    {
+        var (database, buy, fee) = await LedgerWithABuyAsync();
+
+        await using var db = DbSetup.Create(database);
+        var rows = await db.Transactions.AsNoTracking().OrderBy(t => t.Kind).ToListAsync();
+
+        Assert.Equal([buy, fee], rows.Select(r => r.ToDomain()));
+        Assert.Equal(-1203.505m, rows[0].CashAmount);
+        Assert.Equal(2.000001m, rows[0].QuantityChange);
+        Assert.Equal(601.752499m, rows[0].Price);
+        Assert.Equal(buy.Id, rows[1].RelatedTo);
+    }
+
+    [Fact]
+    public async Task LedgerAcceptsNewEntriesButRejectsUpdateDeleteTruncate()
+    {
+        var (database, buy, _) = await LedgerWithABuyAsync();
+        await using var conn = new NpgsqlConnection(database);
+        await conn.OpenAsync();
+
+        foreach (var sql in new[]
+                 {
+                     $"UPDATE transactions SET cash_amount = -1 WHERE id = '{buy.Id}'",
+                     $"DELETE FROM transactions WHERE related_to = '{buy.Id}'",
+                     "TRUNCATE transactions",
+                 })
+        {
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => cmd.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, error.SqlState);
+            Assert.Contains("record a reversal instead", error.MessageText, StringComparison.Ordinal);
+        }
+
+        await using var db = DbSetup.Create(database);
+        Assert.Equal(2, await db.Transactions.CountAsync());
+        Assert.Equal(-1203.505m, (await db.Transactions.SingleAsync(t => t.Id == buy.Id)).CashAmount);
+    }
+
+    [Fact]
+    public async Task DatabaseRefusesASecondCopyASecondReversalAndBrokenReferences()
+    {
+        var (database, buy, fee) = await LedgerWithABuyAsync();
+
+        async Task<string?> SqlStateOfAsync(Transaction entry)
+        {
+            await using var db = DbSetup.Create(database);
+            db.Transactions.Add(TransactionRow.From(entry));
+            var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            return (error.InnerException as PostgresException)?.SqlState;
+        }
+
+        // The same external id of the same source at the same place: a second copy of a statement line.
+        var copy = new Transaction(
+            TransactionId.New(), buy.HoldingPlace, TransactionKind.Fee, buy.TradeDate, buy.SettlementDate, Money.Usd(-1m),
+            TransactionSource.Flex, At, externalId: "T-1001");
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, await SqlStateOfAsync(copy));
+
+        // One reversal is fine; a second one of the same entry is not.
+        await using (var db = DbSetup.Create(database))
+        {
+            db.Transactions.Add(TransactionRow.From(fee.Reversal(TransactionId.New(), At, "charged twice")));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(
+            PostgresErrorCodes.UniqueViolation,
+            await SqlStateOfAsync(fee.Reversal(TransactionId.New(), At, "charged twice, again")));
+
+        // References must exist, and what the ledger points at cannot be removed.
+        var orphan = new Transaction(
+            TransactionId.New(), HoldingPlaceId.New(), TransactionKind.Deposit, buy.TradeDate, buy.TradeDate, Money.Usd(10m),
+            TransactionSource.Manual, At);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, await SqlStateOfAsync(orphan));
+        await using var conn = new NpgsqlConnection(database);
+        await conn.OpenAsync();
+        foreach (var sql in new[] { "DELETE FROM instruments", "DELETE FROM holding_places" })
+        {
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => cmd.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.RestrictViolation, error.SqlState);
+        }
+    }
+
+    [Fact]
+    public async Task DatabaseItselfRefusesAnEntryThatSettlesBeforeItTradesOrChangesNothing()
+    {
+        var (database, buy, _) = await LedgerWithABuyAsync();
+        await using var conn = new NpgsqlConnection(database);
+        await conn.OpenAsync();
+        const string insert =
+            "INSERT INTO transactions (id, holding_place_id, kind, trade_date, settlement_date, quantity_change, " +
+            "cash_amount, cash_currency, source, recorded_at) VALUES (gen_random_uuid(), '{0}', 'Deposit', {1}, 'USD', 'Manual', now())";
+
+        foreach (var values in new[] { "'2026-10-12', '2026-10-09', 0, 10", "'2026-10-12', '2026-10-12', 0, 0" })
+        {
+            await using var cmd = new NpgsqlCommand(
+                string.Format(System.Globalization.CultureInfo.InvariantCulture, insert, buy.HoldingPlace, values), conn);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => cmd.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+        }
     }
 
     [Fact]

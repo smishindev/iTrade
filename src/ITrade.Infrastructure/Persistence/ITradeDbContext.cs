@@ -26,6 +26,8 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
 
     public DbSet<HoldingPlaceRow> HoldingPlaces => Set<HoldingPlaceRow>();
 
+    public DbSet<TransactionRow> Transactions => Set<TransactionRow>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
@@ -92,6 +94,30 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.Property(h => h.Kind).HasConversion<string>().HasMaxLength(20);
             e.Property(h => h.Integration).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(h => h.Name).IsUnique();
+        });
+        modelBuilder.Entity<TransactionRow>(e =>
+        {
+            e.ToTable("transactions", table =>
+            {
+                table.HasCheckConstraint("ck_transactions_settles_on_or_after_the_trade", "settlement_date >= trade_date");
+                table.HasCheckConstraint("ck_transactions_changes_something", "quantity_change <> 0 OR cash_amount <> 0");
+            });
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Kind).HasConversion<string>().HasMaxLength(20);
+            e.Property(t => t.Source).HasConversion<string>().HasMaxLength(20);
+            e.Property(t => t.ExternalId).HasMaxLength(Transaction.MaxExternalIdLength);
+            e.Property(t => t.Note).HasMaxLength(Transaction.MaxNoteLength);
+            // The ledger references are never cascaded: nothing a transaction points at may disappear.
+            e.HasOne<HoldingPlaceRow>().WithMany().HasForeignKey(t => t.HoldingPlaceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<InstrumentRow>().WithMany().HasForeignKey(t => t.InstrumentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<TransactionRow>().WithMany().HasForeignKey(t => t.RelatedTo).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<TransactionRow>().WithOne().HasForeignKey<TransactionRow>(t => t.Reverses).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(t => new { t.HoldingPlaceId, t.TradeDate });
+            e.HasIndex(t => new { t.InstrumentId, t.TradeDate });
+            // What a repeated import recognises an entry by; entries typed in by hand have no external id.
+            e.HasIndex(t => new { t.HoldingPlaceId, t.Source, t.ExternalId }).IsUnique();
+            // An entry is reversed at most once.
+            e.HasIndex(t => t.Reverses).IsUnique();
         });
     }
 
