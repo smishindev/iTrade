@@ -1,3 +1,4 @@
+using ITrade.Domain;
 using ITrade.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
@@ -23,6 +24,9 @@ public sealed class DatabaseTests(PostgresFixture pg)
         Assert.Contains("audit_events", tables);
         Assert.Contains("job_runs", tables);
         Assert.DoesNotContain("jobs", tables);
+        Assert.Contains("instruments", tables);
+        Assert.Contains("instrument_former_tickers", tables);
+        Assert.Contains("holding_places", tables);
     }
 
     [Fact]
@@ -66,6 +70,86 @@ public sealed class DatabaseTests(PostgresFixture pg)
 
         await using var read = pg.NewContext();
         Assert.Equal(At, (await read.Settings.SingleAsync(s => s.Key == "probe")).UpdatedAt);
+    }
+
+    private async Task<ITradeDbContext> NewMigratedDatabaseAsync()
+    {
+        var db = DbSetup.Create(await pg.NewEmptyDatabaseAsync());
+        await db.Database.MigrateAsync();
+        return db;
+    }
+
+    private static Instrument Etf(string ticker, int? conId, string exchange = "ARCA") =>
+        new(InstrumentId.New(), new Ticker(ticker), exchange, Currency.Usd, $"{ticker} fund", ibkrConId: conId);
+
+    [Fact]
+    public async Task InstrumentRoundTripsWithItsValueTypes()
+    {
+        await using var db = await NewMigratedDatabaseAsync();
+        var voo = new Instrument(
+            InstrumentId.New(), new Ticker("VOO"), "ARCA", Currency.Usd, "Vanguard S&P 500 ETF",
+            new Isin("US9229083632"), 136155102);
+        db.Instruments.Add(InstrumentRow.From(voo));
+        db.FormerTickers.Add(new FormerTickerRow
+        {
+            InstrumentId = voo.Id,
+            Ticker = new Ticker("OLD"),
+            Until = new LocalDate(2020, 1, 2),
+        });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        Assert.Equal(voo, (await db.Instruments.SingleAsync()).ToDomain());
+        var former = await db.FormerTickers.SingleAsync();
+        Assert.Equal((voo.Id, new Ticker("OLD"), new LocalDate(2020, 1, 2)), (former.InstrumentId, former.Ticker, former.Until));
+    }
+
+    [Fact]
+    public async Task DatabaseRefusesASecondInstrumentWithTheSameContractOrTheSameTickerOnAnExchange()
+    {
+        var database = await pg.NewEmptyDatabaseAsync();
+        await using var db = DbSetup.Create(database);
+        await db.Database.MigrateAsync();
+        db.Instruments.AddRange(InstrumentRow.From(Etf("AAA", 1001)), InstrumentRow.From(Etf("BBB", null)), InstrumentRow.From(Etf("CCC", null)));
+        await db.SaveChangesAsync();
+
+        async Task<string?> SqlStateOfAsync(Instrument duplicate)
+        {
+            await using var other = DbSetup.Create(database);
+            other.Instruments.Add(InstrumentRow.From(duplicate));
+            var error = await Assert.ThrowsAsync<DbUpdateException>(() => other.SaveChangesAsync());
+            return (error.InnerException as PostgresException)?.SqlState;
+        }
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, await SqlStateOfAsync(Etf("ZZZ", 1001)));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, await SqlStateOfAsync(Etf("AAA", 2002)));
+        // The same ticker on another exchange is another instrument.
+        await using var third = DbSetup.Create(database);
+        third.Instruments.Add(InstrumentRow.From(Etf("AAA", 3003, "LSEETF")));
+        await third.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task DatabaseItselfRefusesAutomaticReadingOfAPlaceThatIsNotABroker()
+    {
+        await using var db = await NewMigratedDatabaseAsync();
+        db.HoldingPlaces.Add(HoldingPlaceRow.From(
+            new HoldingPlace(HoldingPlaceId.New(), "IBKR", HoldingPlaceKind.Broker, IntegrationKind.Broker)));
+        db.HoldingPlaces.Add(HoldingPlaceRow.From(
+            new HoldingPlace(HoldingPlaceId.New(), "Keren hishtalmut", HoldingPlaceKind.StudyFund, IntegrationKind.Manual)));
+        await db.SaveChangesAsync();
+
+        // Past the domain type, straight into the table.
+        var refused = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO holding_places (id, name, kind, integration) VALUES (gen_random_uuid(), 'Fund', 'StudyFund', 'Broker')"));
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refused.SqlState);
+        var duplicateName = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO holding_places (id, name, kind, integration) VALUES (gen_random_uuid(), 'IBKR', 'Broker', 'Manual')"));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicateName.SqlState);
+
+        db.ChangeTracker.Clear();
+        var places = await db.HoldingPlaces.OrderBy(h => h.Name).ToListAsync();
+        Assert.Equal(["IBKR", "Keren hishtalmut"], places.Select(p => p.ToDomain().Name));
     }
 
     [Fact]

@@ -60,6 +60,124 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_events", (string)null);
                 });
 
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.FormerTickerRow", b =>
+                {
+                    b.Property<Guid>("InstrumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instrument_id");
+
+                    b.Property<LocalDate>("Until")
+                        .HasColumnType("date")
+                        .HasColumnName("until");
+
+                    b.Property<string>("Ticker")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("ticker");
+
+                    b.HasKey("InstrumentId", "Until")
+                        .HasName("pk_instrument_former_tickers");
+
+                    b.HasIndex("Ticker")
+                        .HasDatabaseName("ix_instrument_former_tickers_ticker");
+
+                    b.ToTable("instrument_former_tickers", (string)null);
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.HoldingPlaceRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Integration")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("integration");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_holding_places");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_holding_places_name");
+
+                    b.ToTable("holding_places", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_holding_places_only_a_broker_is_read_automatically", "integration <> 'Broker' OR kind = 'Broker'");
+                        });
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.InstrumentRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("Exchange")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("exchange");
+
+                    b.Property<int?>("IbkrConId")
+                        .HasColumnType("integer")
+                        .HasColumnName("ibkr_con_id");
+
+                    b.Property<string>("Isin")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("isin");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Ticker")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("ticker");
+
+                    b.HasKey("Id")
+                        .HasName("pk_instruments");
+
+                    b.HasIndex("IbkrConId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_instruments_ibkr_con_id");
+
+                    b.HasIndex("Isin")
+                        .HasDatabaseName("ix_instruments_isin");
+
+                    b.HasIndex("Ticker", "Exchange")
+                        .IsUnique()
+                        .HasDatabaseName("ix_instruments_ticker_exchange");
+
+                    b.ToTable("instruments", (string)null);
+                });
+
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.JobRun", b =>
                 {
                     b.Property<string>("Name")
@@ -119,6 +237,16 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasName("pk_settings");
 
                     b.ToTable("settings", (string)null);
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.FormerTickerRow", b =>
+                {
+                    b.HasOne("ITrade.Infrastructure.Persistence.InstrumentRow", null)
+                        .WithMany()
+                        .HasForeignKey("InstrumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_instrument_former_tickers_instruments_instrument_id");
                 });
 #pragma warning restore 612, 618
         }

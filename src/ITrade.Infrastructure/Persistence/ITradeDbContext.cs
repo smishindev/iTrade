@@ -20,6 +20,12 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
 
     public DbSet<JobRun> JobRuns => Set<JobRun>();
 
+    public DbSet<InstrumentRow> Instruments => Set<InstrumentRow>();
+
+    public DbSet<FormerTickerRow> FormerTickers => Set<FormerTickerRow>();
+
+    public DbSet<HoldingPlaceRow> HoldingPlaces => Set<HoldingPlaceRow>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
@@ -31,6 +37,8 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
         configurationBuilder.Properties<TransactionId>().HaveConversion<TransactionIdConverter>();
         configurationBuilder.Properties<OrderId>().HaveConversion<OrderIdConverter>();
         configurationBuilder.Properties<TradeDate>().HaveConversion<TradeDateConverter>();
+        configurationBuilder.Properties<Ticker>().HaveConversion<TickerConverter>().HaveMaxLength(Ticker.MaxLength);
+        configurationBuilder.Properties<Isin>().HaveConversion<IsinConverter>().HaveMaxLength(Isin.Length);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -56,7 +64,40 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.Property(j => j.Name).HasMaxLength(100);
             e.Property(j => j.Status).HasConversion<string>().HasMaxLength(20);
         });
+        modelBuilder.Entity<InstrumentRow>(e =>
+        {
+            e.ToTable("instruments");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Exchange).HasMaxLength(Instrument.MaxExchangeLength);
+            e.Property(i => i.Name).HasMaxLength(Instrument.MaxNameLength);
+            // One instrument per ticker on an exchange today, and per IBKR contract (several rows may have none).
+            e.HasIndex(i => new { i.Ticker, i.Exchange }).IsUnique();
+            e.HasIndex(i => i.IbkrConId).IsUnique();
+            e.HasIndex(i => i.Isin);
+        });
+        modelBuilder.Entity<FormerTickerRow>(e =>
+        {
+            e.ToTable("instrument_former_tickers");
+            e.HasKey(f => new { f.InstrumentId, f.Until });
+            e.HasOne<InstrumentRow>().WithMany().HasForeignKey(f => f.InstrumentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(f => f.Ticker);
+        });
+        modelBuilder.Entity<HoldingPlaceRow>(e =>
+        {
+            e.ToTable("holding_places", table => table.HasCheckConstraint(
+                "ck_holding_places_only_a_broker_is_read_automatically",
+                "integration <> 'Broker' OR kind = 'Broker'"));
+            e.HasKey(h => h.Id);
+            e.Property(h => h.Name).HasMaxLength(HoldingPlace.MaxNameLength);
+            e.Property(h => h.Kind).HasConversion<string>().HasMaxLength(20);
+            e.Property(h => h.Integration).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(h => h.Name).IsUnique();
+        });
     }
+
+    private sealed class TickerConverter() : ValueConverter<Ticker, string>(t => t.Value, v => new Ticker(v));
+
+    private sealed class IsinConverter() : ValueConverter<Isin, string>(i => i.Value, v => new Isin(v));
 
     private sealed class TradeDateConverter() : ValueConverter<TradeDate, LocalDate>(d => d.Value, v => new TradeDate(v));
 
