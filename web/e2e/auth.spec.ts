@@ -19,7 +19,7 @@ async function signIn(page: Page, password: string) {
   await page.getByRole('button', { name: 'Sign in' }).click()
 }
 
-test('sign in, move around, reload, sign out', async ({ page }) => {
+test('sign in, move around, reload, sign out', async ({ page }, testInfo) => {
   const problems = collectProblems(page)
 
   // Without a session every screen leads to the sign-in page.
@@ -33,7 +33,7 @@ test('sign in, move around, reload, sign out', async ({ page }) => {
   expect(await button.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
     'rgba(0, 0, 0, 0)',
   )
-  await page.screenshot({ path: 'test-results/01-sign-in.png' })
+  await page.screenshot({ path: `test-results/${testInfo.project.name}-01-sign-in.png` })
 
   // The right password opens the screen the visitor was going to.
   await signIn(page, secret)
@@ -54,7 +54,10 @@ test('sign in, move around, reload, sign out', async ({ page }) => {
   await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/)
   await expect(page.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('link', { name: 'Taxes' })).not.toHaveAttribute('aria-current')
-  await page.screenshot({ path: 'test-results/02-overview.png', animations: 'disabled' })
+  await page.screenshot({
+    path: `test-results/${testInfo.project.name}-02-overview.png`,
+    animations: 'disabled',
+  })
 
   // A reload of a screen address keeps the session and the screen.
   await page.getByRole('link', { name: 'Positions' }).click()

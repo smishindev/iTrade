@@ -39,5 +39,9 @@ export const healthQuery = queryOptions({
       mode: mode === 'Paper' || mode === 'Live' ? mode : undefined,
     }
   },
-  refetchInterval: 60_000,
+  // Asked often and never retried or reused: a server that stopped, or restarted in another mode, must show
+  // within seconds. (The events hub will make this immediate once the interface listens to it.)
+  refetchInterval: 15_000,
+  staleTime: 0,
+  retry: false,
 })

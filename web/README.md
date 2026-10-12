@@ -34,7 +34,8 @@ needs anything else (a CDN font, an inline script) will not work — bundle it i
 `npm run e2e` runs Playwright (`e2e/`) in the installed Microsoft Edge against the real Host. It builds the
 interface and starts `tests/ITrade.E2EHost`: a throw-away PostgreSQL in Docker, its own port (7199) and data
 folder, and an owner secret generated for the run. The owner's database and settings are not involved, and
-the container is removed afterwards. Needs Docker; a Host started by hand must be stopped first (it locks
+the container is removed afterwards. Every scenario runs twice: against the Host serving the built interface
+(`host`) and through the Vite development server on port 5199 passing the API to that Host (`dev-proxy`). Needs Docker; a Host started by hand must be stopped first (it locks
 the build). Not part of `npm run check` — run it before a phase gate and after changes to sign-in, routing
 or the Host's static files and security headers.
 

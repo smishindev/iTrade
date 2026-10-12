@@ -4,9 +4,11 @@ import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Snackbar from '@mui/material/Snackbar'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { signOut } from '../api/auth'
 import { isUnauthorized } from '../api/http'
+import { forgetOwnerData } from '../api/queryClient'
 import { healthQuery, sessionQuery } from '../api/session'
 import { AppShell } from './AppShell'
 
@@ -21,15 +23,18 @@ export function RequireSession() {
   const queryClient = useQueryClient()
   const logout = useMutation({
     mutationFn: signOut,
-    onSuccess: async () => {
-      // Nothing of the signed-in owner's data stays in memory; the session is asked again and the gate closes.
-      queryClient.removeQueries({
-        predicate: ({ queryKey }) =>
-          queryKey[0] !== sessionQuery.queryKey[0] && queryKey[0] !== healthQuery.queryKey[0],
-      })
-      await queryClient.invalidateQueries({ queryKey: sessionQuery.queryKey })
-    },
+    // The session is asked again and the gate closes.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: sessionQuery.queryKey }),
   })
+
+  // However the session ended (sign-out, expiry, a new password, another tab): nothing fetched for the
+  // signed-in owner stays in memory.
+  const signedOut = session.data !== undefined && !session.data.authenticated
+  useEffect(() => {
+    if (signedOut) {
+      forgetOwnerData(queryClient)
+    }
+  }, [signedOut, queryClient])
 
   if (session.isPending) {
     return (
@@ -61,9 +66,12 @@ export function RequireSession() {
   }
 
   const signOutFailed = logout.isError && !isUnauthorized(logout.error)
+  // The mode is shown only while the server confirms it: after a failed check the last answer is history,
+  // and the badge goes back to "not connected".
+  const mode = health.isError ? undefined : health.data?.mode
   return (
     <AppShell
-      status={{ mode: health.data?.mode, account: undefined, reconciliation: undefined }}
+      status={{ mode, account: undefined, reconciliation: undefined }}
       onSignOut={() => {
         logout.mutate()
       }}

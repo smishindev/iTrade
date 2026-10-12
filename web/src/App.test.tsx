@@ -61,6 +61,22 @@ describe('signed in', () => {
     expect(screen.getByLabelText('Trading mode: not connected')).toBeInTheDocument()
   })
 
+  test('the mode badge goes back to "not connected" when the server stops answering', async () => {
+    const server = installFakeServer({ mode: 'Paper' })
+    const app = renderApp('/')
+    expect(await screen.findByLabelText('Trading mode: Paper')).toBeInTheDocument()
+
+    server.reachable = false
+    await app.queryClient.refetchQueries({ queryKey: ['health'] })
+
+    expect(await screen.findByLabelText('Trading mode: not connected')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Trading mode: Paper')).not.toBeInTheDocument()
+
+    server.reachable = true
+    await app.queryClient.refetchQueries({ queryKey: ['health'] })
+    expect(await screen.findByLabelText('Trading mode: Paper')).toBeInTheDocument()
+  })
+
   test('an unknown address says so and keeps the menu', async () => {
     installFakeServer()
     renderApp('/no-such-screen')
@@ -84,10 +100,11 @@ describe('not signed in', () => {
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
   })
 
-  test('a session that ends while working leads to the sign-in page', async () => {
+  test('a session that ends while working leads to the sign-in page and leaves no data behind', async () => {
     const server = installFakeServer()
     const app = renderApp('/positions')
     await screen.findByRole('heading', { level: 1, name: 'Positions' })
+    app.queryClient.setQueryData(['lots'], [{ ticker: 'VOO', quantity: 3 }])
 
     // The session expires on the server; the next request of any screen is answered with 401.
     server.signedIn = false
@@ -99,6 +116,23 @@ describe('not signed in', () => {
       await screen.findByRole('heading', { level: 1, name: 'Sign in to iTrade' }),
     ).toBeInTheDocument()
     expect(app.path()).toBe('/login')
+    expect(app.queryClient.getQueryData(['lots'])).toBeUndefined()
+  })
+
+  test('a session found ended on the next check leaves no data behind either', async () => {
+    const server = installFakeServer()
+    const app = renderApp('/positions')
+    await screen.findByRole('heading', { level: 1, name: 'Positions' })
+    app.queryClient.setQueryData(['lots'], [{ ticker: 'VOO', quantity: 3 }])
+
+    // No request failed: the session check itself (on returning to the tab) finds the session gone.
+    server.signedIn = false
+    await app.queryClient.refetchQueries({ queryKey: ['session'] })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Sign in to iTrade' }),
+    ).toBeInTheDocument()
+    expect(app.queryClient.getQueryData(['lots'])).toBeUndefined()
   })
 })
 
