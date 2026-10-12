@@ -47,6 +47,7 @@ runs in PAPER mode. To get rid of the browser's certificate warning: `dotnet dev
 | `python tools/ci.py` | build and test everything (needs Docker); `--fast` without Docker |
 | `dotnet run --project src/ITrade.Host` | the application (interface + API); stop it before building |
 | `dotnet run --project src/ITrade.Host -- check` | is everything in place to start? (interface, database, password) — changes nothing |
+| `dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv` | load the instrument catalogue; running it again changes nothing |
 | `cd web; npm run dev` | interface with hot reload on `http://127.0.0.1:5173`, next to a running Host |
 | `.\deploy\backup.ps1` | back up the database to `<data folder>\backups` |
 | `.\deploy\restore.ps1 -File <dump> -Verify` | check a backup by restoring it into a temporary database |

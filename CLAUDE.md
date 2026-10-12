@@ -38,6 +38,8 @@ statistics. **Python never trades.**
   Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password` ·
   `dotnet run --project src/ITrade.Host -- check` (builds the Host as a real start does and reports what is missing;
   changes nothing). Tests run the Host in-process as "Testing"; only `check` and a real start exercise the owner's launch.
+  `dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv` loads the instrument catalogue
+  (repeatable); the catalogue itself is generated: `uv run python tools/make_instrument_catalogue.py` in `python/`.
 - Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·
   `.\deploy\restore.ps1 -File <dump> -Verify` (restores into a temporary database and removes it). Restore never
   overwrites an existing database; switching the Host to a restored one is the owner's step.

@@ -5,3 +5,5 @@
 # The API snapshot and the client generated from it are compared byte by byte.
 web/openapi/** text eol=lf
 web/src/api/generated/** text eol=lf
+# Generated catalogue: its generator's --check compares the text.
+config/instruments.csv text eol=lf

@@ -1,5 +1,6 @@
 using ITrade.Host;
 using ITrade.Host.Auth;
+using ITrade.Host.Portfolio;
 
 if (args is [SetPasswordCommand.Name, .. var rest])
 {
@@ -11,6 +12,18 @@ if (args is [SetPasswordCommand.Name, .. var rest])
 if (args is [CheckCommand.Name, .. var checkArgs])
 {
     return await CheckCommand.RunAsync(checkArgs, Console.Out);
+}
+
+if (args is [ImportInstrumentsCommand.Name, ..])
+{
+    if (args is not [_, var file, .. var importArgs] || file.StartsWith('-'))
+    {
+        await Console.Error.WriteLineAsync($"Usage: {ImportInstrumentsCommand.Name} <file>, e.g. config/instruments.csv");
+        return 2;
+    }
+
+    await using var cli = ITradeHost.Build(importArgs);
+    return await ImportInstrumentsCommand.RunAsync(cli, file, Console.Out);
 }
 
 try
