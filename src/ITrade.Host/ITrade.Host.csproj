@@ -11,6 +11,11 @@
     <ProjectReference Include="..\ITrade.Broker.IBKR\ITrade.Broker.IBKR.csproj" />
   </ItemGroup>
 
+  <!-- The built web interface (`npm run build` in web/) is served from wwwroot next to the Host (P2.5.06). -->
+  <ItemGroup>
+    <Content Include="..\..\web\dist\**" LinkBase="wwwroot" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="ITrade.UnitTests" />
     <InternalsVisibleTo Include="ITrade.IntegrationTests" />

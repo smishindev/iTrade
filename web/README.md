@@ -16,6 +16,18 @@ Node 24 (see `.nvmrc`). From this folder:
 | `npm run gen:api` | regenerate the typed API client from `openapi/v1.json`               |
 | `npm run check`   | everything a commit must pass: API client, format, lint, test, build |
 
+## Running
+
+- **Normal use — one process.** `npm run build` here, then `dotnet run --project src/ITrade.Host` in the
+  repository root: the Host copies `dist/` to its `wwwroot` and serves the interface and the API together at
+  `https://127.0.0.1:7120`.
+- **Development — hot reload.** Start the Host as above, then `npm run dev` here and open
+  `http://localhost:5173`. Vite serves the pages and passes `/api`, `/health`, `/openapi` and `/hubs` to the
+  Host (another address: environment variable `ITRADE_HOST`).
+
+The Host sends a Content-Security-Policy: scripts, data and frames from its own origin only. A library that
+needs anything else (a CDN font, an inline script) will not work — bundle it instead.
+
 ## API client
 
 `src/api/generated/schema.d.ts` is generated from `openapi/v1.json` — never edit it by hand. After a change

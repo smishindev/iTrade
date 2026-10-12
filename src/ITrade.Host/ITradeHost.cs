@@ -5,6 +5,7 @@ using ITrade.Host.Events;
 using ITrade.Host.Health;
 using ITrade.Host.Jobs;
 using ITrade.Host.Logging;
+using ITrade.Host.Web;
 using ITrade.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -90,12 +91,14 @@ public static partial class ITradeHost
             requests => requests.Logger = app.Services.GetRequiredService<Serilog.ILogger>());
         app.UseExceptionHandler();
         app.UseStatusCodePages();
+        app.UseWebUi();
         app.UseSameOriginForHubs();
         app.UseOwnerAuth();
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealth }).AllowAnonymous();
         app.MapOwnerAuth();
         app.MapEvents();
         app.MapOpenApi(); // /openapi/v1.json — behind sign-in, like everything not marked anonymous
+        app.MapWebUi();
         return app;
     }
 
