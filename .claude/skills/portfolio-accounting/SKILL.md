@@ -13,7 +13,7 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
-| Where it is held | `HoldingPlace` (broker, study fund, other; read automatically or by hand) | `holding_places` |
+| Where it is held | `HoldingPlace` (broker, study fund, other; read automatically or by hand). In use: IBKR only — the owner decided on 2026-10-12 not to keep keren hishtalmut in the platform; the `StudyFund` kind stays in the code unused | `holding_places` |
 | What happened | `Transaction`; `TransactionLedger` (`RecordAsync`, `ReverseAsync`) | `transactions` |
 
 ## The ledger

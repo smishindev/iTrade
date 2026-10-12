@@ -29,7 +29,7 @@ raise it when phase 4 starts instead of working around it.
 | Lots are matched FIFO | assumption | not verified (question 5) |
 | Half-year reports and advances are due | assumption | not verified (questions 13–16) |
 | How the real gain is computed for a dollar security | — | **open** (question 3): no formula without a written source; until one is chosen and recorded, the code refuses |
-| Where to hold an index (US ETF, Irish UCITS, keren hishtalmut, Israeli broker) | — | open (questions 26–30) |
+| Where to hold an index (US ETF, Irish UCITS, Israeli broker) | — | open (questions 26–30); keren hishtalmut is out — the owner decided on 2026-10-12 not to keep it in the platform |
 
 When an answer arrives: replace the assumption, write the answer's **date and source** next to the
 number (a comment in `config/costs.toml`, the row in `accountant-questions.md`), and add the
