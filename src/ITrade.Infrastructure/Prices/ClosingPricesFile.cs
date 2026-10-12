@@ -12,9 +12,10 @@ namespace ITrade.Infrastructure.Prices;
 /// <summary>
 /// Reads the export of closing prices the data pipeline writes (`itrade export-closes`, python/src/itrade/data/closes.py):
 /// `closing-prices.csv` with the lines `ticker,session,close`, the exchange's sessions those cover in
-/// `closing-prices-sessions.csv`, and `closing-prices.json` with the SHA-256 of both and what is known about
-/// each ticker. The tables are taken only if they are exactly the ones the manifest vouches for, and anything
-/// that is not as the pipeline writes it stops the whole export — with its line number where there is one.
+/// `closing-prices-sessions.csv`, the funds' dividends and splits in `closing-prices-events.csv`, and
+/// `closing-prices.json` with the SHA-256 of the three and what is known about each ticker. The tables are
+/// taken only if they are exactly the ones the manifest vouches for, and anything that is not as the pipeline
+/// writes it stops the whole export — with its line number where there is one.
 /// </summary>
 public static class ClosingPricesFile
 {
@@ -22,13 +23,14 @@ public static class ClosingPricesFile
     public const string ManifestName = "closing-prices.json";
     public const string Header = "ticker,session,close";
     public const string SessionsHeader = "session";
+    public const string EventsHeader = "ticker,day,kind,value";
 
     /// <summary>Where the pipeline puts the export inside the data folder.</summary>
     public static string DefaultPath(string dataDir) => Path.Combine(dataDir, "derived", "closing-prices", CsvName);
 
     /// <param name="csvPath">
     /// The table of prices; its manifest is the `.json` of the same name beside it, and the manifest names the
-    /// table of sessions, in the same folder.
+    /// tables of sessions and of fund events, in the same folder.
     /// </param>
     public static ClosingPricesExport Read(string csvPath)
     {
@@ -52,34 +54,21 @@ public static class ClosingPricesFile
 
         using (manifest)
         {
-            var sessionsName = manifest.RootElement.ValueKind == JsonValueKind.Object
-                && manifest.RootElement.TryGetProperty("sessions_file", out var name) && name.ValueKind == JsonValueKind.String
-                    ? name.GetString()!
-                    : throw new FormatException(
-                        "The manifest of the closing prices names no table of sessions: it was written by an older exporter. Export again.");
-            // A name, not a path: the manifest does not get to point anywhere else.
-            if (sessionsName.Length == 0 || sessionsName != Path.GetFileName(sessionsName))
-            {
-                throw new FormatException($"The manifest's 'sessions_file' is not a file name: '{sessionsName}'.");
-            }
-
-            var sessionsPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(csvPath))!, sessionsName);
-            if (!File.Exists(sessionsPath))
-            {
-                throw new FileNotFoundException($"The export's table of sessions is not there: {sessionsPath}. Export again.");
-            }
-
-            return Read(File.ReadAllBytes(csvPath), File.ReadAllBytes(sessionsPath), manifest.RootElement);
+            var folder = Path.GetDirectoryName(Path.GetFullPath(csvPath))!;
+            var sessions = Beside(folder, manifest.RootElement, "sessions_file", "sessions");
+            var events = Beside(folder, manifest.RootElement, "events_file", "fund events");
+            return Read(File.ReadAllBytes(csvPath), File.ReadAllBytes(sessions), File.ReadAllBytes(events), manifest.RootElement);
         }
     }
 
-    public static ClosingPricesExport Read(byte[] table, byte[] sessionsTable, JsonElement manifest)
+    public static ClosingPricesExport Read(byte[] table, byte[] sessionsTable, byte[] eventsTable, JsonElement manifest)
     {
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(sessionsTable);
+        ArgumentNullException.ThrowIfNull(eventsTable);
         try
         {
-            return ReadChecked(table, sessionsTable, manifest);
+            return ReadChecked(table, sessionsTable, eventsTable, manifest);
         }
         // A manifest whose values are of another kind than expected or that names a ticker twice, or a table
         // that is not text.
@@ -89,7 +78,27 @@ public static class ClosingPricesFile
         }
     }
 
-    private static ClosingPricesExport ReadChecked(byte[] table, byte[] sessionsTable, JsonElement manifest)
+    /// <summary>The table the manifest names under <paramref name="key"/>, in the folder of the export.</summary>
+    private static string Beside(string folder, JsonElement manifest, string key, string what)
+    {
+        var fileName = manifest.ValueKind == JsonValueKind.Object
+            && manifest.TryGetProperty(key, out var name) && name.ValueKind == JsonValueKind.String
+                ? name.GetString()!
+                : throw new FormatException(
+                    $"The manifest of the closing prices names no table of {what}: it was written by an older exporter. Export again.");
+        // A name, not a path: the manifest does not get to point anywhere else.
+        if (fileName.Length == 0 || fileName != Path.GetFileName(fileName))
+        {
+            throw new FormatException($"The manifest's '{key}' is not a file name: '{fileName}'.");
+        }
+
+        var path = Path.Combine(folder, fileName);
+        return File.Exists(path)
+            ? path
+            : throw new FileNotFoundException($"The export's table of {what} is not there: {path}. Export again.");
+    }
+
+    private static ClosingPricesExport ReadChecked(byte[] table, byte[] sessionsTable, byte[] eventsTable, JsonElement manifest)
     {
         if (manifest.ValueKind != JsonValueKind.Object)
         {
@@ -98,20 +107,26 @@ public static class ClosingPricesFile
 
         var sha256 = Vouched(table, Text(manifest, "sha256"), "closing prices");
         Vouched(sessionsTable, Text(manifest, "sessions_sha256"), "sessions");
+        Vouched(eventsTable, Text(manifest, "events_sha256"), "fund events");
         var exportedAt = Time(Text(manifest, "exported_at"), "'exported_at'");
 
         var utf8 = new UTF8Encoding(false, throwOnInvalidBytes: true);
         var sessions = ReadSessions(utf8.GetString(sessionsTable));
-        if (!manifest.TryGetProperty("sessions", out var sessionCount) || !sessionCount.TryGetInt32(out var statedSessions)
-            || statedSessions != sessions.Count)
+        if (Count(manifest, "sessions") != sessions.Count)
         {
             throw new FormatException($"The manifest counts another number of sessions than their table has ({sessions.Count}).");
         }
 
         var lines = ReadLines(utf8.GetString(table));
-        if (!manifest.TryGetProperty("rows", out var rows) || !rows.TryGetInt32(out var count) || count != lines.Count)
+        if (Count(manifest, "rows") != lines.Count)
         {
             throw new FormatException($"The manifest counts another number of rows than the table has ({lines.Count}).");
+        }
+
+        var events = ReadEvents(utf8.GetString(eventsTable));
+        if (Count(manifest, "events") != events.Count)
+        {
+            throw new FormatException($"The manifest counts another number of fund events than their table has ({events.Count}).");
         }
 
         var tickers = ReadTickers(manifest);
@@ -130,15 +145,24 @@ public static class ClosingPricesFile
             throw new FormatException($"The table holds prices of {unnamed}, which the manifest does not name.");
         }
 
+        if (events.FirstOrDefault(e => !tickers.ContainsKey(e.Ticker)) is { } stray)
+        {
+            throw new FormatException($"The table of fund events holds one of {stray.Ticker}, which the manifest does not name.");
+        }
+
         return new ClosingPricesExport(
             Text(manifest, "source"), sha256, exportedAt, Text(manifest, "calendar"), sessions,
-            tickers.ToDictionary(t => t.Key, t => t.Value.About, StringComparer.OrdinalIgnoreCase), lines);
+            tickers.ToDictionary(t => t.Key, t => t.Value.About, StringComparer.OrdinalIgnoreCase), lines, events);
     }
 
     private static string Text(JsonElement parent, string name) =>
         parent.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()!
             : throw new FormatException($"The manifest of the closing prices has no '{name}'.");
+
+    /// <summary>A count the manifest states; -1 when it states none (no table has that many lines).</summary>
+    private static int Count(JsonElement manifest, string name) =>
+        manifest.TryGetProperty(name, out var value) && value.TryGetInt32(out var count) ? count : -1;
 
     private static Instant Time(string text, string name)
     {
@@ -241,6 +265,54 @@ public static class ClosingPricesFile
         }
 
         return sessions;
+    }
+
+    private static List<FundEventLine> ReadEvents(string text)
+    {
+        var events = new List<FundEventLine>();
+        var number = 0;
+        foreach (var line in text.Split('\n'))
+        {
+            number++;
+            if (number == 1)
+            {
+                if (line != EventsHeader)
+                {
+                    throw new FormatException($"Line 1 of the fund events is not the header '{EventsHeader}'.");
+                }
+
+                continue;
+            }
+
+            if (line.Length == 0)
+            {
+                continue; // the end of the file
+            }
+
+            var fields = line.Split(',');
+            var day = fields.Length == 4 ? LocalDatePattern.Iso.Parse(fields[1]) : null;
+            FundEventKind? kind = fields.Length == 4
+                ? fields[2] switch { "dividend" => FundEventKind.Dividend, "split" => FundEventKind.Split, _ => null }
+                : null;
+            if (day is not { Success: true } || kind is null || fields[0].Length == 0 || fields[0] != fields[0].Trim()
+                || !decimal.TryParse(fields[3], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value)
+                || value <= 0m || decimal.Round(value, FundEvent.Scale) != value)
+            {
+                throw new FormatException($"Line {number} of the fund events is not a ticker, a date, a kind and an amount: '{line}'.");
+            }
+
+            // One ticker after another, each in order of date, a dividend before a split of the same day:
+            // the same event cannot come twice unnoticed.
+            if (events.Count > 0 && events[^1] is var before && before.Ticker == fields[0]
+                && (day.Value < before.Day || (day.Value == before.Day && kind.Value <= before.Kind)))
+            {
+                throw new FormatException($"Line {number} of the fund events: the events of {fields[0]} are not in order, each once.");
+            }
+
+            events.Add(new FundEventLine(fields[0], day.Value, kind.Value, value));
+        }
+
+        return events;
     }
 
     private static List<ClosingPriceLine> ReadLines(string text)

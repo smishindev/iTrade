@@ -11,6 +11,9 @@ namespace ITrade.Application.Prices;
 /// <summary>One line of an export of closing prices: a ticker, a session and the close as it traded.</summary>
 public sealed record ClosingPriceLine(string Ticker, LocalDate Session, decimal Close);
 
+/// <summary>One line of the export's table of fund events: a dividend per share as paid, or a split as new shares per old.</summary>
+public sealed record FundEventLine(string Ticker, LocalDate Day, FundEventKind Kind, decimal Value);
+
 /// <summary>
 /// What the export says about one ticker: when its data was fetched, the currency the prices are in (when the
 /// pipeline knows it) and the days of its splits — on those the price rightly jumps.
@@ -29,15 +32,34 @@ public sealed record ClosingPricesExport(
     string Calendar,
     IReadOnlyList<LocalDate> Sessions,
     IReadOnlyDictionary<string, ExportedTicker> Tickers,
-    IReadOnlyList<ClosingPriceLine> Lines);
+    IReadOnlyList<ClosingPriceLine> Lines,
+    IReadOnlyList<FundEventLine> Events);
 
 /// <summary>The export that was imported last: a later import must not be of an older one.</summary>
 public sealed record ImportedExport(Instant ExportedAt, string Sha256);
 
 /// <summary>
-/// Stored closing prices and the sessions they belong to (tables `closing_prices`, `market_sessions`). Price
-/// rows are only ever added: a price the source corrected is a new revision of its session, and the reads
-/// give the latest revision.
+/// What one import adds, all of it or nothing. <paramref name="Added"/> are the first closes of their sessions;
+/// <paramref name="Revised"/> are each the next revision of a session that has a close;
+/// <paramref name="Sessions"/> are sessions of <paramref name="Calendar"/> not stored yet;
+/// <paramref name="Events"/> are fund events not stored yet and <paramref name="RevisedEvents"/> each the next
+/// revision of a stored one.
+/// </summary>
+public sealed record PricesToStore(
+    IReadOnlyList<ClosingPrice> Added,
+    IReadOnlyList<ClosingPrice> Revised,
+    string Calendar,
+    IReadOnlyList<LocalDate> Sessions,
+    IReadOnlyList<FundEvent> Events,
+    IReadOnlyList<FundEvent> RevisedEvents)
+{
+    public bool IsEmpty => Added.Count + Revised.Count + Sessions.Count + Events.Count + RevisedEvents.Count == 0;
+}
+
+/// <summary>
+/// Stored closing prices, the sessions they belong to and the funds' dividends and splits (tables
+/// `closing_prices`, `market_sessions`, `fund_events`). Rows are only ever added: a price or an event the
+/// source corrected is a new revision, and the reads give the latest revision.
 /// </summary>
 public interface IClosingPriceStore
 {
@@ -61,21 +83,14 @@ public interface IClosingPriceStore
 
     Task<ImportedExport?> LastImportAsync(CancellationToken cancellationToken);
 
+    /// <summary>Every stored dividend and split of the instrument, earliest first.</summary>
+    Task<IReadOnlyList<FundEvent>> ListEventsAsync(InstrumentId instrument, CancellationToken cancellationToken);
+
     /// <summary>
-    /// Adds all of it or nothing, with the note for the audit trail and the mark of the export in the same
-    /// step. <paramref name="added"/> are the first closes of their sessions; <paramref name="revised"/> are
-    /// each the next revision of a session that has a close; <paramref name="sessions"/> are sessions of
-    /// <paramref name="calendar"/> not stored yet.
+    /// Adds all of it or nothing, with the note for the audit trail and the mark of the export in the same step.
     /// </summary>
     Task AddAsync(
-        IReadOnlyList<ClosingPrice> added,
-        IReadOnlyList<ClosingPrice> revised,
-        string calendar,
-        IReadOnlyList<LocalDate> sessions,
-        Instant importedAt,
-        PricesNote note,
-        ImportedExport importedExport,
-        CancellationToken cancellationToken);
+        PricesToStore what, Instant importedAt, PricesNote note, ImportedExport importedExport, CancellationToken cancellationToken);
 }
 
 /// <summary>An entry for the audit trail about an import of prices: who, what kind, and the details as JSON.</summary>
@@ -91,6 +106,9 @@ public sealed record PricesNote(string Actor, string Kind, string Payload)
 /// <summary>A stored close and what the source states for the same session now.</summary>
 public sealed record ClosingPriceChange(string Ticker, ClosingPrice Stored, ClosingPrice Stated);
 
+/// <summary>A stored fund event and what the source states for the same day now.</summary>
+public sealed record FundEventChange(string Ticker, FundEvent Stored, FundEvent Stated);
+
 /// <summary>A new close that moves far from the close before it on a day that is not a split day.</summary>
 public sealed record UnusualClose(string Ticker, ClosingPrice Before, ClosingPrice Close);
 
@@ -100,6 +118,11 @@ public sealed record UnusualClose(string Ticker, ClosingPrice Before, ClosingPri
 /// closes the export left out (they stay). <paramref name="Behind"/> are instruments whose last close is of
 /// an earlier session than the export's latest; <paramref name="UnknownTickers"/> are in the export and not
 /// in the catalogue (skipped); <paramref name="WithoutPrices"/> are instruments the export says nothing about.
+/// <paramref name="EventsAdded"/> counts the dividends and splits stored for the first time;
+/// <paramref name="EventsRevised"/> are the ones the source now states differently — recorded next to the old.
+/// <paramref name="EventsNotRepeated"/> are stored dividends and splits, within the sessions the export covers
+/// for their fund, that the export no longer states: they stay, and an index is followed with them — if the
+/// source moved or withdrew one, the comparison is off by it until it is dealt with.
 /// </summary>
 public sealed record ClosingPricesImport(
     int Added,
@@ -111,7 +134,10 @@ public sealed record ClosingPricesImport(
     LocalDate? LatestSession,
     IReadOnlyList<(string Ticker, LocalDate Last)> Behind,
     IReadOnlyList<string> UnknownTickers,
-    IReadOnlyList<string> WithoutPrices);
+    IReadOnlyList<string> WithoutPrices,
+    int EventsAdded,
+    IReadOnlyList<FundEventChange> EventsRevised,
+    IReadOnlyList<(string Ticker, FundEvent Event)> EventsNotRepeated);
 
 /// <summary>
 /// The import found something only the owner can decide about; nothing was stored.
@@ -194,6 +220,9 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
     /// than <see cref="LargestUsualMove"/> on a day that is not a split day, stop the import
     /// (<see cref="PricesDisagreeException"/>, nothing stored) until the owner accepts exactly that set with
     /// <paramref name="acceptedCode"/>. A stored close the export leaves out is kept and counted.
+    ///
+    /// The export's dividends and splits of the same instruments are stored with the prices. One the source
+    /// now states differently is the next revision of its day and is reported; nothing about them is asked.
     /// </summary>
     public async Task<ClosingPricesImport> ImportAsync(
         ClosingPricesExport export, string? acceptedCode, CancellationToken cancellationToken)
@@ -261,6 +290,10 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         var revised = new List<ClosingPriceChange>();
         var unusual = new List<UnusualClose>();
         var behind = new List<(string, LocalDate)>();
+        var events = new List<FundEvent>();
+        var eventsRevised = new List<FundEventChange>();
+        var eventsNotRepeated = new List<(string, FundEvent)>();
+        var eventLines = export.Events.ToLookup(e => e.Ticker, StringComparer.OrdinalIgnoreCase);
         var (unchanged, notRepeated) = (0, 0);
         foreach (var lines in byTicker)
         {
@@ -331,6 +364,39 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
             }
 
             notRepeated += stored.Keys.Count(session => !stated.Contains(session));
+            var storedEvents = (await store.ListEventsAsync(instrument.Id, cancellationToken)).ToDictionary(e => (e.Day, e.Kind));
+            var statedEvents = new HashSet<(LocalDate, FundEventKind)>();
+            foreach (var line in eventLines[lines.Key])
+            {
+                if (!statedEvents.Add((line.Day, line.Kind)))
+                {
+                    throw new InvalidOperationException(
+                        $"The export states two {Name(line.Kind)}s of {instrument.Ticker} for {line.Day:R}.");
+                }
+
+                if (!sessions.Contains(line.Day))
+                {
+                    throw new InvalidOperationException(
+                        $"The export states a {Name(line.Kind)} of {instrument.Ticker} for {line.Day:R}, which is not one of its finished sessions.");
+                }
+
+                var statedEvent = new FundEvent(instrument.Id, line.Day, line.Kind, line.Value, export.Source);
+                if (!storedEvents.TryGetValue((line.Day, line.Kind), out var was))
+                {
+                    events.Add(statedEvent);
+                }
+                else if (was.Value != statedEvent.Value)
+                {
+                    eventsRevised.Add(new FundEventChange(instrument.Ticker.Value, was, statedEvent));
+                }
+            }
+
+            // Within the days the export covers for this fund it states every event it knows: a stored one it
+            // leaves out was moved or withdrawn by the source. It cannot be removed here; it is said.
+            eventsNotRepeated.AddRange(storedEvents.Values
+                .Where(e => !statedEvents.Contains((e.Day, e.Kind)) && e.Day >= stated.Min() && e.Day <= stated.Max())
+                .Select(e => (instrument.Ticker.Value, e)));
+
             if (before is not null && export.Sessions.Count > 0 && before.Session < export.Sessions[^1])
             {
                 behind.Add((instrument.Ticker.Value, before.Session));
@@ -358,16 +424,27 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         var newSessions = export.Sessions.Except(storedSessions).Order().ToList();
         var result = new ClosingPricesImport(
             added.Count, unchanged, revised, unusual, notRepeated, newSessions.Count,
-            export.Sessions.Count > 0 ? export.Sessions[^1] : null, behind, unknown, without);
-        if (added.Count > 0 || revised.Count > 0 || newSessions.Count > 0)
+            export.Sessions.Count > 0 ? export.Sessions[^1] : null, behind, unknown, without, events.Count, eventsRevised,
+            eventsNotRepeated);
+        var toStore = new PricesToStore(
+            added, revised.ConvertAll(c => c.Stated), Calendar, newSessions, events, eventsRevised.ConvertAll(c => c.Stated));
+        if (!toStore.IsEmpty)
         {
             await store.AddAsync(
-                added, revised.ConvertAll(c => c.Stated), Calendar, newSessions, clock.GetCurrentInstant(),
-                NoteOf(export, result, code), new ImportedExport(export.ExportedAt, export.Sha256), cancellationToken);
+                toStore, clock.GetCurrentInstant(), NoteOf(export, result, code),
+                new ImportedExport(export.ExportedAt, export.Sha256), cancellationToken);
         }
 
         return result;
     }
+
+    /// <summary>
+    /// The stored dividends and splits of the instrument on the days after <paramref name="after"/> up to
+    /// <paramref name="through"/>, earliest first — what the fund did to a holder between those two evenings.
+    /// </summary>
+    public async Task<IReadOnlyList<FundEvent>> EventsAsync(
+        InstrumentId instrument, LocalDate after, LocalDate through, CancellationToken cancellationToken) =>
+        (await store.ListEventsAsync(instrument, cancellationToken)).Where(e => e.Day > after && e.Day <= through).ToList();
 
     /// <summary>
     /// The close to value the instrument with on a date, or why there is none. Whether the exchange was open
@@ -439,6 +516,11 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         return string.Join(" ", findings);
     }
 
+    private static string Name(FundEventKind kind) => kind == FundEventKind.Split ? "split" : "dividend";
+
+    private static string Describe(FundEventChange change) => Invariant(
+        $"{change.Ticker} {change.Stored.Day:R} {Name(change.Stored.Kind)}: {change.Stored.Value:0.######} stored, {change.Stated.Value:0.######} stated");
+
     private static string Describe(ClosingPriceChange change) => Invariant(
         $"{change.Ticker} {change.Stored.Session:R}: {change.Stored.Close.Value:0.######} stored, {change.Stated.Close.Value:0.######} stated");
 
@@ -480,6 +562,12 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
                 $"{result.Unusual.Count} unusual new close(s) accepted, e.g. {string.Join("; ", result.Unusual.Take(3).Select(Describe))}"));
         }
 
+        if (result.EventsRevised.Count > 0)
+        {
+            remarks.Add(Invariant(
+                $"{result.EventsRevised.Count} stored dividend(s) or split(s) revised, e.g. {string.Join("; ", result.EventsRevised.Take(3).Select(Describe))}"));
+        }
+
         var payload = JsonSerializer.Serialize(new
         {
             source = export.Source,
@@ -504,6 +592,22 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
                 session = Iso(c.Close.Session),
                 close = c.Close.Close.Value,
                 before = c.Before.Close.Value,
+            }),
+            eventsAdded = result.EventsAdded,
+            eventsNotRepeated = result.EventsNotRepeated.Select(e => new
+            {
+                ticker = e.Ticker,
+                day = Iso(e.Event.Day),
+                kind = Name(e.Event.Kind),
+                value = e.Event.Value,
+            }),
+            eventsRevised = result.EventsRevised.Select(c => new
+            {
+                ticker = c.Ticker,
+                day = Iso(c.Stored.Day),
+                kind = Name(c.Stored.Kind),
+                was = c.Stored.Value,
+                now = c.Stated.Value,
             }),
             remarks,
         });

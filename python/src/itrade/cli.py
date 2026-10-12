@@ -74,7 +74,8 @@ def _export_closes() -> int:
         return 1
     print(
         f"\nClosing prices as traded: {export.rows} rows, {len(export.tickers)} tickers, "
-        f"{export.sessions} sessions up to {export.last_session}\n"
+        f"{export.sessions} sessions up to {export.last_session}, "
+        f"{export.events} dividends and splits\n"
         f"  -> {export.path}\n  sha256 {export.sha256}"
     )
     about = export.tickers

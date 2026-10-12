@@ -45,7 +45,8 @@ public sealed class ClosingPricesTests
         (string Ticker, int Day)[]? splits = null,
         Instant? fetchedAt = null,
         Instant? exportedAt = null,
-        string calendar = ClosingPrices.Calendar)
+        string calendar = ClosingPrices.Calendar,
+        (string Ticker, int Day, FundEventKind Kind, decimal Value)[]? events = null)
     {
         var fetched = fetchedAt ?? Instant.FromUtc(2026, 10, through + 1, 3, 0);
         var tickers = lines.Select(l => l.Ticker).Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
@@ -55,7 +56,8 @@ public sealed class ClosingPricesTests
             StringComparer.OrdinalIgnoreCase);
         return new ClosingPricesExport(
             "yfinance", "0f0f", exportedAt ?? fetched + Duration.FromHours(3), calendar, sessions ?? Weekdays(through), tickers,
-            lines.Select(l => new ClosingPriceLine(l.Ticker, Day(l.Day), l.Close)).ToList());
+            lines.Select(l => new ClosingPriceLine(l.Ticker, Day(l.Day), l.Close)).ToList(),
+            (events ?? []).Select(e => new FundEventLine(e.Ticker, Day(e.Day), e.Kind, e.Value)).ToList());
     }
 
     private static ClosingPricesExport Export(params (string Ticker, int Day, decimal Close)[] lines) => Export(lines, through: 6);
@@ -152,7 +154,7 @@ public sealed class ClosingPricesTests
         ClosingPricesExport August(Func<int, decimal> close) => new(
             "yfinance", "0f0f", fetched, ClosingPrices.Calendar, days,
             new Dictionary<string, ExportedTicker> { ["XLK"] = new(fetched, "USD", new HashSet<LocalDate>()) },
-            days.Select((day, i) => new ClosingPriceLine("XLK", day, close(i))).ToList());
+            days.Select((day, i) => new ClosingPriceLine("XLK", day, close(i))).ToList(), []);
         await ImportAsync(August(i => 300m + i));
 
         var refused = await Assert.ThrowsAsync<PricesDisagreeException>(() => ImportAsync(August(i => 300.01m + i)));
@@ -341,6 +343,95 @@ public sealed class ClosingPricesTests
 
         Assert.Equal([("XLK", Day(5))], result.Behind);
         Assert.Equal(Day(6), result.LatestSession);
+    }
+
+    [Fact]
+    public async Task DividendsAndSplitsOfTheFundsAreStoredWithThePrices()
+    {
+        (string, int, FundEventKind, decimal)[] happened = [("SPY", 5, FundEventKind.Dividend, 1.889m), ("XLK", 6, FundEventKind.Split, 2m), ("VWO", 6, FundEventKind.Dividend, 0.4m)];
+        var first = await ImportAsync(Export([.. WeekLines, ("VWO", 6, 55.10m)], events: happened));
+        var again = await ImportAsync(Export([.. WeekLines, ("VWO", 6, 55.10m)], events: happened));
+
+        // VWO is not in the catalogue: neither its price nor its dividend is taken.
+        Assert.Equal((2, 0, 0, 0), (first.EventsAdded, first.EventsRevised.Count, again.EventsAdded, again.EventsRevised.Count));
+        Assert.Empty(again.EventsNotRepeated);
+        Assert.Equal(
+            [(Spy.Id, Day(5), FundEventKind.Dividend, 1.889m, "yfinance", 0), (Xlk.Id, Day(6), FundEventKind.Split, 2m, "yfinance", 0)],
+            _store.Events.Select(e => (e.Event.Instrument, e.Event.Day, e.Event.Kind, e.Event.Value, e.Event.Source, e.Revision)));
+        Assert.Single(_store.Notes); // the second import had nothing to store
+        Assert.Contains("\"eventsAdded\":2", _store.Notes[0].Payload, StringComparison.Ordinal);
+
+        // What a holder was dealt between two evenings: after the first, up to and including the second.
+        Assert.Equal(1.889m, Assert.Single(await _prices.EventsAsync(Spy.Id, Day(2), Day(5), CancellationToken.None)).Value);
+        Assert.Empty(await _prices.EventsAsync(Spy.Id, Day(5), Day(6), CancellationToken.None));
+        Assert.Empty(await _prices.EventsAsync(Xlc.Id, Day(1), Day(6), CancellationToken.None));
+
+        // A new event alone is stored too, though every price is known.
+        var later = await ImportAsync(Export(WeekLines, events: [.. happened[..2], ("XLC", 6, FundEventKind.Dividend, 0.25m)]));
+        Assert.Equal((0, 1, 2), (later.Added, later.EventsAdded, _store.Notes.Count));
+    }
+
+    [Fact]
+    public async Task RestatedFundEventIsRecordedNextToTheOldOneAndNamed()
+    {
+        await ImportAsync(Export(WeekLines, events: [("SPY", 5, FundEventKind.Dividend, 1.889m), ("XLK", 6, FundEventKind.Split, 2m)]));
+
+        // The vendor now says the split was 3:1.
+        var result = await ImportAsync(Export(WeekLines, events: [("SPY", 5, FundEventKind.Dividend, 1.889m), ("XLK", 6, FundEventKind.Split, 3m)]));
+
+        var change = Assert.Single(result.EventsRevised);
+        Assert.Equal(("XLK", Day(6), FundEventKind.Split, 2m, 3m), (change.Ticker, change.Stored.Day, change.Stored.Kind, change.Stored.Value, change.Stated.Value));
+        Assert.Equal((0, 0), (result.EventsAdded, result.Added));
+        Assert.Equal([(2m, 0), (3m, 1)], _store.Events.Where(e => e.Event.Instrument == Xlk.Id).Select(e => (e.Event.Value, e.Revision)));
+        Assert.Equal(3m, Assert.Single(await _prices.EventsAsync(Xlk.Id, Day(5), Day(6), CancellationToken.None)).Value);
+        Assert.Equal((PricesNote.Noted, "prices"), (_store.Notes[^1].Kind, _store.Notes[^1].Actor));
+        Assert.Contains("1 stored dividend(s) or split(s) revised, e.g. XLK 2026-10-06 split: 2 stored, 3 stated", _store.Notes[^1].Payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StoredFundEventTheExportNoLongerStatesIsKeptAndNamed()
+    {
+        await ImportAsync(Export(WeekLines, events: [("SPY", 5, FundEventKind.Dividend, 1.889m), ("XLK", 2, FundEventKind.Split, 2m), ("XLK", 6, FundEventKind.Dividend, 0.2m)]));
+
+        // The vendor moves SPY's ex-date from Monday to Tuesday, and no longer knows XLK's split.
+        var moved = await ImportAsync(Export(WeekLines, events: [("SPY", 6, FundEventKind.Dividend, 1.889m), ("XLK", 6, FundEventKind.Dividend, 0.2m)]));
+
+        Assert.Equal(1, moved.EventsAdded);
+        Assert.Equal(
+            [("SPY", Day(5), FundEventKind.Dividend, 1.889m), ("XLK", Day(2), FundEventKind.Split, 2m)],
+            moved.EventsNotRepeated.Select(e => (e.Ticker, e.Event.Day, e.Event.Kind, e.Event.Value)));
+        // Both are still there: SPY's dividend now counts twice for whoever follows the fund, and that is said.
+        Assert.Equal(2, (await _prices.EventsAsync(Spy.Id, Day(1), Day(6), CancellationToken.None)).Count);
+        Assert.Contains("\"eventsNotRepeated\":[{\"ticker\":\"SPY\",\"day\":\"2026-10-05\",\"kind\":\"dividend\",\"value\":1.889}", _store.Notes[^1].Payload, StringComparison.Ordinal);
+
+        // An export that covers a later stretch of a fund says nothing about the days before it: XLK's split
+        // of Friday is not missed by an export that starts on Tuesday. Nothing is stored by it, either.
+        var notes = _store.Notes.Count;
+        var later = await ImportAsync(Export(
+            WeekLines.Where(l => l.Day == 6).ToArray(), events: [("SPY", 6, FundEventKind.Dividend, 1.889m), ("XLK", 6, FundEventKind.Dividend, 0.2m)]));
+        Assert.Empty(later.EventsNotRepeated);
+        Assert.Equal(notes, _store.Notes.Count);
+        // Nor does an export that ends on Monday say anything about Tuesday: only what lies inside its days is missed.
+        var earlier = await ImportAsync(Export(WeekLines.Where(l => l.Day <= 5).ToArray()));
+        Assert.Equal([("SPY", Day(5)), ("XLK", Day(2))], earlier.EventsNotRepeated.Select(e => (e.Ticker, e.Event.Day)));
+    }
+
+    [Fact]
+    public async Task FundEventThatCannotBeOneIsRefusedWithTheWholeExport()
+    {
+        // On a Saturday; the same one twice; finer than is kept; nothing.
+        var saturday = await Assert.ThrowsAsync<InvalidOperationException>(() => ImportAsync(Export(WeekLines, events: [("SPY", 3, FundEventKind.Dividend, 1.889m)])));
+        Assert.Contains("a dividend of SPY for 2026-10-03, which is not one of its finished sessions", saturday.Message, StringComparison.Ordinal);
+        var twice = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ImportAsync(Export(WeekLines, events: [("XLK", 6, FundEventKind.Split, 2m), ("XLK", 6, FundEventKind.Split, 3m)])));
+        Assert.Contains("two splits of XLK for 2026-10-06", twice.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<ArgumentException>(() => ImportAsync(Export(WeekLines, events: [("SPY", 5, FundEventKind.Dividend, 1.8890001m)])));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ImportAsync(Export(WeekLines, events: [("SPY", 5, FundEventKind.Dividend, 0m)])));
+
+        Assert.Empty(_store.Rows);
+        Assert.Empty(_store.Events);
+        // A dividend and a split on one day are two events.
+        Assert.Equal(2, (await ImportAsync(Export(WeekLines, events: [("XLK", 6, FundEventKind.Dividend, 0.1m), ("XLK", 6, FundEventKind.Split, 2m)]))).EventsAdded);
     }
 
     [Fact]
@@ -571,16 +662,27 @@ public sealed class ClosingPricesTests
         public Task<ImportedExport?> LastImportAsync(CancellationToken cancellationToken) =>
             Task.FromResult(Imports.MaxBy(i => i.ExportedAt));
 
+        public List<(FundEvent Event, int Revision)> Events { get; } = [];
+
+        public Task<IReadOnlyList<FundEvent>> ListEventsAsync(InstrumentId instrument, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<FundEvent>>(
+                Events.Where(e => e.Event.Instrument == instrument)
+                    .GroupBy(e => (e.Event.Day, e.Event.Kind)).Select(g => g.MaxBy(e => e.Revision).Event)
+                    .OrderBy(e => e.Day).ThenBy(e => e.Kind).ToList());
+
         public Task AddAsync(
-            IReadOnlyList<ClosingPrice> added,
-            IReadOnlyList<ClosingPrice> revised,
-            string calendar,
-            IReadOnlyList<LocalDate> sessions,
-            Instant importedAt,
-            PricesNote note,
-            ImportedExport importedExport,
-            CancellationToken cancellationToken)
+            PricesToStore what, Instant importedAt, PricesNote note, ImportedExport importedExport, CancellationToken cancellationToken)
         {
+            var (added, revised, sessions) = (what.Added, what.Revised, what.Sessions);
+            bool Happened(FundEvent e) => Events.Exists(s => s.Event.Instrument == e.Instrument && s.Event.Day == e.Day && s.Event.Kind == e.Kind);
+            if (what.Events.Any(Happened) || !what.RevisedEvents.All(Happened)
+                || what.Events.Concat(what.RevisedEvents).Any(e => !Sessions.Contains(e.Day) && !sessions.Contains(e.Day)))
+            {
+                throw new InvalidOperationException("A fund event stored twice, a revision of none, or one on a day that is no session.");
+            }
+
+            Events.AddRange(what.Events.Select(e => (e, 0)));
+            Events.AddRange(what.RevisedEvents.Select(e => (e, Events.Where(s => s.Event.Instrument == e.Instrument && s.Event.Day == e.Day && s.Event.Kind == e.Kind).Max(s => s.Revision) + 1)));
             bool Stored(ClosingPrice p) => Rows.Exists(r => r.Price.Instrument == p.Instrument && r.Price.Session == p.Session);
             if (added.Any(Stored) || !revised.All(Stored))
             {

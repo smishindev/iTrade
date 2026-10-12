@@ -79,6 +79,7 @@ docker exec itrade-postgres psql -U itrade -d itrade -c "select name, trade_date
 docker exec itrade-postgres psql -U itrade -d itrade -c "select count(*), max(rate_date) from fx_rates"
 docker exec itrade-postgres psql -U itrade -d itrade -c "select count(*), count(distinct instrument_id), max(session) from closing_prices"
 docker exec itrade-postgres psql -U itrade -d itrade -c "select calendar, count(*), min(session), max(session) from market_sessions group by 1"
+docker exec itrade-postgres psql -U itrade -d itrade -c "select kind, count(*), min(day), max(day) from fund_events group by 1"
 docker exec itrade-postgres psql -U itrade -d itrade -c "select occurred_at, actor, kind from audit_events order by occurred_at desc limit 10"
 docker exec itrade-postgres psql -U itrade -d itrade -c 'select migration_id from \"__EFMigrationsHistory\" order by 1'
 ```
@@ -175,6 +176,8 @@ reported and left alone; a ticker change is a rename with its date.
 | A fund is "behind" after an ingest | Its newest bar failed the quality check, so nothing of that fetch was taken - not even the good days before it. Seen 12 October 2026 with EWC: the vendor's bar had its open a cent below the day's low, during the session and still after the close. Ingest again the next day; the vendor usually repairs such a bar |
 | `import-prices` says the export left out thousands of stored prices | The plain `itrade ingest` was run: it fetches the nine research tickers from 2005 and shortens the history of the ones the catalogue shares (SPY, IEF, TLT, GLD, VT). Nothing is lost - stored prices stay. The catalogue's funds are `--universe etf_pullback_v1` |
 | A price is "missing" for a day although the fund trades | The vendor has no bar for that session (the export's manifest lists them under `missing_sessions`), or the fund is behind - `check` names it |
+| `Cannot read the closing prices: ... names no table of fund events: it was written by an older exporter` | The export in the data folder is from before dividends and splits were exported. `uv run --directory python itrade export-closes`, then import |
+| The portfolio "beats the index" by about 2% a year | It is being compared with the fund's price. The comparison is `PerformanceReport.Index` - the same contributions into the fund, with its dividends |
 | `Cannot read the closing prices: ... not the one its manifest vouches for` | A table (prices or sessions) was changed after it was exported, or the export was caught half-written. `itrade export-closes` again |
 | The integration tests fail with `53300: too many clients` | Every test database keeps pooled connections for a while. The test server runs with `max_connections=500` (`PostgresFixture`) |
 | `test_fixture_the_platform_reads_is_what_the_oracle_says` fails after a change of the returns oracle | The fixture the C# tests read is written by the oracle: in `python/`, `ITRADE_UPDATE_FIXTURES=1 uv run pytest tests/test_returns_oracle.py`, then run the .NET unit tests - they must agree with the new file |

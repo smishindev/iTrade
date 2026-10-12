@@ -1,5 +1,8 @@
 {
   "calendar": "XNYS",
+  "events": 3,
+  "events_file": "closing-prices-events.csv",
+  "events_sha256": "b4c5928ae6333d7b787089844595b95629dab63e5aa41c91c7874afbb929b09f",
   "exported_at": "2026-01-07T06:00:00+00:00",
   "file": "closing-prices.csv",
   "first_session": "2025-12-29",
@@ -14,30 +17,36 @@
   "tickers": {
     "QQQ": {
       "currency": null,
+      "dividends_corrected": [],
+      "events": 0,
       "fetched_at": "2026-01-07T03:00:00+00:00",
       "finished_through": "2026-01-06",
       "first": "2025-12-29",
       "last": "2025-12-30",
       "missing_sessions": [],
-      "raw_sha256": "816224612d82efff2e6fb4259c8a19c287dbc8848f1e564301a95799b9d4da8b",
+      "raw_sha256": "0125bb33b4285b91c7b6bdf9e2e0f52128c6b14d1e334ad0078936fd4b3895b7",
       "rows": 2,
       "splits": {},
       "unfinished_dropped": 0
     },
     "VT": {
       "currency": "USD",
+      "dividends_corrected": [],
+      "events": 1,
       "fetched_at": "2026-01-07T03:00:00+00:00",
       "finished_through": "2026-01-06",
       "first": "2026-01-05",
       "last": "2026-01-06",
       "missing_sessions": [],
-      "raw_sha256": "cbac7f60a98a06c8a64c92be9816e8188fc9301d7e9371facde65f0cb8cff4af",
+      "raw_sha256": "f10c63d0e8dc4754e63ed334f736293effeb9143741b289a5338cf8c1e026a47",
       "rows": 2,
       "splits": {},
       "unfinished_dropped": 0
     },
     "XLC": {
       "currency": "USD",
+      "dividends_corrected": [],
+      "events": 0,
       "fetched_at": "2026-01-07T03:00:00+00:00",
       "finished_through": "2026-01-06",
       "first": "2025-12-30",
@@ -45,19 +54,21 @@
       "missing_sessions": [
         "2025-12-31"
       ],
-      "raw_sha256": "bfcea0cc99d8bab8dad51b763741f1adb3dfad1146d3bf454dcd7b857fd1f703",
+      "raw_sha256": "fcee7136283f70479ead4615705b6afe785e2764fd0f257acfeca5ed6373bb06",
       "rows": 2,
       "splits": {},
       "unfinished_dropped": 0
     },
     "XLK": {
       "currency": "USD",
+      "dividends_corrected": [],
+      "events": 2,
       "fetched_at": "2026-01-07T03:00:00+00:00",
       "finished_through": "2026-01-06",
       "first": "2026-01-05",
       "last": "2026-01-06",
       "missing_sessions": [],
-      "raw_sha256": "92090788b6b62ee8e5bf93c840c1ac7377ac6ab710c92565088954797ac5672a",
+      "raw_sha256": "bc655e087edaa1cf94e509da0c4d13898fd0f4f8442432cbf60403bdde2d1986",
       "rows": 2,
       "splits": {
         "2026-01-06": 2.0

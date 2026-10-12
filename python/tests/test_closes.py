@@ -15,9 +15,11 @@ from itrade.backtest import corporate_actions
 from itrade.data.closes import (
     HEADER,
     ClosesError,
+    amount_text,
     as_traded_closes,
     export_closes,
     finished_sessions,
+    fund_events,
     price_text,
     split_scale,
 )
@@ -27,13 +29,15 @@ from itrade.data.store import Store
 AFTER_6_JANUARY = datetime(2026, 1, 7, 3, 0, tzinfo=UTC)
 
 
-def bars(rows: list[tuple[str, float, float]]) -> pd.DataFrame:
-    """(date, vendor close, split ratio on that date) -> bars as the pipeline stores them."""
+def bars(rows: list[tuple]) -> pd.DataFrame:
+    """(date, vendor close, split ratio on that date[, vendor dividend]) -> bars as the pipeline
+    stores them."""
     return pd.DataFrame(
         {
             "date": pd.to_datetime([r[0] for r in rows]),
             "close": [r[1] for r in rows],
             "splits": [r[2] for r in rows],
+            "dividends": [r[3] if len(r) > 3 else 0.0 for r in rows],
         }
     )
 
@@ -178,7 +182,7 @@ def store_with(tmp_path, series: dict[str, pd.DataFrame], fetched: datetime) -> 
     """A store holding these bars, each ticker fetched (promoted) at the given time."""
     store = Store(tmp_path)
     for ticker, table in series.items():
-        full = table.assign(open=1.0, high=1.0, low=1.0, adj_close=1.0, volume=1.0, dividends=0.0)
+        full = table.assign(open=1.0, high=1.0, low=1.0, adj_close=1.0, volume=1.0)
         raw = store.write_raw("test", ticker, full)
         store.promote(ticker, raw, full)
     fetch(store, dict.fromkeys(series, fetched))
@@ -244,6 +248,8 @@ def test_export_writes_the_prices_their_sessions_and_a_manifest_that_vouches_for
     )
     sessions = export.sessions_path.read_bytes()
     assert sessions == b"session\n2026-01-05\n2026-01-06\n"
+    events = export.events_path.read_bytes()
+    assert events == b"ticker,day,kind,value\nXLK,2026-01-06,split,2\n"
     manifest = json.loads(export.manifest_path.read_text(encoding="utf-8"))
     assert manifest["sha256"] == hashlib.sha256(data).hexdigest() == export.sha256
     assert manifest["sessions_sha256"] == hashlib.sha256(sessions).hexdigest()
@@ -256,6 +262,9 @@ def test_export_writes_the_prices_their_sessions_and_a_manifest_that_vouches_for
         "sessions_file": "closing-prices-sessions.csv",
         "sessions_sha256": manifest["sessions_sha256"],
         "sessions": 2,
+        "events_file": "closing-prices-events.csv",
+        "events_sha256": hashlib.sha256(events).hexdigest(),
+        "events": 1,
         "first_session": "2026-01-05",
         "last_session": "2026-01-06",
         "exported_at": "2026-01-07T06:00:00+00:00",
@@ -269,13 +278,16 @@ def test_export_writes_the_prices_their_sessions_and_a_manifest_that_vouches_for
         "finished_through": "2026-01-06",
         "unfinished_dropped": 0,
         "currency": "USD",
+        "events": 1,
+        "dividends_corrected": [],
         "splits": {"2026-01-06": 2.0},  # on that day the price rightly halves
         "missing_sessions": [],
     }
     assert manifest["tickers"]["VT"]["currency"] is None  # not in the catalogue given
     assert manifest["tickers"]["VT"]["splits"] == {}
     assert sorted(manifest["tickers"]) == ["VT", "XLK"]
-    assert (export.rows, export.sessions, export.last_session) == (4, 2, "2026-01-06")
+    assert (export.rows, export.sessions, export.events) == (4, 2, 1)
+    assert export.last_session == "2026-01-06"
     # Exporting the same data again gives the same bytes: the platform sees nothing new.
     assert export_closes(store).sha256 == export.sha256
 
@@ -321,6 +333,7 @@ def test_a_bar_fetched_while_its_session_was_open_is_not_a_close(tmp_path):
         "XLK,2026-01-05,289.99",
     ]
     assert early.tickers["XLK"]["splits"] == {}  # the split belongs to the session left out
+    assert early.events_path.read_text(encoding="utf-8").split() == ["ticker,day,kind,value"]
 
 
 def test_a_split_on_a_dropped_day_still_scales_the_days_before_it(tmp_path):
@@ -400,7 +413,7 @@ def test_a_ticker_with_no_finished_session_is_refused(tmp_path):
 def test_export_of_a_refused_ticker_leaves_the_old_files_alone(tmp_path):
     store = store_with(tmp_path, {"VT": bars([("2026-01-05", 120.13, 0.0)])}, AFTER_6_JANUARY)
     first = export_closes(store)
-    files = (first.path, first.sessions_path, first.manifest_path)
+    files = (first.path, first.sessions_path, first.events_path, first.manifest_path)
     before = [f.read_bytes() for f in files]
     bad = bars([("2026-01-05", 120.13, 0.0), ("2026-01-06", -1.0, 0.0)])
     store_with(tmp_path, {"VT": bad}, AFTER_6_JANUARY)
@@ -409,6 +422,126 @@ def test_export_of_a_refused_ticker_leaves_the_old_files_alone(tmp_path):
         export_closes(store)
 
     assert [f.read_bytes() for f in files] == before
+
+
+def test_dividend_is_told_as_it_was_paid_and_a_split_as_new_shares_per_old():
+    # 0.168 a share is paid on 4 December; on the 5th the fund splits 2:1; 0.11 is paid on the 8th.
+    # The vendor shows the first dividend halved, like the closes of those days.
+    table = bars(
+        [
+            ("2025-12-03", 144.994995, 0.0),
+            ("2025-12-04", 145.535004, 0.0, 0.0839999989),
+            ("2025-12-05", 146.600006, 2.0),
+            ("2025-12-08", 147.630005, 0.0, 0.1099999994),
+        ]
+    )
+
+    assert fund_events(table, "XLK") == [
+        ("2025-12-04", "dividend", "0.168"),
+        ("2025-12-05", "split", "2"),
+        ("2025-12-08", "dividend", "0.11"),
+    ]
+    # A reverse split is a ratio below one; a dividend on the split day is of the new shares.
+    reverse = bars([("2016-11-04", 3.0, 0.0), ("2016-11-07", 12.34, 0.25, 0.0125)])
+    assert fund_events(reverse, "T") == [
+        ("2016-11-07", "dividend", "0.0125"),
+        ("2016-11-07", "split", "0.25"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [(0.5673000216, "0.5673"), (1.7970000505, "1.797"), (2.0, "2"), (0.000001, "0.000001")],
+)
+def test_amount_is_six_decimals_at_most_without_the_floats_tail(value, text):
+    assert amount_text(value) == text
+
+
+@pytest.mark.parametrize("value", [0.0, -0.5, float("nan"), 0.0000004])
+def test_amount_that_is_nothing_is_refused(value):
+    with pytest.raises(ClosesError):
+        amount_text(value)
+
+
+def test_events_of_exported_sessions_only_and_a_wrong_one_stops_the_export(tmp_path):
+    # VT pays on the 6th and was fetched while that session was open: the dividend waits with its
+    # bar. XLK was fetched after it.
+    store = store_with(
+        tmp_path,
+        {
+            "VT": bars([("2026-01-05", 120.13, 0.0), ("2026-01-06", 119.02, 0.0, 0.5673)]),
+            "XLK": bars([("2026-01-05", 144.994995, 0.0, 0.084), ("2026-01-06", 146.6, 2.0)]),
+        },
+        fetched=AFTER_6_JANUARY,
+    )
+    fetch(store, {"VT": datetime(2026, 1, 6, 18, 0, tzinfo=UTC)})
+
+    export = export_closes(store)
+
+    assert export.events_path.read_text(encoding="utf-8").splitlines() == [
+        "ticker,day,kind,value",
+        "XLK,2026-01-05,dividend,0.168",
+        "XLK,2026-01-06,split,2",
+    ]
+    assert (export.events, export.tickers["VT"]["events"], export.tickers["XLK"]["events"]) == (
+        2,
+        0,
+        2,
+    )
+    manifest = json.loads(export.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["events_sha256"] == hashlib.sha256(export.events_path.read_bytes()).hexdigest()
+
+    before = export.events_path.read_bytes()
+    store_with(tmp_path, {"XLK": bars([("2026-01-05", 144.99, 0.0, -0.084)])}, AFTER_6_JANUARY)
+    with pytest.raises(ClosesError, match="XLK 2026-01-05: not an amount"):
+        export_closes(store)
+    assert export.events_path.read_bytes() == before
+
+
+def test_dividend_the_vendor_lacks_comes_from_the_recorded_corrections(tmp_path):
+    from itrade.backtest.corporate_actions import DividendOverride
+
+    def known(ticker: str, day: str, amount: float) -> DividendOverride:
+        return DividendOverride(ticker, pd.Timestamp(day), amount, "the fund's own page")
+
+    # The vendor has no dividend for QQQ on the 5th; a second source says 0.38824 was paid.
+    series = {"QQQ": bars([("2026-01-05", 600.0, 0.0), ("2026-01-06", 602.5, 0.0, 0.7)])}
+    store = store_with(tmp_path, series, AFTER_6_JANUARY)
+
+    export = export_closes(
+        store,
+        overrides=[
+            known("QQQ", "2026-01-05", 0.38824),
+            known("QQQ", "2020-09-21", 0.5),  # before these bars: not of this series
+            known("XLK", "2026-01-05", 9.0),  # another fund
+        ],
+    )
+
+    assert export.events_path.read_text(encoding="utf-8").splitlines()[1:] == [
+        "QQQ,2026-01-05,dividend,0.38824",
+        "QQQ,2026-01-06,dividend,0.7",
+    ]
+    assert export.tickers["QQQ"]["dividends_corrected"] == ["2026-01-05"]
+    assert export_closes(store, overrides=[]).tickers["QQQ"]["dividends_corrected"] == []
+    # The same amount as the vendor's is no correction; another amount is a contradiction, and a
+    # correction on a day the fund has no bar for cannot be placed. Neither is guessed at.
+    assert export_closes(store, overrides=[known("QQQ", "2026-01-06", 0.7)]).events == 1
+    with pytest.raises(ClosesError, match="vendor dividend 0.7 != override 0.9"):
+        export_closes(store, overrides=[known("QQQ", "2026-01-06", 0.9)])
+    series = {"QQQ": bars([("2026-01-02", 600.0, 0.0), ("2026-01-06", 602.5, 0.0)])}
+    store = store_with(tmp_path, series, AFTER_6_JANUARY)
+    with pytest.raises(ClosesError, match="override ex-date 2026-01-05 has no bar"):
+        export_closes(store, overrides=[known("QQQ", "2026-01-05", 0.38824)])
+
+
+def test_the_recorded_corrections_are_used_unless_others_are_given(tmp_path):
+    # config/corporate_actions.toml has the dividend of 21 September 2020 that the vendor lacks.
+    series = {"QQQ": bars([("2020-09-18", 267.5, 0.0), ("2020-09-21", 268.5, 0.0)])}
+    store = store_with(tmp_path, series, AFTER_6_JANUARY)
+
+    assert export_closes(store).events_path.read_text(encoding="utf-8").splitlines()[1:] == [
+        "QQQ,2020-09-21,dividend,0.38824"
+    ]
 
 
 def test_currencies_come_from_the_platforms_catalogue():
@@ -424,8 +557,12 @@ def fixture_store(tmp_path) -> Store:
     return store_with(
         tmp_path,
         {
-            "VT": bars([("2026-01-05", 120.129997, 0.0), ("2026-01-06", 121.5, 0.0)]),
-            "XLK": bars([("2026-01-05", 144.994995, 0.0), ("2026-01-06", 146.600006, 2.0)]),
+            # A dividend of 0.5673 a share on the 6th.
+            "VT": bars([("2026-01-05", 120.129997, 0.0), ("2026-01-06", 121.5, 0.0, 0.5673000216)]),
+            # A dividend the day before a 2:1 split: the vendor shows half of the 0.168 paid.
+            "XLK": bars(
+                [("2026-01-05", 144.994995, 0.0, 0.084), ("2026-01-06", 146.600006, 2.0, 0.0)]
+            ),
             # A fund that starts later, with a three-decimal close and a session without a bar.
             "XLC": bars([("2025-12-30", 49.53200149536133, 0.0), ("2026-01-02", 49.75, 0.0)]),
             # Fractions of a dollar as quoted before 2001 (recent dates keep the calendar short).
@@ -450,10 +587,15 @@ def test_fixture_the_platform_reads_is_what_the_exporter_writes(tmp_path):
     )
 
     if os.environ.get("ITRADE_UPDATE_FIXTURES") == "1":
-        for written in (export.path, export.sessions_path, export.manifest_path):
+        for written in (
+            export.path,
+            export.sessions_path,
+            export.events_path,
+            export.manifest_path,
+        ):
             (fixtures / written.name).write_bytes(written.read_bytes())
 
-    for written in (export.path, export.sessions_path):
+    for written in (export.path, export.sessions_path, export.events_path):
         assert written.read_bytes() == (fixtures / written.name).read_bytes(), written.name
     # The manifest also names the hash of each raw snapshot, which is a Parquet file and so
     # changes with the library that writes it; everything else is held to the letter.

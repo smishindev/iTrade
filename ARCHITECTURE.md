@@ -148,6 +148,7 @@ called done.
 | `closing_prices` | closes as traded, with revisions | **append-only**; 185,273 prices of 29 funds since 1993; only for a day that is a session |
 | `market_sessions` | the days an exchange calendar was open | **append-only**; 8,482 sessions of XNYS since 1993, from the exports of prices |
 | `price_imports` | which export of prices was imported, and when | **append-only**; an export older than the latest is refused |
+| `fund_events` | a fund's dividends (per share, as paid) and splits, with revisions | **append-only**; 2,538 events of 28 funds since 1993; only for a day that is a session; from the same export as the prices |
 
 Conventions: snake_case; money, quantities and prices `numeric(18,6)`, rates `numeric(12,6)`, never
 float; instants `timestamptz` (UTC), dates `date`; typed ids `uuid` (v7). One configuration point
@@ -158,7 +159,7 @@ the owner role. A ledger mistake is reversed by a new entry; a rate the bank cor
 revision; nothing is edited. Because a wrong row is permanent, the rules of the domain types are
 repeated as CHECK constraints and triggers, each tested with a planted violation.
 
-**Migrations** (`src/ITrade.Infrastructure/Persistence/Migrations`, ten so far) are applied by the
+**Migrations** (`src/ITrade.Infrastructure/Persistence/Migrations`, eleven so far) are applied by the
 Host at start. One that is on `origin/main` is frozen — a schema change is a new migration, in its own
 commit. `dotnet ef database update|drop` is not used.
 
@@ -192,6 +193,7 @@ PortfolioValuation.AsOfAsync(date) = books of the date + a PriceOnDate per instr
 
 PortfolioPerformance.OverAsync(first, last) = the ledger's deposits and withdrawals + the value around each
                  ──► PeriodReturns in dollars and in shekels: time-weighted, money-weighted, gain
+                 ──► the same flows put into the index fund (IndexPortfolio: closes + fund_events) ──► its returns
 ```
 
 - **Ledger.** One entry is one signed effect on shares and/or cash at one holding place. A line of a
@@ -217,6 +219,11 @@ PortfolioPerformance.OverAsync(first, last) = the ledger's deposits and withdraw
   valued only around the owner's flows. A contribution counts from the start of its day, a withdrawal
   at the end of its day. Per-year figures from a year on. The same definitions are worked out another
   way in Python (`python/src/itrade/accounting/returns.py`), and its fixture holds the C# code.
+- **Index.** Compared as a portfolio, not as a price: the owner's contributions and withdrawals, on
+  their days, buy and sell the index fund (`ITrade:IndexTicker`) at that day's close; its dividends,
+  after withholding, buy more; a split changes the shares. Measured by the same returns. No comparison
+  is given rather than a wrong one - a missing close, a fund outside the catalogue, a withdrawal the
+  index portfolio cannot follow are said.
 
 The rules in full are the `portfolio-accounting` skill. Tax figures (phase 4) follow `israeli-tax`:
 every number there is an unverified assumption until a specialist confirms it.

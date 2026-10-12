@@ -19,8 +19,9 @@ source.fetch() -> <data>/raw/<source>/<TICKER>/<utc-stamp>.parquet   (immutable,
   share SPY, VT, IEF, TLT and GLD, and whichever ran last decides how far back their curated series reach.
 - `uv run --directory python itrade quality [TICKERS...] -v` — re-validate curated files.
 - `uv run --directory python itrade export-closes` — closing prices **as traded** for the platform's valuation
-  (`<data>/derived/closing-prices/`: prices, the exchange's sessions they cover, manifest with the SHA-256 of
-  both); `ingest` does it at its end. Only finished sessions are exported — a bar fetched before the close
+  (`<data>/derived/closing-prices/`: prices, the exchange's sessions they cover, the funds' dividends and splits,
+  manifest with the SHA-256 of the three); `ingest` does it at its end. A dividend is exported per share **as it
+  was paid** - the vendor shows it divided by every later split, like its closes. Only finished sessions are exported — a bar fetched before the close
   (+30 minutes) is left out and comes with the next ingest. Then
   `dotnet run --project src/ITrade.Host -- import-prices` loads them into the database.
 - `uv run --directory python itrade sql "<query>"` — DuckDB; view `bars(date, open, high, low, close, adj_close, volume, dividends, splits, ticker)`.

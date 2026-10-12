@@ -18,6 +18,11 @@ internal static class PortfolioSetup
         services.AddScoped<PortfolioBooksReader>();
         services.AddScoped<PortfolioValuation>();
         services.AddScoped<PortfolioPerformance>();
+        services.AddSingleton(provider =>
+        {
+            var options = provider.GetRequiredService<ITradeOptions>();
+            return new IndexFund(options.IndexTicker, 1m - options.DividendWithheld);
+        });
     }
 }
 

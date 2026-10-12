@@ -7,7 +7,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 13 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: 103 of 106 tasks (the three open ones are the owner's, at IBKR);
-phase 3: 7 of 13.
+phase 3: 8 of 13.
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993 — but they are empty: no
@@ -26,8 +26,8 @@ platform becomes an accounting and execution-with-approval tool. Phase 2 built t
 .NET 10 Host on loopback HTTPS with sign-in, PostgreSQL 18, daily jobs with catch-up, a React shell,
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
 ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded, the
-value of the portfolio on a date and its returns. Next comes the comparison with the index; the
-statement import and the reconciliation wait for the funded account.
+value of the portfolio on a date, its returns and their comparison with the index. Everything that is
+left of phase 3 - the statement import and the reconciliation - waits for the funded account.
 
 ---
 
@@ -39,13 +39,13 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 291 unit, 5 architecture, 102 integration on a real PostgreSQL 18 (Testcontainers) |
-| Python tests | ✅ | 324 collected, 1 skipped (`uv run pytest`, no network) |
+| .NET tests | ✅ | 301 unit, 5 architecture, 109 integration on a real PostgreSQL 18 (Testcontainers) |
+| Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
 | One Host per database | ✅ | a second instance refused by the instance lock (integration test; seen on the real database on 12 October) |
 | Sign-in, lockout, session end | ✅ | integration tests and browser tests; the owner's password is set on the working database |
-| Working database | ✅ | 10 migrations applied; backups before each schema change, the latest `itrade-20261012-194000Z.dump` |
+| Working database | ✅ | 11 migrations applied; backups before each schema change, the latest `itrade-20261012-215529Z.dump` |
 | Backup and restore | ✅ | `backup.ps1`, then `restore.ps1 -Verify` into a temporary database (phase 2 gate) |
 | Instrument catalogue | ✅ | 29 ETFs imported; importing again: 29 unchanged |
 | Ledger: repeated import, reversal, corrected line | ✅ tests only | unit and PostgreSQL tests, 7 deliberate breakages caught. **No real statement imported yet** — the table is empty |
@@ -63,7 +63,9 @@ read in the code.
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
 | Statement (Flex) import | ❌ not built | waits for a funded account (see *Waiting on the owner*) |
 | Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
-| Comparison with the index, reconciliation | ❌ not built | phase 3: P3.4.04, P3.4.03 |
+| Comparison with the index | ✅ tests only | the same contributions put into the index fund (VT) at each day's close, its dividends put back after withholding; a portfolio that holds only the index matches it; a split of the index is no fall. 60 deliberate breakages caught. No real flows yet |
+| Dividends and splits of the funds | ✅ | 2,538 events of 28 funds in the working database (2,524 dividends, 14 splits; one dividend the vendor lacks comes from the recorded corrections); with them one share reproduces the vendor's total-return series within 0.005% a year over up to 33 years |
+| Reconciliation with the broker | ❌ not built | phase 3: P3.4.03, waits for the first statement |
 | Screens with data | ❌ not built | the shell and sign-in exist; six menu entries are placeholders until phase 6 |
 | Taxes, broker adapter, purchases | ❌ not built | phases 4, 5, 6 |
 | Scheduled backups | ❌ | manual until phase 7 — the owner's decision |
@@ -148,7 +150,13 @@ gain. The comparison with the index was split off (P3.4.04): the portfolio's val
 dividends it received, a fund's price does not, so a comparison on prices alone would show the
 portfolio ahead by the dividend yield. It needs the fund's dividends and split days in the database.
 
-### 15. The statement import waits for the funded account (12 October)
+### 15. The index is a portfolio, not a price (13 October)
+The owner's contributions, on their days, buy the index fund at that day's close; its dividends buy
+more after withholding; the result is measured by the same two returns. The fund that stands for the
+index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
+ex-date - and says so.
+
+### 16. The statement import waits for the funded account (12 October)
 Flex queries live in a part of the IBKR portal that appears only after the first deposit, and the
 demo account has no reports. The steps for the owner are written on the card of P3.2.01.
 
@@ -197,8 +205,11 @@ Ordered roughly by how much they would hurt.
     prices and the rates as they are now.
 17. **One fund (EWC) has no price after 6 October**: the pipeline takes a fetch whole or not at
     all, and the vendor's newest bar is inconsistent.
-18. **Returns are before tax on gains and not compared with any index yet**; a transfer between two
-    holding places would be counted as the owner's money going out and coming in.
+18. **Returns are before tax on gains**; a transfer between two holding places would be counted as
+    the owner's money going out and coming in. The index comparison takes no commission from the
+    index, and its dividends come from the free vendor, unchecked against the fund's announcements.
+    A dividend or split the vendor later moves or withdraws stays stored - it is named at the import,
+    it cannot be withdrawn yet.
 19. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
 
@@ -208,9 +219,7 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.4.04 — comparison with the index**: the same contributions on the same days put into the
-   index fund, with its dividends; needs dividends and split days from the data pipeline (a schema
-   change).
+1. Nothing of phase 3 is left that does not need the broker's statement.
 2. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
    → **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
 

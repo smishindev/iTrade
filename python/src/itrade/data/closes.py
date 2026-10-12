@@ -7,11 +7,17 @@ undoes the adjustment and writes what the C# Host imports:
 
     <data>/derived/closing-prices/closing-prices.csv            ticker,session,close
     <data>/derived/closing-prices/closing-prices-sessions.csv   the exchange's sessions these cover
-    <data>/derived/closing-prices/closing-prices.json           SHA-256 of both, and their origin
+    <data>/derived/closing-prices/closing-prices-events.csv     ticker,day,kind,value (see below)
+    <data>/derived/closing-prices/closing-prices.json           SHA-256 of the three; their origin
 
 Only finished sessions are exported: a bar fetched while its session was still open holds the last
 trade, not the close. The sessions come from the exchange calendar, so the platform can tell a day
 the exchange was closed from a day whose price is missing.
+
+The events are what a fund did to its holders on a day: a dividend per share as it was paid (the
+vendor shows it divided by every later split, like its closes) and a split as new shares per old
+one. The platform uses them to follow an index fund with the owner's contributions; the dividends
+the owner really received come from the broker's statement, not from here.
 
 These prices are for valuation only - never for tax and never for an order.
 """
@@ -28,6 +34,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from itrade.backtest.corporate_actions import (
+    CorporateActionConflict,
+    DividendOverride,
+    apply_dividend_overrides,
+    load_dividend_overrides,
+)
 from itrade.config import project_root
 from itrade.data.store import Store
 
@@ -36,6 +48,10 @@ SESSIONS_NAME = "closing-prices-sessions.csv"
 MANIFEST_NAME = "closing-prices.json"
 HEADER = "ticker,session,close"
 SESSIONS_HEADER = "session"
+EVENTS_NAME = "closing-prices-events.csv"
+EVENTS_HEADER = "ticker,day,kind,value"
+DIVIDEND, SPLIT = "dividend", "split"
+EVENT_DECIMALS = 6  # what the platform keeps; a dividend is quoted to four to six places
 CALENDAR = "XNYS"
 
 # A bar is a close once its session is over. The margin covers the closing auction and the vendor
@@ -114,6 +130,55 @@ def as_traded_closes(bars: pd.DataFrame, ticker: str) -> list[tuple[str, str]]:
     return closes
 
 
+def amount_text(value: float) -> str:
+    """A dividend per share or a split ratio as decimal text of at most six places, without the
+    float's tail. Unlike a close it is not read as "what it was quoted in": six places are finer
+    than any dividend is declared in, and nothing is paid or taxed by this figure."""
+    if not math.isfinite(value) or value <= 0:
+        raise ClosesError(f"not an amount: {value!r}")
+    rounded = round(value, EVENT_DECIMALS)
+    if rounded <= 0:
+        raise ClosesError(f"{value!r} is nothing at {EVENT_DECIMALS} decimals")
+    text = f"{rounded:.{EVENT_DECIMALS}f}".rstrip("0").rstrip(".")
+    return text
+
+
+def fund_events(bars: pd.DataFrame, ticker: str) -> list[tuple[str, str, str]]:
+    """(day, kind, value) for every dividend and split of a ticker, earliest first: the dividend
+    per share as it was paid that day, the split as new shares per old one."""
+    dates = pd.to_datetime(bars["date"])
+    scale = split_scale(bars)
+    events = []
+    for day, paid, ratio, s in zip(
+        dates, bars["dividends"].fillna(0.0), bars["splits"].fillna(0.0), scale, strict=True
+    ):
+        try:
+            if paid != 0:
+                # Paid on the shares of that day: the day's own split is already in them.
+                events.append((day.date().isoformat(), DIVIDEND, amount_text(float(paid) * s)))
+            if ratio != 0:
+                events.append((day.date().isoformat(), SPLIT, amount_text(float(ratio))))
+        except ClosesError as exc:
+            raise ClosesError(f"{ticker} {day.date()}: {exc}") from exc
+    return events
+
+
+def with_known_corrections(
+    bars: pd.DataFrame, ticker: str, overrides: list[DividendOverride]
+) -> tuple[pd.DataFrame, list[str]]:
+    """The bars with the dividends the vendor is known to lack (config/corporate_actions.toml) put
+    in, and the days that were corrected. A correction outside the days the bars cover is not of
+    this series; one that contradicts the vendor stops the export."""
+    dates = pd.to_datetime(bars["date"])
+    mine = [o for o in overrides if o.ticker == ticker and dates.min() <= o.ex_date <= dates.max()]
+    try:
+        corrected = apply_dividend_overrides(bars, ticker, mine)
+    except CorporateActionConflict as exc:
+        raise ClosesError(str(exc)) from exc
+    changed = corrected["dividends"].fillna(0.0) != bars["dividends"].fillna(0.0)
+    return corrected, [d.date().isoformat() for d in dates[changed]]
+
+
 def finished_sessions(calendar: pd.DataFrame, fetched_at: datetime) -> list[str]:
     """The sessions of the calendar that were over when the data was fetched, earliest first."""
     over = calendar["close_utc"] + FINAL_AFTER_CLOSE <= pd.Timestamp(fetched_at)
@@ -135,10 +200,12 @@ def catalogue_currencies() -> dict[str, str]:
 class ClosesExport:
     path: Path
     sessions_path: Path
+    events_path: Path
     manifest_path: Path
     sha256: str
     rows: int
     sessions: int
+    events: int
     last_session: str | None
     tickers: dict[str, dict]
 
@@ -149,10 +216,11 @@ def export_closes(
     now: datetime | None = None,
     calendar: pd.DataFrame | None = None,
     currencies: dict[str, str] | None = None,
+    overrides: list[DividendOverride] | None = None,
 ) -> ClosesExport:
     """Writes the closing prices of the curated tickers (all, or the given ones), the sessions they
-    cover, and the manifest. Either all three files are complete or the old ones stay: a refused
-    ticker stops the export.
+    cover, the funds' dividends and splits, and the manifest. Either all four files are complete or
+    the old ones stay: a refused ticker stops the export.
 
     A bar is exported only if its session was over when the ticker was fetched (`promoted_at` of the
     curated manifest). A bar on a day that is not a session of the calendar is refused - the
@@ -163,6 +231,8 @@ def export_closes(
     chosen = sorted(tickers if tickers is not None else [t for t in manifest if "=" not in t])
     if currencies is None:
         currencies = catalogue_currencies()
+    if overrides is None:
+        overrides = load_dividend_overrides()
     unknown = [t for t in chosen if t not in manifest]
     if unknown:
         raise ClosesError(f"{unknown[0]}: no curated data")
@@ -177,6 +247,7 @@ def export_closes(
     is_session = set(all_sessions)
 
     lines = [HEADER]
+    event_lines = [EVENTS_HEADER]
     summary: dict[str, dict] = {}
     for ticker in chosen:
         bars = series[ticker]
@@ -194,6 +265,11 @@ def export_closes(
             raise ClosesError(f"{ticker}: no finished session among its bars")
         have = {session for session, _ in kept}
         lines.extend(f"{ticker},{session},{close}" for session, close in kept)
+        # What the fund did on the sessions that are exported - an event of a bar left out waits
+        # with its bar.
+        corrected, corrections = with_known_corrections(bars, ticker, overrides)
+        events = [e for e in fund_events(corrected, ticker) if e[0] in have]
+        event_lines.extend(f"{ticker},{day},{kind},{value}" for day, kind, value in events)
         split_days = bars.loc[bars["splits"].fillna(0.0) != 0, ["date", "splits"]]
         summary[ticker] = {
             "rows": len(kept),
@@ -204,6 +280,8 @@ def export_closes(
             "finished_through": through,
             "unfinished_dropped": len(closes) - len(kept),
             "currency": currencies.get(ticker),
+            "events": len(events),
+            "dividends_corrected": [d for d in corrections if d in have],
             "splits": {
                 d.date().isoformat(): float(r)
                 for d, r in zip(
@@ -226,11 +304,13 @@ def export_closes(
     folder.mkdir(parents=True, exist_ok=True)
     data = ("\n".join(lines) + "\n").encode("utf-8")
     sessions_data = ("\n".join([SESSIONS_HEADER, *sessions]) + "\n").encode("utf-8")
+    events_data = ("\n".join(event_lines) + "\n").encode("utf-8")
     sha256 = hashlib.sha256(data).hexdigest()
     path, sessions_path = folder / CSV_NAME, folder / SESSIONS_NAME
-    manifest_path = folder / MANIFEST_NAME
+    events_path, manifest_path = folder / EVENTS_NAME, folder / MANIFEST_NAME
     _replace(path, data)
     _replace(sessions_path, sessions_data)
+    _replace(events_path, events_data)
     # The manifest is written last: a reader that finds a hash that does not match a table knows it
     # caught the export in the middle, or that somebody touched the table.
     _replace(
@@ -247,6 +327,9 @@ def export_closes(
                 "sessions_file": SESSIONS_NAME,
                 "sessions_sha256": hashlib.sha256(sessions_data).hexdigest(),
                 "sessions": len(sessions),
+                "events_file": EVENTS_NAME,
+                "events_sha256": hashlib.sha256(events_data).hexdigest(),
+                "events": len(event_lines) - 1,
                 "first_session": first_session,
                 "last_session": last_session,
                 "exported_at": (now or datetime.now(UTC)).isoformat(timespec="seconds"),
@@ -260,10 +343,12 @@ def export_closes(
     return ClosesExport(
         path,
         sessions_path,
+        events_path,
         manifest_path,
         sha256,
         len(lines) - 1,
         len(sessions),
+        len(event_lines) - 1,
         last_session,
         summary,
     )

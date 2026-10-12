@@ -30,6 +30,7 @@ namespace ITrade.IntegrationTests.Prices;
 public sealed class ClosingPricesTests(PostgresFixture pg)
 {
     private const string SessionsName = "closing-prices-sessions.csv";
+    private const string EventsName = "closing-prices-events.csv";
     private static readonly Instant Imported = Instant.FromUtc(2026, 10, 7, 6, 0);
     private static readonly PricesNote Note = new("test", PricesNote.Imported, "{}");
     private static readonly ImportedExport Stamp = new(Instant.FromUtc(2026, 10, 7, 5, 0), new string('a', 64));
@@ -42,7 +43,19 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
     /// <summary>Stores closes, revisions and the sessions of these days of October that are new.</summary>
     private static Task AddAsync(ClosingPriceStore store, ClosingPrice[] added, ClosingPrice[] revised, params int[] newSessions) =>
         store.AddAsync(
-            added, revised, ClosingPrices.Calendar, [.. newSessions.Select(Day)], Imported, Note, Stamp, CancellationToken.None);
+            new PricesToStore(added, revised, ClosingPrices.Calendar, [.. newSessions.Select(Day)], [], []), Imported, Note, Stamp,
+            CancellationToken.None);
+
+    private static Task AddEventsAsync(ClosingPriceStore store, FundEvent[] events, FundEvent[] revised, params int[] newSessions) =>
+        store.AddAsync(
+            new PricesToStore([], [], ClosingPrices.Calendar, [.. newSessions.Select(Day)], events, revised), Imported, Note, Stamp,
+            CancellationToken.None);
+
+    private static FundEvent Dividend(Instrument instrument, int day, decimal perShare) =>
+        new(instrument.Id, Day(day), FundEventKind.Dividend, perShare, "yfinance");
+
+    private static FundEvent Split(Instrument instrument, int day, decimal ratio) =>
+        new(instrument.Id, Day(day), FundEventKind.Split, ratio, "yfinance");
 
     private sealed record World(string Database, Instrument Spy, Instrument Xlk);
 
@@ -63,8 +76,10 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
     /// Writes an export the way the pipeline does: the two tables, then the manifest with their SHA-256. Every
     /// ticker is fetched when the export is written.
     /// </summary>
-    private static string WriteExport(string folder, string exportedAt, LocalDate[] sessions, string[] lines, string? splitOf = null)
+    private static string WriteExport(
+        string folder, string exportedAt, LocalDate[] sessions, string[] lines, string? splitOf = null, string[]? events = null)
     {
+        events ??= [];
         static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         Directory.CreateDirectory(folder);
         var table = Encoding.UTF8.GetBytes(ClosingPricesFile.Header + "\n" + string.Join('\n', lines) + "\n");
@@ -73,6 +88,8 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         var path = Path.Combine(folder, ClosingPricesFile.CsvName);
         File.WriteAllBytes(path, table);
         File.WriteAllBytes(Path.Combine(folder, SessionsName), days);
+        var happened = Encoding.UTF8.GetBytes(ClosingPricesFile.EventsHeader + "\n" + string.Join('\n', events) + (events.Length > 0 ? "\n" : ""));
+        File.WriteAllBytes(Path.Combine(folder, EventsName), happened);
         File.WriteAllText(Path.Combine(folder, ClosingPricesFile.ManifestName), JsonSerializer.Serialize(new
         {
             file = ClosingPricesFile.CsvName,
@@ -83,6 +100,9 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
             sessions_file = SessionsName,
             sessions_sha256 = Hash(days),
             sessions = sessions.Length,
+            events_file = EventsName,
+            events_sha256 = Hash(happened),
+            events = events.Length,
             exported_at = exportedAt,
             tickers = lines.GroupBy(l => l.Split(',')[0]).ToDictionary(g => g.Key, g => new
             {
@@ -133,7 +153,7 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         Assert.Equal(3, await db.AuditEvents.CountAsync());
         Assert.Equal(3, await db.PriceImports.CountAsync());
         var later = new ImportedExport(Instant.FromUtc(2026, 10, 8, 5, 0), new string('b', 64));
-        await store.AddAsync([], [], ClosingPrices.Calendar, [Day(7)], Imported, Note, later, CancellationToken.None);
+        await store.AddAsync(new PricesToStore([], [], ClosingPrices.Calendar, [Day(7)], [], []), Imported, Note, later, CancellationToken.None);
         await AddAsync(store, [], [], 8); // the mark of the older export, stored after it
         Assert.Equal(later, await store.LastImportAsync(CancellationToken.None));
 
@@ -154,6 +174,64 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         Assert.Equal(5, await db.MarketSessions.CountAsync());
         Assert.Equal(5, await db.PriceImports.CountAsync());
         Assert.Equal(5, await db.AuditEvents.CountAsync());
+    }
+
+    [Fact]
+    public async Task DividendsAndSplitsAreStoredExactlyAndTheLatestRevisionIsTheOneInUse()
+    {
+        var w = await NewAsync();
+        await using var db = DbSetup.Create(w.Database);
+        var store = new ClosingPriceStore(db);
+
+        // SPY pays 1.889 on the 5th; XLK pays 0.168 on the 5th and splits 2:1 on the 6th - with that day's own
+        // dividend of 0.000125 a share, the smallest the table keeps.
+        await AddEventsAsync(store, [Dividend(w.Spy, 5, 1.889m), Dividend(w.Xlk, 5, 0.168m), Split(w.Xlk, 6, 2m), Dividend(w.Xlk, 6, 0.000125m)], [], 5, 6);
+        await AddEventsAsync(store, [], [Split(w.Xlk, 6, 3m)]);
+        await AddEventsAsync(store, [], [Split(w.Xlk, 6, 0.25m)]);
+
+        Assert.Empty(db.ChangeTracker.Entries());
+        Assert.Equal(
+            [Dividend(w.Xlk, 5, 0.168m), Dividend(w.Xlk, 6, 0.000125m), Split(w.Xlk, 6, 0.25m)],
+            await store.ListEventsAsync(w.Xlk.Id, CancellationToken.None));
+        Assert.Equal([Dividend(w.Spy, 5, 1.889m)], await store.ListEventsAsync(w.Spy.Id, CancellationToken.None));
+        var revisions = await db.FundEvents.AsNoTracking().Where(e => e.Kind == FundEventKind.Split).OrderBy(e => e.Revision).ToListAsync();
+        Assert.Equal([(0, 2m), (1, 3m), (2, 0.25m)], revisions.Select(e => (e.Revision, e.Value)));
+        Assert.All(revisions, e => Assert.Equal(("yfinance", Imported), (e.Source, e.ImportedAt)));
+
+        // The same event a second time is refused whole, a revision of none too, and one on a day that is no session.
+        var twice = await Assert.ThrowsAsync<DbUpdateException>(() => AddEventsAsync(store, [Dividend(w.Spy, 6, 1m), Dividend(w.Spy, 5, 1.9m)], []));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, (twice.InnerException as PostgresException)?.SqlState);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => AddEventsAsync(store, [], [Split(w.Spy, 5, 2m)]));
+        var saturday = await Assert.ThrowsAsync<DbUpdateException>(() => AddEventsAsync(store, [Dividend(w.Spy, 10, 1m)], [], 9));
+        Assert.Contains("2026-10-10 is not a session", saturday.InnerException!.Message, StringComparison.Ordinal);
+        Assert.Equal(6, await db.FundEvents.CountAsync());
+        Assert.Equal(2, await db.MarketSessions.CountAsync());
+
+        // The database keeps what is stored, and takes nothing that is no event.
+        await using var conn = new NpgsqlConnection(w.Database);
+        await conn.OpenAsync();
+        const string insert = "INSERT INTO fund_events (instrument_id, day, kind, revision, value, source, imported_at) VALUES ";
+        (string Sql, string SqlState)[] planted =
+        [
+            ("UPDATE fund_events SET value = 1 WHERE kind = 'Split'", PostgresErrorCodes.InsufficientPrivilege),
+            ("DELETE FROM fund_events", PostgresErrorCodes.InsufficientPrivilege),
+            ("TRUNCATE fund_events", PostgresErrorCodes.InsufficientPrivilege),
+            (insert + $"('{w.Spy.Id}', '2026-10-06', 'Dividend', 0, 0, 'x', now())", PostgresErrorCodes.CheckViolation), // nothing paid
+            (insert + $"('{w.Spy.Id}', '2026-10-06', 'Bonus', 0, 1, 'x', now())", PostgresErrorCodes.CheckViolation), // no such kind
+            (insert + $"('{w.Spy.Id}', '2026-10-06', 'Dividend', -1, 1, 'x', now())", PostgresErrorCodes.CheckViolation),
+            (insert + $"('{w.Spy.Id}', '2026-10-05', 'Dividend', 2, 1, 'x', now())", PostgresErrorCodes.CheckViolation), // skips revision 1
+            (insert + $"('{w.Spy.Id}', '2026-10-03', 'Dividend', 0, 1, 'x', now())", PostgresErrorCodes.CheckViolation), // a Saturday
+            (insert + $"('{w.Spy.Id}', '2026-10-05', 'Dividend', 0, 1, 'x', now())", PostgresErrorCodes.UniqueViolation),
+            (insert + $"('{Guid.NewGuid()}', '2026-10-05', 'Dividend', 0, 1, 'x', now())", PostgresErrorCodes.ForeignKeyViolation),
+        ];
+        foreach (var (sql, sqlState) in planted)
+        {
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => cmd.ExecuteNonQueryAsync());
+            Assert.Equal((sql, sqlState), (sql, error.SqlState));
+        }
+
+        Assert.Equal(6, await db.FundEvents.CountAsync());
     }
 
     [Fact]
@@ -346,6 +424,40 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         Assert.Equal(0, (await RunAsync(other)).Code);
         Assert.Equal(57, await db.ClosingPrices.CountAsync());
 
+        // The export's dividends and splits come with the prices; a restated one is said.
+        clock.Reset(Instant.FromUtc(2026, 10, 11, 14, 0));
+        WriteExport(
+            elsewhere, "2026-10-11T06:00:00+00:00", [.. sessions, Day(8), Day(9)], [.. spy, "SPY,2026-10-09,600.00"], splitOf: "SPY,2026-10-09",
+            events: ["SPY,2026-10-06,dividend,1.889", "SPY,2026-10-09,split,2", "VWO,2026-10-06,dividend,0.4"]);
+        var withEvents = await RunAsync(other);
+        Assert.Equal(1, withEvents.Code); // VWO is not among the export's tickers: the reader refuses the table
+        Assert.Contains("fund events holds one of VWO, which the manifest does not name", withEvents.Output[0], StringComparison.Ordinal);
+        WriteExport(
+            elsewhere, "2026-10-11T06:00:00+00:00", [.. sessions, Day(8), Day(9)], [.. spy, "SPY,2026-10-09,600.00"], splitOf: "SPY,2026-10-09",
+            events: ["SPY,2026-10-06,dividend,1.889", "SPY,2026-10-09,split,2"]);
+        withEvents = await RunAsync(other);
+        Assert.Equal(0, withEvents.Code);
+        Assert.Contains("Dividends and splits of the funds: 2 new.", withEvents.Output);
+        WriteExport(
+            elsewhere, "2026-10-11T07:00:00+00:00", [.. sessions, Day(8), Day(9)], [.. spy, "SPY,2026-10-09,600.00"], splitOf: "SPY,2026-10-09",
+            events: ["SPY,2026-10-06,dividend,1.9", "SPY,2026-10-09,split,2"]);
+        var restated = await RunAsync(other);
+        Assert.Equal(0, restated.Code);
+        Assert.Contains("Revised SPY 2026-10-06 dividend: 1.889 -> 1.9 (the old figure is kept as the earlier revision).", restated.Output);
+        Assert.Equal(3, await db.FundEvents.CountAsync());
+        // The vendor withdraws the split: it stays stored, and the import says what that means.
+        WriteExport(
+            elsewhere, "2026-10-11T08:00:00+00:00", [.. sessions, Day(8), Day(9)], [.. spy, "SPY,2026-10-09,600.00"], splitOf: "SPY,2026-10-09",
+            events: ["SPY,2026-10-06,dividend,1.9"]);
+        var withdrawn = await RunAsync(other);
+        Assert.Equal(0, withdrawn.Code);
+        Assert.Contains(
+            "Note: the export no longer states 1 stored dividend(s) or split(s), for example SPY 2026-10-09 split 2. They are kept and an index is still followed with them: if the source moved or withdrew them, the comparison is off by that much.",
+            withdrawn.Output);
+        Assert.Equal(3, await db.FundEvents.CountAsync());
+        Assert.Equal(57, await db.ClosingPrices.CountAsync());
+        clock.Reset(Instant.FromUtc(2026, 10, 10, 14, 0));
+
         // The price for a date, through the Host's own services.
         await using var host = ITradeHost.Build(RunningHost.Args(w.Database, dataDir), services => services.AddSingleton<IClock>(clock));
         await using var scope = host.Services.CreateAsyncScope();
@@ -437,8 +549,10 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
             await using var db = DbSetup.Create(w.Database);
             var session = today.PlusDays(-daysAgo);
             await new ClosingPriceStore(db).AddAsync(
-                [.. priced.Select(i => new ClosingPrice(i.Id, session, new Price(700m, Currency.Usd), "yfinance"))], [],
-                ClosingPrices.Calendar, [session], Imported, Note, Stamp, CancellationToken.None);
+                new PricesToStore(
+                    [.. priced.Select(i => new ClosingPrice(i.Id, session, new Price(700m, Currency.Usd), "yfinance"))], [],
+                    ClosingPrices.Calendar, [session], [], []),
+                Imported, Note, Stamp, CancellationToken.None);
         }
 
         await AddAsync(30, w.Spy, w.Xlk);

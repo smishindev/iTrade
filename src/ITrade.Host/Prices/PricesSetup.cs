@@ -115,6 +115,31 @@ internal static class ImportPricesCommand
         await output.WriteLineAsync(result.LatestSession is { } latest
             ? Invariant($"Latest finished session: {latest:R}.")
             : "The export covers no session.");
+        if (result.EventsAdded > 0)
+        {
+            await output.WriteLineAsync(Invariant($"Dividends and splits of the funds: {result.EventsAdded} new."));
+        }
+
+        foreach (var change in result.EventsRevised.Take(MostListed))
+        {
+            var kind = change.Stored.Kind == ITrade.Domain.FundEventKind.Split ? "split" : "dividend";
+            await output.WriteLineAsync(Invariant(
+                $"Revised {change.Ticker} {change.Stored.Day:R} {kind}: {change.Stored.Value:0.######} -> {change.Stated.Value:0.######} (the old figure is kept as the earlier revision)."));
+        }
+
+        if (result.EventsRevised.Count > MostListed)
+        {
+            await output.WriteLineAsync(Invariant($"... and {result.EventsRevised.Count - MostListed} more revised dividends or splits; all are in the audit trail."));
+        }
+
+        if (result.EventsNotRepeated.Count > 0)
+        {
+            var examples = result.EventsNotRepeated.Take(3).Select(e => Invariant(
+                $"{e.Ticker} {e.Event.Day:R} {(e.Event.Kind == ITrade.Domain.FundEventKind.Split ? "split" : "dividend")} {e.Event.Value:0.######}"));
+            await output.WriteLineAsync(Invariant(
+                $"Note: the export no longer states {result.EventsNotRepeated.Count} stored dividend(s) or split(s), for example {string.Join("; ", examples)}. They are kept and an index is still followed with them: if the source moved or withdrew them, the comparison is off by that much."));
+        }
+
         foreach (var change in result.Revised.Take(MostListed))
         {
             await output.WriteLineAsync(Invariant(

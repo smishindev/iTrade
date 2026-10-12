@@ -34,14 +34,19 @@ public sealed class PerformanceTests(PostgresFixture pg)
         (Day(12), 159.50m, 3.078m),
     ];
 
-    private sealed record World(IServiceProvider Services, FakeClock Clock, HoldingPlace Ibkr, Instrument Vt, string DataDir);
+    private sealed record World(IServiceProvider Services, FakeClock Clock, HoldingPlace Ibkr, Instrument Vt, string DataDir, string Database);
 
-    private async Task<(World World, IAsyncDisposable App, IAsyncDisposable Scope)> NewAsync()
+    private Task<(World World, IAsyncDisposable App, IAsyncDisposable Scope)> NewAsync(params string[] hostArgs) =>
+        NewAsync(Day(12), hostArgs);
+
+    /// <param name="ratesThrough">The last day the bank's rate is stored for.</param>
+    /// <param name="hostArgs">Settings of the Host.</param>
+    private async Task<(World World, IAsyncDisposable App, IAsyncDisposable Scope)> NewAsync(LocalDate ratesThrough, params string[] hostArgs)
     {
         var database = await pg.NewEmptyDatabaseAsync();
         var dataDir = RunningHost.NewDataDir();
         var clock = new FakeClock(Instant.FromUtc(2026, 10, 13, 14, 0));
-        var app = ITradeHost.Build(RunningHost.Args(database, dataDir), services => services.AddSingleton<IClock>(clock));
+        var app = ITradeHost.Build([.. RunningHost.Args(database, dataDir), .. hostArgs], services => services.AddSingleton<IClock>(clock));
         await ITradeHost.MigrateAsync(app);
         var scope = app.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
@@ -54,14 +59,39 @@ public sealed class PerformanceTests(PostgresFixture pg)
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
         await new ClosingPriceStore(db).AddAsync(
-            [.. Market.Select(m => new ClosingPrice(vt.Id, m.Session, new Price(m.Close, Currency.Usd), "yfinance"))], [],
-            ClosingPrices.Calendar, [.. Market.Select(m => m.Session)], Stored, new PricesNote("test", PricesNote.Imported, "{}"),
-            new ImportedExport(Stored, new string('a', 64)), CancellationToken.None);
+            new PricesToStore(
+                [.. Market.Select(m => new ClosingPrice(vt.Id, m.Session, new Price(m.Close, Currency.Usd), "yfinance"))], [],
+                ClosingPrices.Calendar, [.. Market.Select(m => m.Session)], [], []),
+            Stored, new PricesNote("test", PricesNote.Imported, "{}"), new ImportedExport(Stored, new string('a', 64)), CancellationToken.None);
         var bank = services.GetRequiredService<IFxRateSource>();
         await new FxRateStore(db).AddAsync(
-            [.. Market.Select(m => new FxRate(bank.BaseCurrency, bank.QuoteCurrency, m.Rate, m.Session, bank.Name))], [], null, Stored,
+            [.. Market.Where(m => m.Session <= ratesThrough).Select(m => new FxRate(bank.BaseCurrency, bank.QuoteCurrency, m.Rate, m.Session, bank.Name))], [], null, Stored,
             new FxRatesNote("test", FxRatesNote.Updated, "{}"), CancellationToken.None);
-        return (new World(services, clock, ibkr, vt, dataDir), app, scope);
+        return (new World(services, clock, ibkr, vt, dataDir, database), app, scope);
+    }
+
+    /// <summary>Stores what a fund did, and - for a fund of its own - its closes on sessions that are already stored.</summary>
+    private static Task<Instrument> AddFundAsync(World w, string ticker, (LocalDate Session, decimal Close)[] closes, params (LocalDate Day, FundEventKind Kind, decimal Value)[] events) =>
+        AddFundAsync(w, ticker, closes, [], events);
+
+    private static async Task<Instrument> AddFundAsync(
+        World w, string ticker, (LocalDate Session, decimal Close)[] closes, LocalDate[] newSessions, (LocalDate Day, FundEventKind Kind, decimal Value)[] events)
+    {
+        await using var db = DbSetup.Create(w.Database);
+        var fund = ticker == "VT" ? w.Vt : new Instrument(InstrumentId.New(), new Ticker(ticker), "ARCA", Currency.Usd, $"{ticker} fund");
+        if (ticker != "VT")
+        {
+            db.Instruments.Add(InstrumentRow.From(fund));
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
+        }
+
+        await new ClosingPriceStore(db).AddAsync(
+            new PricesToStore(
+                [.. closes.Select(c => new ClosingPrice(fund.Id, c.Session, new Price(c.Close, Currency.Usd), "yfinance"))], [],
+                ClosingPrices.Calendar, newSessions, [.. events.Select(e => new FundEvent(fund.Id, e.Day, e.Kind, e.Value, "yfinance"))], []),
+            Stored, new PricesNote("test", PricesNote.Imported, "{}"), new ImportedExport(Stored, new string('b', 64)), CancellationToken.None);
+        return fund;
     }
 
     private static Transaction Entry(World w, TransactionKind kind, LocalDate day, Money cash, string id, decimal shares = 0m) =>
@@ -123,6 +153,28 @@ public sealed class PerformanceTests(PostgresFixture pg)
         Assert.Equal(4630.50m * 3.078m + 305.50m - 9300m - 4626m, inShekels.Returns!.Gain);
         Assert.True(inShekels.Returns.TimeWeighted < inDollars.Returns.TimeWeighted); // the dollar lost against the shekel meanwhile
 
+        // The same money in the index fund (VT itself here): 3,000 buy 20 shares at the close of the 1st; 1,500
+        // buy 1,500 / 155 more at the close of the 8th; 100 are sold out at the close of the 9th. Nothing lies
+        // idle there, so the index does a little better than a portfolio that kept 105 dollars in cash.
+        var shares = 3000m / 150m;
+        var onThe8th = shares + (1500m / 155m);
+        var onThe9th = onThe8th + ((0m - 100m) / 158m);
+        ValuePoint[] indexDollars =
+        [
+            new(September30, 0m), new(Day(1), shares * 150m, Inflow: 3000m), new(Day(7), shares * 154m), new(Day(8), onThe8th * 155m, Inflow: 1500m),
+            new(Day(9), onThe9th * 158m, Outflow: 100m), new(Day(12), onThe9th * 159.50m),
+        ];
+        Assert.Equal(("VT", 0), (october.Index.Ticker, october.Index.WhyNone.Count));
+        var indexInDollars = october.Index.In(Currency.Usd)!;
+        Assert.Equal(PeriodReturns.Of(indexDollars), indexInDollars.Returns);
+        Assert.Equal(0.061087m, decimal.Round(indexInDollars.Returns!.TimeWeighted, 6)); // 1.026667 x 1.004367 x 158/155 x 159.5/158
+        Assert.True(indexInDollars.Returns.TimeWeighted > inDollars.Returns.TimeWeighted);
+        Assert.Equal((4500m, 100m, false), (indexInDollars.Returns.Contributed, indexInDollars.Returns.Withdrawn, indexInDollars.IsProvisional));
+        // In shekels: the index's value of each day at that day's rate, against the same shekel flows.
+        decimal[] rates = [3.100m, 3.100m, 3.080m, 3.084m, 3.055m, 3.078m];
+        var indexShekels = indexDollars.Select((p, i) => shekels[i] with { Value = p.Value * rates[i] }).ToList();
+        Assert.Equal(PeriodReturns.Of(indexShekels), october.Index.In(Currency.Ils)!.Returns);
+
         // A period inside the month starts from what was there: 3,080 on the 7th is its opening value.
         var second = await performance.OverAsync(Day(8), Day(12), CancellationToken.None);
         Assert.Equal([Day(7), Day(8), Day(9), Day(12)], second.ValuedOn);
@@ -141,9 +193,13 @@ public sealed class PerformanceTests(PostgresFixture pg)
         Assert.NotNull(toToday.In(Currency.Usd).Returns);
         Assert.Contains(toToday.Remarks, r => r.StartsWith("2026-10-13: VT: provisional - valued at the close of 2026-10-12", StringComparison.Ordinal));
 
+        Assert.True(toToday.Index.In(Currency.Usd)!.IsProvisional); // the index is valued at Monday's close too
+
         // Up to tomorrow there is no value to end with: no return is made up.
         var toTomorrow = await performance.OverAsync(Day(1), Day(14), CancellationToken.None);
         Assert.Null(toTomorrow.In(Currency.Usd).Returns);
+        Assert.Contains("The portfolio's own values in USD are not complete", Assert.Single(toTomorrow.Index.WhyNone), StringComparison.Ordinal);
+        Assert.Empty(toTomorrow.Index.ByCurrency);
         Assert.Equal(["2026-10-14: the value in USD is not complete - 1 position(s) have no usable price."], toTomorrow.In(Currency.Usd).WhyNone);
         Assert.Contains("USD could not be converted", Assert.Single(toTomorrow.In(Currency.Ils).WhyNone), StringComparison.Ordinal);
 
@@ -171,6 +227,198 @@ public sealed class PerformanceTests(PostgresFixture pg)
         Assert.Contains("stood empty for a while", afterTheExit.Notes[1], StringComparison.Ordinal);
 
         await Assert.ThrowsAsync<ArgumentException>(() => performance.OverAsync(Day(12), Day(1), CancellationToken.None));
+        Directory.Delete(w.DataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task PortfolioThatHoldsOnlyTheIndexEarnsWhatTheIndexDoes()
+    {
+        var (w, app, scope) = await NewAsync();
+        await using var disposeApp = app;
+        await using var disposeScope = scope;
+        // VT pays 1.00 a share on Tuesday the 6th, when it closes at 153.00.
+        await AddFundAsync(w, "VT", [], (Day(6), FundEventKind.Dividend, 1.00m));
+
+        // The owner does what the index portfolio does: every dollar into VT at the close of the day it came -
+        // 3,000 on the 1st, 1,550 on the 8th - and the dividend, a quarter of it withheld, back into VT at the
+        // close of its day (as nearly as shares of six decimals allow).
+        var dividend = new Transaction(
+            TransactionId.New(), w.Ibkr.Id, TransactionKind.Dividend, Day(6), Day(6), Money.Usd(20m), TransactionSource.Flex,
+            w.Clock.GetCurrentInstant(), w.Vt.Id, externalId: "DIV-1");
+        await w.Services.GetRequiredService<TransactionLedger>().RecordAsync(
+            [
+                Entry(w, TransactionKind.Deposit, Day(1), Money.Usd(3000m), "D-1"),
+                Entry(w, TransactionKind.Buy, Day(1), Money.Usd(-3000m), "T-1", 20m),
+                dividend,
+                new Transaction(
+                    TransactionId.New(), w.Ibkr.Id, TransactionKind.TaxWithheld, Day(6), Day(6), Money.Usd(-5m), TransactionSource.Flex,
+                    w.Clock.GetCurrentInstant(), w.Vt.Id, externalId: "DIV-1:tax", relatedTo: dividend.Id),
+                new Transaction(
+                    TransactionId.New(), w.Ibkr.Id, TransactionKind.Buy, Day(6), Day(6), Money.Usd(-14.999967m), TransactionSource.Flex,
+                    w.Clock.GetCurrentInstant(), w.Vt.Id, 0.098039m, new Price(153m, Currency.Usd), "T-2"),
+                Entry(w, TransactionKind.Deposit, Day(8), Money.Usd(1550m), "D-2"),
+                Entry(w, TransactionKind.Buy, Day(8), Money.Usd(-1550m), "T-3", 10m),
+            ],
+            CancellationToken.None);
+
+        var report = await w.Services.GetRequiredService<PortfolioPerformance>().OverAsync(Day(1), Day(12), CancellationToken.None);
+
+        foreach (var currency in new[] { Currency.Usd, Currency.Ils })
+        {
+            var (own, index) = (report.In(currency).Returns!, report.Index.In(currency)!.Returns!);
+            Assert.InRange(own.TimeWeighted - index.TimeWeighted, -0.0000001m, 0.0000001m);
+            Assert.InRange(own.MoneyWeighted!.Value - index.MoneyWeighted!.Value, -0.0000001m, 0.0000001m);
+            Assert.InRange(own.Gain - index.Gain, -0.001m, 0.001m);
+            Assert.Equal((own.Contributed, own.Withdrawn, own.DaysAtWork), (index.Contributed, index.Withdrawn, index.DaysAtWork));
+        }
+
+        // 30.098039 shares at 159.50 and a rounding crumb of cash: 250.64 earned on 4,550 - the 15.00 of the
+        // dividend are in it, the 5.00 withheld are not.
+        Assert.Equal(250.637254m, decimal.Round(report.In(Currency.Usd).Returns!.Gain, 6));
+        // Without the dividend the index would have 30 shares: 4,785 instead of 4,800.64.
+        Assert.Equal(4800.637255m, decimal.Round(report.Index.In(Currency.Usd)!.Returns!.ClosingValue, 6));
+        Directory.Delete(w.DataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task SplitOfTheIndexFundIsNoFallOfTheIndex()
+    {
+        var (w, app, scope) = await NewAsync("--ITrade:IndexTicker=WRLD");
+        await using var disposeApp = app;
+        await using var disposeScope = scope;
+        // The index fund closes at 100 when the money comes, splits 2:1 on Thursday the 8th and closes at 55 on
+        // Monday - 110 of the old shares. The owner keeps 1,000 dollars in cash all the while.
+        (LocalDate, decimal)[] closes = [(September30, 100m), (Day(1), 100m), (Day(7), 104m), (Day(8), 52m), (Day(12), 55m)];
+        await AddFundAsync(w, "WRLD", closes, (Day(8), FundEventKind.Split, 2m));
+        var recorder = w.Services.GetRequiredService<TransactionLedger>();
+        await recorder.RecordAsync([Entry(w, TransactionKind.Deposit, Day(1), Money.Usd(1000m), "D-1")], CancellationToken.None);
+        var performance = w.Services.GetRequiredService<PortfolioPerformance>();
+
+        var report = await performance.OverAsync(Day(1), Day(12), CancellationToken.None);
+
+        // 10 shares became 20; 20 x 55 = 1,100. Read without the split it would be 10 x 55: a loss of 45%.
+        var index = report.Index.In(Currency.Usd)!.Returns!;
+        Assert.Equal(("WRLD", 0.1m, 1100m, 100m), (report.Index.Ticker, index.TimeWeighted, index.ClosingValue, index.Gain));
+        Assert.Equal((0m, 0m), (report.In(Currency.Usd).Returns!.TimeWeighted, report.In(Currency.Usd).Returns!.Gain));
+
+        // A period whose last day has no close of the fund: no comparison, and the day is named. The
+        // portfolio's own returns do not depend on the index.
+        var toFriday = await performance.OverAsync(Day(1), Day(9), CancellationToken.None);
+        Assert.Equal(["2026-10-09: there is no closing price of WRLD to use."], toFriday.Index.WhyNone);
+        Assert.NotNull(toFriday.In(Currency.Usd).Returns);
+
+        // The owner takes the 1,000 out on Monday - and 110 more that came as interest. The index portfolio is
+        // worth 1,100 at that close: it can still follow, to the cent.
+        await recorder.RecordAsync(
+            [
+                Entry(w, TransactionKind.Interest, Day(12), Money.Usd(110m), "I-1"),
+                Entry(w, TransactionKind.Withdrawal, Day(12), Money.Usd(-1100m), "W-1"),
+            ],
+            CancellationToken.None);
+        var emptied = await performance.OverAsync(Day(1), Day(12), CancellationToken.None);
+        Assert.Equal((0m, 0.1m), (emptied.Index.In(Currency.Usd)!.Returns!.ClosingValue, emptied.Index.In(Currency.Usd)!.Returns!.TimeWeighted));
+        // One dollar more than that it cannot give.
+        await recorder.RecordAsync(
+            [
+                Entry(w, TransactionKind.Interest, Day(12), Money.Usd(1m), "I-2"),
+                Entry(w, TransactionKind.Withdrawal, Day(12), Money.Usd(-1m), "W-2"),
+            ],
+            CancellationToken.None);
+        var overdrawn = await performance.OverAsync(Day(1), Day(12), CancellationToken.None);
+        Assert.Contains("On 2026-10-12 more is taken out than the index portfolio holds", Assert.Single(overdrawn.Index.WhyNone), StringComparison.Ordinal);
+        Assert.Equal(111m, overdrawn.In(Currency.Usd).Returns!.Gain);
+        Directory.Delete(w.DataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task IndexToldInShekelsAtAProvisionalRateIsProvisional()
+    {
+        var (w, app, scope) = await NewAsync();
+        await using var disposeApp = app;
+        await using var disposeScope = scope;
+        // 3,100 shekels since 1 October, kept as shekels; today's close of the index fund is already stored, the
+        // bank's rate of today is not.
+        await AddFundAsync(w, "VT", [(Day(13), 160m)], [Day(13)], []);
+        await w.Services.GetRequiredService<TransactionLedger>().RecordAsync(
+            [Entry(w, TransactionKind.Deposit, Day(1), Money.Ils(3100m), "D-1")], CancellationToken.None);
+        var performance = w.Services.GetRequiredService<PortfolioPerformance>();
+
+        var toToday = await performance.OverAsync(Day(1), Day(13), CancellationToken.None);
+
+        // The owner's shekels are shekels: nothing provisional about them. Everything else rests on Monday's rate.
+        Assert.False(toToday.In(Currency.Ils).IsProvisional);
+        Assert.True(toToday.In(Currency.Usd).IsProvisional);
+        Assert.Equal((true, true), (toToday.Index.In(Currency.Usd)!.IsProvisional, toToday.Index.In(Currency.Ils)!.IsProvisional));
+        // 3,100 shekels were 1,000 dollars at 3.100: 1,000 / 150 shares, at 160 today, at Monday's 3.078.
+        Assert.Equal(1000m / 150m * 160m * 3.078m, toToday.Index.In(Currency.Ils)!.Returns!.ClosingValue);
+
+        // Up to Monday every figure is final.
+        var toMonday = await performance.OverAsync(Day(1), Day(12), CancellationToken.None);
+        Assert.Equal((false, false), (toMonday.Index.In(Currency.Usd)!.IsProvisional, toMonday.Index.In(Currency.Ils)!.IsProvisional));
+        Directory.Delete(w.DataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task IndexValuedAtACarriedCloseIsProvisionalThoughThePortfolioIsNot()
+    {
+        var (w, app, scope) = await NewAsync();
+        await using var disposeApp = app;
+        await using var disposeScope = scope;
+        // 1,000 dollars in cash: the owner's dollars need no price and no rate. The index fund's close of today
+        // is not stored yet - Monday's stands in for it.
+        await w.Services.GetRequiredService<TransactionLedger>().RecordAsync(
+            [Entry(w, TransactionKind.Deposit, Day(1), Money.Usd(1000m), "D-1")], CancellationToken.None);
+
+        var toToday = await w.Services.GetRequiredService<PortfolioPerformance>().OverAsync(Day(1), Day(13), CancellationToken.None);
+
+        Assert.False(toToday.In(Currency.Usd).IsProvisional);
+        Assert.True(toToday.Index.In(Currency.Usd)!.IsProvisional);
+        Assert.Equal(1000m / 150m * 159.50m, toToday.Index.In(Currency.Usd)!.Returns!.ClosingValue);
+        Directory.Delete(w.DataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task DayWithoutARateUnderTheIndexIsAReasonAndTheRestOfTheReportStands()
+    {
+        // The bank's rates stop on Friday the 2nd. The owner pays in 1,000 dollars on the 1st and takes them out
+        // on the 2nd: from then on the portfolio is empty and needs no rate. The index fund rose from 150 to 151
+        // meanwhile, so the index portfolio keeps a few dollars - and those cannot be told in shekels on the 12th.
+        var (w, app, scope) = await NewAsync(Day(2));
+        await using var disposeApp = app;
+        await using var disposeScope = scope;
+        await w.Services.GetRequiredService<TransactionLedger>().RecordAsync(
+            [
+                Entry(w, TransactionKind.Deposit, Day(1), Money.Usd(1000m), "D-1"),
+                Entry(w, TransactionKind.Withdrawal, Day(2), Money.Usd(-1000m), "W-1"),
+            ],
+            CancellationToken.None);
+
+        var report = await w.Services.GetRequiredService<PortfolioPerformance>().OverAsync(Day(1), Day(12), CancellationToken.None);
+
+        Assert.Equal((0m, 0m), (report.In(Currency.Usd).Returns!.TimeWeighted, report.In(Currency.Ils).Returns!.ClosingValue));
+        Assert.Empty(report.Index.WhyNone);
+        var left = (1000m / 150m) + ((0m - 1000m) / 151m);
+        Assert.Equal(left * 159.50m, report.Index.In(Currency.Usd)!.Returns!.ClosingValue);
+        var inShekels = report.Index.In(Currency.Ils)!;
+        Assert.Null(inShekels.Returns);
+        Assert.Equal(["2026-10-12: there is no exchange rate to tell the index's value in ILS."], inShekels.WhyNone);
+        Directory.Delete(w.DataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task IndexFundThatIsNotInTheCatalogueGivesNoComparison()
+    {
+        var (w, app, scope) = await NewAsync("--ITrade:IndexTicker=NOPE");
+        await using var disposeApp = app;
+        await using var disposeScope = scope;
+        await w.Services.GetRequiredService<TransactionLedger>().RecordAsync(
+            [Entry(w, TransactionKind.Deposit, Day(1), Money.Usd(1000m), "D-1")], CancellationToken.None);
+
+        var report = await w.Services.GetRequiredService<PortfolioPerformance>().OverAsync(Day(1), Day(12), CancellationToken.None);
+
+        Assert.Equal(["NOPE, the fund that stands for the index, is not in the instrument catalogue."], report.Index.WhyNone);
+        Assert.Null(report.Index.In(Currency.Usd));
+        Assert.Equal(0m, report.In(Currency.Usd).Returns!.TimeWeighted);
         Directory.Delete(w.DataDir, recursive: true);
     }
 
@@ -224,6 +472,16 @@ public sealed class PerformanceTests(PostgresFixture pg)
         var inDollars = report.In(Currency.Usd);
         Assert.Equal((2000m, 1000m, 1000m, 0m), (inDollars.Returns!.Contributed, inDollars.Returns.Withdrawn, inDollars.Returns.ClosingValue, inDollars.Returns.TimeWeighted));
         Assert.True(inDollars.IsProvisional);
+        // The index follows those flows: its dollar figures are provisional for the same reason, and its shekel
+        // ones because Monday's close - carried, the 13th not being stored - stands in for today's.
+        Assert.Equal((true, true), (report.Index.In(Currency.Usd)!.IsProvisional, report.Index.In(Currency.Ils)!.IsProvisional));
+
+        // Once today's close of the index fund is stored, only the rate is still Monday's: the shekel flows are
+        // what they are, and so are the owner's shekels - but the index's dollars told in shekels are provisional.
+        await AddFundAsync(w, "VT", [(Day(13), 160m)], [Day(13)], []);
+        var withTheClose = await performance.OverAsync(Day(1), Day(13), CancellationToken.None);
+        Assert.Equal((true, true), (withTheClose.Index.In(Currency.Usd)!.IsProvisional, withTheClose.Index.In(Currency.Ils)!.IsProvisional));
+        Assert.Equal(1000m / 150m * 160m, withTheClose.Index.In(Currency.Usd)!.Returns!.ClosingValue);
         // Up to Monday nothing provisional is in it.
         Assert.False((await performance.OverAsync(Day(1), Day(12), CancellationToken.None)).In(Currency.Usd).IsProvisional);
         Directory.Delete(w.DataDir, recursive: true);

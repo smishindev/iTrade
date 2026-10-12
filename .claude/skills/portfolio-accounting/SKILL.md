@@ -9,7 +9,7 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02, P3.4.01, P3.4.02)
+## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02, P3.4.01, P3.4.02, P3.4.04)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
@@ -17,9 +17,11 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 | What happened | `Transaction`; `TransactionLedger` (`RecordAsync`, `ReverseAsync`) | `transactions` |
 | Exchange rates | `FxRate`, `AppliedFxRate`; `FxRates` (`UpdateAsync`, `OnAsync`), job `fx-rates`; source `BankOfIsraelRates` | `fx_rates` |
 | Closing prices | `ClosingPrice`, `PriceOnDate`; `ClosingPrices` (`ImportAsync`, `OnAsync`); file `ClosingPricesFile` | `closing_prices`, `market_sessions`, `price_imports` |
+| What a fund paid and how it split | `FundEvent` (dividend per share as paid, split ratio); `ClosingPrices.EventsAsync` | `fund_events` |
 | What is held | `PortfolioBooks.From(ledger, asOf)` → `Position`, `Lot`, `Disposal`, `CashBalance`; `PortfolioBooksReader` | none — computed from the ledger every time |
 | What it is worth | `PortfolioValue.Of(books, prices, rate)` → `PositionValue`, `PortfolioTotal`; `PortfolioValuation.AsOfAsync(date)` | none — worked out every time |
 | What it earned | `PeriodReturns.Of(points)`, `OwnerFlow.Of(ledger, first, last)`; `PortfolioPerformance.OverAsync(first, last)`; oracle `python/src/itrade/accounting/returns.py` | none |
+| What the index would have earned | `IndexPortfolio.Following(points, events, closes, dividendKept)`; `PerformanceReport.Index` | none |
 
 ## The ledger
 - **One entry = one effect**: a change of the shares of one instrument and/or of the cash in one currency
@@ -252,14 +254,50 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   (`ITRADE_UPDATE_FIXTURES=1 uv run pytest tests/test_returns_oracle.py`) and read by the C# tests.
 - **Known limits:** a transfer between two holding places would count as a withdrawal and a deposit (one
   place is in use); flows that change sign more than once can have several rates and the search returns
-  one of them; the figures are before tax on gains. No comparison with an index yet (P3.4.04: it needs
-  the index fund's dividends and split days). For looking at, never for tax.
+  one of them; the figures are before tax on gains. For looking at, never for tax.
 
-## Rules for what comes next (the index, reconciliation)
+## The index (`IndexPortfolio`, `fund_events`, P3.4.04)
+- **The comparison is with a portfolio, not with a price.** `IndexPortfolio.Following` puts the same money
+  on the same days into the index fund and is then measured by the same `PeriodReturns`: what was there at
+  the opening and every contribution buy the fund **at the close of their own day** (the first price anyone
+  could have had — no looking ahead), a withdrawal sells at the close of its day. Each of the portfolio's
+  returns has its counterpart: time-weighted beside time-weighted, money-weighted beside money-weighted.
+- **Dividends are in it.** The portfolio's value includes the dividends it received; a fund's price does
+  not. The index portfolio buys more of the fund with each dividend at the close of its ex-date, after what
+  is withheld (`ITrade:DividendWithheld`, 0.25 — the assumption of `[tax] dividend_rate` in
+  `config/costs.toml`, 2026-10-06, unverified). A comparison on prices alone would show the portfolio ahead
+  by the dividend yield, about 2% a year.
+- **A split changes the shares, as it changed the price.** Prices are as traded, so without the split a
+  2:1 split would read as a fall by half.
+- **`fund_events`** holds each fund's dividends (per share, as paid — the vendor's figure multiplied back by
+  the later splits) and splits (new shares per old), from the same export as the closing prices
+  (`closing-prices-events.csv`, its SHA-256 in the manifest). Append-only with revisions; an event belongs
+  to a session. A restated event is recorded as the next revision and named by the import; nothing about
+  it is asked. A stored event the export no longer states (the vendor moved an ex-date, dropped a doubled
+  dividend) **stays and is named** (`EventsNotRepeated`): it cannot be withdrawn yet, and the index is
+  followed with it. Dividends the vendor is known to lack come from `config/corporate_actions.toml` (each
+  with a second source) and are in the export; the manifest names them (`dividends_corrected`). **These are
+  the market's facts about a fund, not the owner's**: what the owner received and what was withheld is in
+  the ledger, from the broker's statement.
+- **Which fund is the index** is a setting (`ITrade:IndexTicker`, VT) and must be in the catalogue.
+- **No comparison rather than a wrong one** (`IndexPerformance.WhyNone`): the fund is not in the catalogue;
+  the portfolio's own values are not complete; a close of the fund is missing on a day that is needed (a
+  valued day or a dividend day); more is withdrawn than the index portfolio holds — it cannot follow then.
+- **Provisional follows**: the index's figures are provisional when a close of the fund is, when the rate
+  its value was told with is, or when the flows it follows were told at a provisional rate.
+- **It flatters the index**: no commission, no spread, the dividend reinvested on its ex-date and not on
+  its pay date. A portfolio that holds only the index fund, bought at the close of each contribution's day,
+  matches it — that is tested. For looking at, never for tax.
+- **Known limits:** dividends come from the free data vendor and, but for the recorded corrections, were
+  not checked against the fund's own announcements (`docs/data-notes.md` lists gaps without a second
+  source: TLT, EWG, EWY, INDA); a special distribution (capital gains, return of capital) is counted as a
+  dividend; a spin-off the vendor encodes as a split (XLF 2016-09-19, 1.231) is stored as a split; an
+  event cannot be withdrawn; once the real portfolio was emptied at more than the index portfolio held,
+  no comparison is given for any period with that day in it; the split days stored here are not yet
+  compared with the ledger (P3.4.03).
+
+## Rules for what comes next (reconciliation)
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
-- **A comparison with an index uses the same contributions on the same days**, bought at the close of the
-  day (no looking ahead), with the fund's dividends after withholding — a price-only index flatters the
-  portfolio by the dividend yield.
 - **Reconciliation never repairs.** A difference between the ledger and the broker's statement is shown
   to the owner with both numbers; it is closed by an import or by a reversal with a reason.
 - **Broker statements carry the real account number**: the original file stays in the data folder,

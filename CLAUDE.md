@@ -78,6 +78,9 @@ ingest, statistics. **Python never trades.**
 - Returns come only through `PortfolioPerformance` / `PeriodReturns`: time-weighted and money-weighted are two
   figures, each named; a contribution is not a gain; no return is computed over a value that is not complete.
   The Python oracle (`python/src/itrade/accounting/returns.py`) writes the fixture the C# tests are held to.
+- The index is compared as a portfolio (`IndexPortfolio`): the owner's own contributions, on their days, into the
+  index fund at that day's close, its dividends put back after withholding. Never compare with a fund's price
+  alone. `fund_events` (dividends, splits) are the market's facts about a fund, not what the owner received.
 - Tax and accounting rules do not wait for the accountant (owner, 2026-10-12): choose, record as an assumption with
   source and date, label the result unverified.
 - Money is `decimal`/`numeric`, never floating point, in C# and SQL. Times in UTC; schedules in America/New_York.

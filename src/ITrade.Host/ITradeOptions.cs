@@ -32,6 +32,21 @@ public sealed class ITradeOptions
     /// </summary>
     public bool UpdateFxRates { get; init; } = true;
 
+    /// <summary>
+    /// The fund the portfolio's returns are compared with: a broad world fund (docs/PLAN.md). A ticker of the
+    /// instrument catalogue.
+    /// </summary>
+    public string IndexTicker { get; init; } = "VT";
+
+    /// <summary>
+    /// The share of a US fund's dividend that does not reach an Israeli resident: 25% withheld in the US under
+    /// the treaty and credited against the 25% due in Israel, so a quarter is gone either way. An assumption,
+    /// not tax advice - the same figure as `[tax] dividend_rate` in config/costs.toml (set 2026-10-06, to be
+    /// verified with a specialist). Used only to follow the index fund; the owner's own dividends and what
+    /// was withheld from them come from the broker's statement.
+    /// </summary>
+    public decimal DividendWithheld { get; init; } = 0.25m;
+
     /// <summary>The log folder, with the separators of this system whatever the setting used.</summary>
     public string LogDir => Path.GetFullPath(Path.Combine(DataDir, "logs"));
 
@@ -72,6 +87,12 @@ public sealed class ITradeOptions
         if (options.HeartbeatSeconds <= 0 || options.JobsTickSeconds <= 0)
         {
             throw new InvalidOperationException($"{Section}:HeartbeatSeconds and {Section}:JobsTickSeconds must be positive.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.IndexTicker) || options.DividendWithheld is < 0m or >= 1m)
+        {
+            throw new InvalidOperationException(
+                $"{Section}:IndexTicker names a fund, and {Section}:DividendWithheld is a share from 0 to less than 1.");
         }
 
         if (configuration.GetSection("Kestrel:Endpoints").GetChildren().Any())

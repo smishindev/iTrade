@@ -23,5 +23,7 @@ slippage_bps = 2.0               # extra adverse move vs. signal price (daily-ba
 
 [tax]                            # Israel, individual. Not tax advice — verify.
 capital_gains_rate = 0.25        # on realised real gains
-dividend_rate = 0.25             # US withholding under the treaty is credited against this
+dividend_rate = 0.25             # US withholding under the treaty is credited against this. Assumption of
+                                 # 2026-10-06 (US-Israel treaty, portfolio dividends), unverified. The Host's
+                                 # ITrade:DividendWithheld is the same number: a test holds the two together.
 loss_carryforward = true

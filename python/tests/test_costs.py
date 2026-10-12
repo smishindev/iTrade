@@ -23,6 +23,25 @@ def test_costs_command_uses_the_half_spread_of_a_listed_ticker(capsys):
     assert "is not in config/universe.toml" not in capsys.readouterr().out
 
 
+def test_the_platform_follows_the_index_with_the_dividend_tax_of_this_file():
+    # The Host keeps its own copy of the share withheld from a US fund's dividend (it has no reader
+    # of this file). The two are one assumption: change it here and there together.
+    import re
+    import tomllib
+
+    from itrade.config import project_root
+
+    with (project_root() / "config" / "costs.toml").open("rb") as f:
+        assumed = tomllib.load(f)["tax"]["dividend_rate"]
+    options = (project_root() / "src" / "ITrade.Host" / "ITradeOptions.cs").read_text(
+        encoding="utf-8"
+    )
+    in_the_host = re.search(r"decimal DividendWithheld \{ get; init; \} = ([0-9.]+)m;", options)
+
+    assert in_the_host is not None
+    assert float(in_the_host.group(1)) == assumed == 0.25
+
+
 def test_minimum_commission_applies_to_small_orders(cost_cfg):
     # 4 shares * $0.0035 = $0.014 < $0.35 minimum
     c = commission_usd(cost_cfg, 4, 650.0)

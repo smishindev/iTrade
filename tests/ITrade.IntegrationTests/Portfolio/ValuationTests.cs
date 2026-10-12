@@ -50,9 +50,10 @@ public sealed class ValuationTests(PostgresFixture pg)
             ClosingPrice Close(Instrument instrument, int day, decimal close) =>
                 new(instrument.Id, Day(day), new Price(close, Currency.Usd), "yfinance");
             await new ClosingPriceStore(db).AddAsync(
-                [Close(vt, 8, 121.00m), Close(vt, 9, 121.50m), Close(vt, 12, 122.00m), Close(spy, 8, 775.00m), Close(spy, 9, 778.57m)], [],
-                ClosingPrices.Calendar, [Day(8), Day(9), Day(12)], Stored, new PricesNote("test", PricesNote.Imported, "{}"),
-                new ImportedExport(Stored, new string('a', 64)), CancellationToken.None);
+                new PricesToStore(
+                    [Close(vt, 8, 121.00m), Close(vt, 9, 121.50m), Close(vt, 12, 122.00m), Close(spy, 8, 775.00m), Close(spy, 9, 778.57m)], [],
+                    ClosingPrices.Calendar, [Day(8), Day(9), Day(12)], [], []),
+                Stored, new PricesNote("test", PricesNote.Imported, "{}"), new ImportedExport(Stored, new string('a', 64)), CancellationToken.None);
 
             // The bank's rates of the same three days, under the name the Host's own source goes by.
             var bank = services.GetRequiredService<IFxRateSource>();
