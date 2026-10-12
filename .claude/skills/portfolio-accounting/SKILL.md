@@ -9,7 +9,7 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02, P3.4.01)
+## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02, P3.4.01, P3.4.02)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
@@ -19,6 +19,7 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 | Closing prices | `ClosingPrice`, `PriceOnDate`; `ClosingPrices` (`ImportAsync`, `OnAsync`); file `ClosingPricesFile` | `closing_prices`, `market_sessions`, `price_imports` |
 | What is held | `PortfolioBooks.From(ledger, asOf)` → `Position`, `Lot`, `Disposal`, `CashBalance`; `PortfolioBooksReader` | none — computed from the ledger every time |
 | What it is worth | `PortfolioValue.Of(books, prices, rate)` → `PositionValue`, `PortfolioTotal`; `PortfolioValuation.AsOfAsync(date)` | none — worked out every time |
+| What it earned | `PeriodReturns.Of(points)`, `OwnerFlow.Of(ledger, first, last)`; `PortfolioPerformance.OverAsync(first, last)`; oracle `python/src/itrade/accounting/returns.py` | none |
 
 ## The ledger
 - **One entry = one effect**: a change of the shares of one instrument and/or of the cash in one currency
@@ -218,10 +219,47 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   statement import lags), old shares × new price shows half the value and nothing here can see it — the
   reconciliation (P3.4.03) has to compare the split days of the price export with the ledger.
 
-## Rules for what comes next (returns, reconciliation)
+## Returns (`PeriodReturns`, P3.4.02)
+- **A contribution is not a gain, a withdrawal is not a loss.** `PeriodReturns.Gain` is the money earned:
+  closing value + withdrawn − opening value − contributed.
+- **Two returns, never one figure called "the return".** *Time-weighted*: what one unit of money made that
+  was there all the time — independent of when and how much was paid in; the one to compare with an index.
+  *Money-weighted*: the single rate that turns the owner's own contributions into what they became (what a
+  spreadsheet calls XIRR). Say which one a figure is.
+- **Timing, a named assumption:** a contribution counts from the start of its day (the end of the day
+  before), a withdrawal at the end of its day. Step factor = (value + taken out) / (value before + paid in).
+- **The owner's flows are the ledger's deposits and withdrawals** (`OwnerFlow.Of`; reversed ones are none).
+  Dividends, interest, fees, withheld tax and conversions happen inside the portfolio: they are return.
+- **Valued around the flows, not every day:** the day before the period, every day with a flow, the day
+  before each contribution, the last day (`PerformanceReport.ValuedOn`). A contribution whose day before
+  is not valued is refused — the rise before it would be credited to the new money.
+- **In dollars and in shekels separately**: every value and every flow at the rate that goes with its own
+  day. The two differ by what the dollar did against the shekel.
+- **Per year only from a year on**: 365 days *at work* (`DaysAtWork` — days on which there was money in
+  the portfolio; a stretch in which it stood empty is not counted). A few weeks are not stretched.
+- **No money-weighted figure for a period with an empty stretch in it.** The rate per year while invested
+  stays; compounded across days on which the money was out it would claim earnings that were not made.
+- **Money that turns up while nothing is invested** (a dividend after everything was taken out, or a
+  contribution the ledger does not hold) is in `Gain` and in `GainedOnNothing`, and in neither return;
+  `PerformanceIn.Notes` says so. Not zero and not small: look for the missing contribution.
+- **No return over a hole.** If a value of a needed day is not a complete total, there are no returns in
+  that currency and `PerformanceIn.WhyNone` names the day and the reason. Provisional values make the
+  returns provisional (`IsProvisional`), and that is said.
+- **Money is `decimal`; a rate that needs a power or a root is computed in floating point** and rounded to
+  ten places (`RateScale`). The time-weighted return over the period is a chain of exact divisions.
+- **The oracle** is Python on purpose and by another route (exact fractions; the annual-rate equation). The
+  fixture `tests/ITrade.UnitTests/Fixtures/returns-oracle.json` is written by it
+  (`ITRADE_UPDATE_FIXTURES=1 uv run pytest tests/test_returns_oracle.py`) and read by the C# tests.
+- **Known limits:** a transfer between two holding places would count as a withdrawal and a deposit (one
+  place is in use); flows that change sign more than once can have several rates and the search returns
+  one of them; the figures are before tax on gains. No comparison with an index yet (P3.4.04: it needs
+  the index fund's dividends and split days). For looking at, never for tax.
+
+## Rules for what comes next (the index, reconciliation)
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
-- **Returns**: a contribution is not a gain. Time-weighted and money-weighted returns state their
-  period, their cash flows and what they include (fees, withheld tax).
+- **A comparison with an index uses the same contributions on the same days**, bought at the close of the
+  day (no looking ahead), with the fund's dividends after withholding — a price-only index flatters the
+  portfolio by the dividend yield.
 - **Reconciliation never repairs.** A difference between the ledger and the broker's statement is shown
   to the owner with both numbers; it is closed by an import or by a reversal with a reason.
 - **Broker statements carry the real account number**: the original file stays in the data folder,

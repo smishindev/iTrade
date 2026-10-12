@@ -4,10 +4,10 @@ Running memory of what exists, what verified it, and why it is the way it is. Re
 picking the project back up. Task-level detail — every card with its dated note — is in
 [docs/roadmap/](docs/roadmap/README.md); live numbers come from `python tools/roadmap.py status`.
 
-**Last updated:** 12 October 2026
+**Last updated:** 13 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: 103 of 106 tasks (the three open ones are the owner's, at IBKR);
-phase 3: 6 of 12.
+phase 3: 7 of 13.
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993 — but they are empty: no
@@ -25,22 +25,22 @@ stays locked. On 9 October the owner approved plan v4: the money goes into a bro
 platform becomes an accounting and execution-with-approval tool. Phase 2 built the foundation:
 .NET 10 Host on loopback HTTPS with sign-in, PostgreSQL 18, daily jobs with catch-up, a React shell,
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
-ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded and
-the value of the portfolio on a date. Next come returns; the statement import and the
-reconciliation wait for the funded account.
+ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded, the
+value of the portfolio on a date and its returns. Next comes the comparison with the index; the
+statement import and the reconciliation wait for the funded account.
 
 ---
 
 ## What works today
 
-"Verified" means it was run on this machine on 12 October 2026 unless another date is given — not
+"Verified" means it was run on this machine on 12–13 October 2026 unless another date is given — not
 read in the code.
 
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 279 unit, 5 architecture, 99 integration on a real PostgreSQL 18 (Testcontainers) |
-| Python tests | ✅ | 316 collected, 1 skipped (`uv run pytest`, no network) |
+| .NET tests | ✅ | 291 unit, 5 architecture, 102 integration on a real PostgreSQL 18 (Testcontainers) |
+| Python tests | ✅ | 324 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
 | One Host per database | ✅ | a second instance refused by the instance lock (integration test; seen on the real database on 12 October) |
@@ -62,7 +62,8 @@ read in the code.
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
 | Statement (Flex) import | ❌ not built | waits for a funded account (see *Waiting on the owner*) |
-| Returns, reconciliation | ❌ not built | phase 3, next tasks |
+| Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
+| Comparison with the index, reconciliation | ❌ not built | phase 3: P3.4.04, P3.4.03 |
 | Screens with data | ❌ not built | the shell and sign-in exist; six menu entries are placeholders until phase 6 |
 | Taxes, broker adapter, purchases | ❌ not built | phases 4, 5, 6 |
 | Scheduled backups | ❌ | manual until phase 7 — the owner's decision |
@@ -141,7 +142,13 @@ close (the owner's evening is the middle of the New York session), and "was the 
 guessed from the prices themselves. Now only finished sessions are exported, the export carries the
 exchange's calendar, and changes of stored prices are judged by size as well as by number.
 
-### 14. The statement import waits for the funded account (12 October)
+### 14. Two returns, and no index comparison on prices alone (13 October)
+Time-weighted and money-weighted returns are two figures and each is named; a contribution is not a
+gain. The comparison with the index was split off (P3.4.04): the portfolio's value includes the
+dividends it received, a fund's price does not, so a comparison on prices alone would show the
+portfolio ahead by the dividend yield. It needs the fund's dividends and split days in the database.
+
+### 15. The statement import waits for the funded account (12 October)
 Flex queries live in a part of the IBKR portal that appears only after the first deposit, and the
 demo account has no reports. The steps for the owner are written on the card of P3.2.01.
 
@@ -190,7 +197,9 @@ Ordered roughly by how much they would hurt.
     prices and the rates as they are now.
 17. **One fund (EWC) has no price after 6 October**: the pipeline takes a fetch whole or not at
     all, and the vendor's newest bar is inconsistent.
-18. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
+18. **Returns are before tax on gains and not compared with any index yet**; a transfer between two
+    holding places would be counted as the owner's money going out and coming in.
+19. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
 
 ---
@@ -199,7 +208,9 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.4.02 — returns** (time-weighted and money-weighted) against the index.
+1. **P3.4.04 — comparison with the index**: the same contributions on the same days put into the
+   index fund, with its dividends; needs dividends and split days from the data pipeline (a schema
+   change).
 2. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
    → **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
 

@@ -13,13 +13,13 @@ The owner communicates in Russian — answer in Russian.
 ## Target stack (decided — docs/PLAN.md §2)
 React 19 + TypeScript (web/) · C# / .NET 10 + ASP.NET Core (src/ITrade.*) · PostgreSQL 18 (Docker) ·
 Parquet snapshots in `D:\ITradeData` · official IBKR TWS API (C#) via IB Gateway.
-Python (`python/src/itrade/`) = the frozen research archive of phase 1, reference oracle, free data ingest,
-statistics. **Python never trades.**
+Python (`python/src/itrade/`) = the frozen research archive of phase 1, reference oracle (`accounting/`), free data
+ingest, statistics. **Python never trades.**
 
 ## Where things are now (phase 3 — accounting, plan v4; the phase itself is in `config/project.toml`)
 - `src/ITrade.Domain` money, time, ids, instruments, holding places, transactions, books (lots, positions, cash) ·
   `src/ITrade.Application` use cases (daily jobs, instrument catalogue, transaction ledger, books, exchange rates,
-  closing prices, value on a date) ·
+  closing prices, value on a date, returns of a period) ·
   `src/ITrade.Infrastructure` EF Core / PostgreSQL, Bank of Israel rates · `src/ITrade.Broker.IBKR` (empty until phase 5) ·
   `src/ITrade.Host` API, sign-in, events hub, background jobs, serves the web interface · `tests/ITrade.*`
 - `web/` React interface (MUI, React Router, TanStack Query, generated API client) · `web/e2e` browser tests
@@ -75,6 +75,9 @@ statistics. **Python never trades.**
   A value keeps its `PriceOnDate`; a missing or unavailable price is shown as such, never replaced by an older one.
 - The value of the portfolio comes only through `PortfolioValuation`: a position without a usable price is not
   valued, and a sum that leaves something out is not called the total (`PortfolioTotal.Total` is null then).
+- Returns come only through `PortfolioPerformance` / `PeriodReturns`: time-weighted and money-weighted are two
+  figures, each named; a contribution is not a gain; no return is computed over a value that is not complete.
+  The Python oracle (`python/src/itrade/accounting/returns.py`) writes the fixture the C# tests are held to.
 - Tax and accounting rules do not wait for the accountant (owner, 2026-10-12): choose, record as an assumption with
   source and date, label the result unverified.
 - Money is `decimal`/`numeric`, never floating point, in C# and SQL. Times in UTC; schedules in America/New_York.

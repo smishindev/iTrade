@@ -177,6 +177,7 @@ reported and left alone; a ticker change is a rename with its date.
 | A price is "missing" for a day although the fund trades | The vendor has no bar for that session (the export's manifest lists them under `missing_sessions`), or the fund is behind - `check` names it |
 | `Cannot read the closing prices: ... not the one its manifest vouches for` | A table (prices or sessions) was changed after it was exported, or the export was caught half-written. `itrade export-closes` again |
 | The integration tests fail with `53300: too many clients` | Every test database keeps pooled connections for a while. The test server runs with `max_connections=500` (`PostgresFixture`) |
+| `test_fixture_the_platform_reads_is_what_the_oracle_says` fails after a change of the returns oracle | The fixture the C# tests read is written by the oracle: in `python/`, `ITRADE_UPDATE_FIXTURES=1 uv run pytest tests/test_returns_oracle.py`, then run the .NET unit tests - they must agree with the new file |
 | A rate or an amount prints as `3.055000` | That is the column's scale. Format with `0.######` where it is shown |
 | The job "succeeds" but the rate of today is missing | The bank publishes in the afternoon, Israel time. The figure is marked provisional until it arrives |
 | `update-fx-rates` says the bank now states another rate | Nothing was stored. After checking the bank's page, run the line it prints (`--accept-changes <code> "<why>"`) — the owner's step |

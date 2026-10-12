@@ -1,0 +1,3806 @@
+{
+  "days_in_a_year": 365,
+  "cases": [
+    {
+      "name": "one contribution that grows",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "1000",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "1100",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2025-12-31",
+        "days_at_work": 181,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.10000000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": "0.100000000000",
+        "money_weighted_annual": null,
+        "gain": "100"
+      }
+    },
+    {
+      "name": "two contributions, ten percent after each",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "1000",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "1100",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-01",
+          "value": "2100",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "2310",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2025-12-31",
+        "days_at_work": 181,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.21000000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": "0.209602434769",
+        "money_weighted_annual": null,
+        "gain": "310"
+      }
+    },
+    {
+      "name": "a large contribution just before a fall",
+      "points": [
+        {
+          "date": "2024-12-31",
+          "value": "1000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "1200",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "11200",
+          "inflow": "10000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "10080",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2024-12-31",
+        "days_at_work": 546,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.08000000000000000000",
+        "time_weighted_annual": "0.052794771236",
+        "money_weighted": "-0.117607887394",
+        "money_weighted_annual": "-0.080239211261",
+        "gain": "-920"
+      }
+    },
+    {
+      "name": "a withdrawal in the middle",
+      "points": [
+        {
+          "date": "2024-12-31",
+          "value": "5000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-15",
+          "value": "5200.50",
+          "inflow": "0",
+          "outflow": "800"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "5512.53",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2024-12-31",
+        "days_at_work": 455,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.27210600000000000000",
+        "time_weighted_annual": "0.212965259276",
+        "money_weighted": "0.280590050482",
+        "money_weighted_annual": "0.219450468298",
+        "gain": "1312.53"
+      }
+    },
+    {
+      "name": "everything is lost",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "1000",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-01",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2025-12-31",
+        "days_at_work": 32,
+        "gained_on_nothing": "0",
+        "time_weighted": "-1.00000000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": "-1.000000000000",
+        "money_weighted_annual": null,
+        "gain": "-1000"
+      }
+    },
+    {
+      "name": "no flows at all, two years",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "10000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-31",
+          "value": "12100",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 731,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.21000000000000000000",
+        "time_weighted_annual": "0.099856587738",
+        "money_weighted": "0.210000000000",
+        "money_weighted_annual": "0.099856587738",
+        "gain": "2100"
+      }
+    },
+    {
+      "name": "empty at first, money comes later",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-28",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-01",
+          "value": "3000",
+          "inflow": "3000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "2940.75",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2026-02-28",
+        "days_at_work": 31,
+        "gained_on_nothing": "0",
+        "time_weighted": "-0.01975000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": "-0.019750000000",
+        "money_weighted_annual": null,
+        "gain": "-59.25"
+      }
+    },
+    {
+      "name": "all of it taken out, then paid in again",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "2000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "2100"
+        },
+        {
+          "date": "2026-04-30",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-01",
+          "value": "1500",
+          "inflow": "1500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "1530",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2025-12-31",
+        "days_at_work": 92,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.07100000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": null,
+        "money_weighted_annual": null,
+        "gain": "130"
+      }
+    },
+    {
+      "name": "never any money",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": null,
+        "days_at_work": 0,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.00000000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": null,
+        "money_weighted_annual": null,
+        "gain": "0"
+      }
+    },
+    {
+      "name": "a dividend after everything was taken out",
+      "points": [
+        {
+          "date": "2025-12-31",
+          "value": "4000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "4100"
+        },
+        {
+          "date": "2026-02-10",
+          "value": "3.20",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "3.20",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2025-12-31",
+        "days_at_work": 171,
+        "gained_on_nothing": "3.20",
+        "time_weighted": "0.02500000000000000000",
+        "time_weighted_annual": null,
+        "money_weighted": null,
+        "money_weighted_annual": null,
+        "gain": "103.20"
+      }
+    },
+    {
+      "name": "more than a year at work around an empty quarter",
+      "points": [
+        {
+          "date": "2024-06-30",
+          "value": "1000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "1100"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "1000",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "1050",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2024-06-30",
+        "days_at_work": 548,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.15500000000000000000",
+        "time_weighted_annual": "0.100736216551",
+        "money_weighted": null,
+        "money_weighted_annual": "0.102800902788",
+        "gain": "150"
+      }
+    },
+    {
+      "name": "generated 0: 4 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "10000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "11278.41",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "11640.62",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "12460.22",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "13025.58",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "14157.75",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "14135.55",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "14519.44",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "14592.64",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 121,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.09579376258867138652",
+        "time_weighted_annual": null,
+        "money_weighted": "0.088478260924",
+        "money_weighted_annual": null,
+        "gain": "1092.64"
+      }
+    },
+    {
+      "name": "generated 1: 7 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "2524.91",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "2399.65",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "3402.98",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "3269.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "3778.14",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "3820.97",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "4757.68",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "4583.18",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "5577.14",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "5452.37",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "6468.04",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "6518.07",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "7442.56",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "6764.05",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 213,
+        "gained_on_nothing": "0",
+        "time_weighted": "-0.21043515667022293304",
+        "time_weighted_annual": null,
+        "money_weighted": "-0.233670796497",
+        "money_weighted_annual": null,
+        "gain": "-1235.95"
+      }
+    },
+    {
+      "name": "generated 2: 10 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "1000.13",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "1033.76",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "1028.67",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "1023.04",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "1999.91",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "1901.58",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "4454.87",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "4411.77",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "5296.42",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "5322.28",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "5242.34",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "5640.35",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "6519.41",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "6808.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "7260.14",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "7224.6",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "7245.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "7449.68",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2024-01-31",
+        "days_at_work": 274,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.04988934118236984977",
+        "time_weighted_annual": null,
+        "money_weighted": "0.102129953343",
+        "money_weighted_annual": null,
+        "gain": "449.68"
+      }
+    },
+    {
+      "name": "generated 3: 13 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "2477.39",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "2466.12",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "4974.52",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "5017.33",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "5981.25",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "5968.17",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "8519.66",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "8238.95",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "8746.38",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "8998.19",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "9991.99",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-15",
+          "value": "7281.56",
+          "inflow": "0",
+          "outflow": "2293.86"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "7117.94",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "7086.72",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "7082.84",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "8192.29",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "8530.4",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "10980.01",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "11875.4",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "11781.7",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-15",
+          "value": "9027.40",
+          "inflow": "0",
+          "outflow": "2516.74"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "9090.53",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "9924.46",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "10341.36",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "12697.53",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "12430.9",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "12669.86",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "11525.35",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 397,
+        "gained_on_nothing": "0",
+        "time_weighted": "-0.05621364387929171948",
+        "time_weighted_annual": "-0.051802100758",
+        "money_weighted": "-0.076892665714",
+        "money_weighted_annual": "-0.070920170322",
+        "gain": "-664.05"
+      }
+    },
+    {
+      "name": "generated 4: 16 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "1008.21",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "1038.71",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "1541.62",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "1557.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "4121.68",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "4000.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "4010",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "4229.94",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "5249.19",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "4894.3",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "5925.43",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "6490.41",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "7507.22",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "7365.17",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "8325.4",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "9024.02",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "10143",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "10490.81",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "11421.26",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "11479.1",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "12425.36",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "13674.22",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "16187.93",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "16219.4",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "16902.82",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "16389.96",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "18960.77",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "19823.97",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "20716.03",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "21046.69",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "22027.22",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "23730.89",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 486,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.49568865125290441831",
+        "time_weighted_annual": "0.353040438393",
+        "money_weighted": "0.552108679865",
+        "money_weighted_annual": "0.391195030537",
+        "gain": "4730.89"
+      }
+    },
+    {
+      "name": "generated 5: 19 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "2500",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "3524.13",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "3221.91",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "5786.05",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "5867.73",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "5892.27",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "5860.24",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "6339.91",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-15",
+          "value": "4924.69",
+          "inflow": "0",
+          "outflow": "1494.32"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "4849.57",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "5870.97",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-15",
+          "value": "4707.54",
+          "inflow": "0",
+          "outflow": "1209.15"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "4637.34",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "5231.15",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-15",
+          "value": "4204.67",
+          "inflow": "0",
+          "outflow": "1352.64"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "4328.03",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "4821.79",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "5083.82",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "5568.28",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-15",
+          "value": "4035.10",
+          "inflow": "0",
+          "outflow": "1658.35"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "4038.33",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "5024.94",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-15",
+          "value": "4728.73",
+          "inflow": "0",
+          "outflow": "447.35"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "4904.06",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "7430.49",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "7091.15",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "7029.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "7206.01",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "8122.28",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-15",
+          "value": "7085.17",
+          "inflow": "0",
+          "outflow": "912.05"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "7157.97",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "7223.35",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "7181.42",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "9705.07",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "9402.95",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "9263.77",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "9489.13",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "10046.18",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "10311.86",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "11254.94",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "11671.96",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "12838.33",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "13451.07",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "14793.69",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-15",
+          "value": "13043.60",
+          "inflow": "0",
+          "outflow": "2038.94"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "12226.44",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 578,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.24044929187132468200",
+        "time_weighted_annual": "0.145760946079",
+        "money_weighted": "0.274171749601",
+        "money_weighted_annual": "0.165333388605",
+        "gain": "1839.24"
+      }
+    },
+    {
+      "name": "generated 6: 22 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "1000.41",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "995.48",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "1487",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "1438.68",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "2437",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "2470.21",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "3488.89",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "3295.95",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "4342.07",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "4252.92",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "4272.71",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "4501.64",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "5463.45",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "5240.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "5267.61",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "5141.15",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "5107.97",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "5298.51",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "6273.46",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "6348.68",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "6812.84",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "6390.6",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "6473.1",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "6408.14",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "6981.25",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "6478.9",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "7629.91",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "7401.29",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "9670.27",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "9258.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "11788.39",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "11842.37",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "12849.3",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "13470.82",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "14420.57",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "14374.22",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "16950.18",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "17933.03",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-01",
+          "value": "18889.09",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-31",
+          "value": "19464.07",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-01",
+          "value": "20515.21",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-30",
+          "value": "21728.96",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-01",
+          "value": "24652.91",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-31",
+          "value": "24935.32",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 670,
+        "gained_on_nothing": "0",
+        "time_weighted": "-0.04651025830965108959",
+        "time_weighted_annual": "-0.025612140127",
+        "money_weighted": "0.273691458045",
+        "money_weighted_annual": "0.140870858262",
+        "gain": "2435.32"
+      }
+    },
+    {
+      "name": "generated 7: 25 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "2500",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "2993.15",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "3034.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "3027.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "3077.32",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "3105.41",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-15",
+          "value": "2570.39",
+          "inflow": "0",
+          "outflow": "594.19"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "2709.51",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "3225.19",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "3204.57",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "5695.55",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "5799.31",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "6297.68",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "6413.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "7443.93",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "7431.05",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "9890.88",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "9603.61",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "9692.47",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "9417.66",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "11825.12",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "11649.83",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "12806.8",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "12886.83",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "13473.78",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-15",
+          "value": "11551.24",
+          "inflow": "0",
+          "outflow": "1816.22"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "12134.04",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "13049.82",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-15",
+          "value": "11967.00",
+          "inflow": "0",
+          "outflow": "2187.27"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "12051.13",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "12978.88",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "13259.53",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "15747.71",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "16229.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "17127.91",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "16567.75",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "16483.07",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "15620.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "15661.38",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "15454.33",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "16658.76",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "16012.54",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-01",
+          "value": "16172.24",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-31",
+          "value": "15722.45",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-01",
+          "value": "16906.94",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-15",
+          "value": "15087.14",
+          "inflow": "0",
+          "outflow": "1901.04"
+        },
+        {
+          "date": "2025-09-30",
+          "value": "14862.12",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-01",
+          "value": "16026.31",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-15",
+          "value": "13417.75",
+          "inflow": "0",
+          "outflow": "2375.48"
+        },
+        {
+          "date": "2025-10-31",
+          "value": "13447.57",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-01",
+          "value": "14527.67",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-30",
+          "value": "14507.9",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-01",
+          "value": "15669.11",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-31",
+          "value": "15431.31",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "15510.69",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-15",
+          "value": "12925.0",
+          "inflow": "0",
+          "outflow": "2670.6"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "13377.01",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 762,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.15892930519234791715",
+        "time_weighted_annual": "0.073206871431",
+        "money_weighted": "0.038540960202",
+        "money_weighted_annual": "0.018279408937",
+        "gain": "421.81"
+      }
+    },
+    {
+      "name": "generated 8: 28 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "1005.25",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "1006.38",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "1013.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "1034.77",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "3548.26",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "3766.36",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "4720.03",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "4763.21",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "7313.25",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "7872.39",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "7741.74",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "7837.03",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "8739.38",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "8741.69",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "9722.06",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "9213.36",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "9248.42",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "9296.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "11826.22",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "11698.93",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "11606.65",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "12281.02",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "13415.24",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "13126.56",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "13563.52",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "13497.64",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "13464.19",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "13508.22",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "14176.91",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "15164.73",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "16123.96",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "14901.69",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "15612.4",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "15273.53",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "16459.78",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "17398.05",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "17253.55",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "17238.17",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-01",
+          "value": "18575.88",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-31",
+          "value": "18245.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-01",
+          "value": "20622.39",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-30",
+          "value": "20248.03",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-01",
+          "value": "21002.68",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-31",
+          "value": "20948.65",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-01",
+          "value": "21100.32",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-30",
+          "value": "19672.86",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-01",
+          "value": "22208.41",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-31",
+          "value": "22994.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "22952.82",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "23710.9",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-01",
+          "value": "23511.2",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-28",
+          "value": "24075.74",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-01",
+          "value": "25194.77",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "26248.75",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-01",
+          "value": "27230.8",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-30",
+          "value": "26518.36",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 851,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.18411052250228517071",
+        "time_weighted_annual": "0.075173268039",
+        "money_weighted": "0.111486261218",
+        "money_weighted_annual": "0.046377992707",
+        "gain": "1518.36"
+      }
+    },
+    {
+      "name": "generated 9: 31 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "10000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "12454.74",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "12723.88",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "12651.58",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "13207.64",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "14025.06",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-15",
+          "value": "11864.20",
+          "inflow": "0",
+          "outflow": "2008.08"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "11785.4",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "12653.67",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-15",
+          "value": "10462.11",
+          "inflow": "0",
+          "outflow": "2243.37"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "10727.26",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "13416.13",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "13814.19",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "13898.64",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-15",
+          "value": "10376.17",
+          "inflow": "0",
+          "outflow": "3426.5"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "10987.59",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "11363.46",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "11358.08",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "11388.66",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "11875.45",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "12920.43",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-15",
+          "value": "9593.88",
+          "inflow": "0",
+          "outflow": "3418"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "10275.79",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "12995.5",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-15",
+          "value": "9617.67",
+          "inflow": "0",
+          "outflow": "3432.95"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "9283",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "9965.87",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "10192.51",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "11199.91",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "11321.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "11865.89",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "12457.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "13054.58",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "13104.18",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "14066.83",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "13900.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "14850.58",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "14800.1",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "15784.26",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "15950.93",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "16172.6",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "16714.19",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "19025.48",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "19740.66",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-01",
+          "value": "22351.59",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-31",
+          "value": "22633.61",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-01",
+          "value": "25300.71",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-30",
+          "value": "24449.53",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-01",
+          "value": "24685.01",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-31",
+          "value": "25076.81",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-01",
+          "value": "26357.15",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-30",
+          "value": "26211.87",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-01",
+          "value": "28937.74",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-31",
+          "value": "31102.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "32197.49",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "32145.44",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-01",
+          "value": "31916.86",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-28",
+          "value": "32501.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-01",
+          "value": "34366.1",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "36267.47",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-01",
+          "value": "36645.69",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-30",
+          "value": "38208.6",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-01",
+          "value": "39880.33",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-15",
+          "value": "37159.51",
+          "inflow": "0",
+          "outflow": "4863.78"
+        },
+        {
+          "date": "2026-05-31",
+          "value": "36377.55",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-01",
+          "value": "37386.73",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-15",
+          "value": "34928.61",
+          "inflow": "0",
+          "outflow": "2437.29"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "35494.79",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-07-01",
+          "value": "38366.78",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-07-15",
+          "value": "32166.75",
+          "inflow": "0",
+          "outflow": "6599.07"
+        },
+        {
+          "date": "2026-07-31",
+          "value": "31354.73",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 943,
+        "gained_on_nothing": "0",
+        "time_weighted": "1.05817158996254114580",
+        "time_weighted_annual": "0.322321272191",
+        "money_weighted": "1.130737775620",
+        "money_weighted_annual": "0.340175477710",
+        "gain": "15783.77"
+      }
+    },
+    {
+      "name": "generated 10: 34 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "0",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "998.48",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "1005.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "2020.1",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "1893.46",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "2421.07",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "2459.7",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "2460.19",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "2718.15",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "3789.77",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "3895.59",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "6355.85",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "6604",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "7494.03",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "7661.21",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "8762.23",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "9259.04",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "9893.04",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "9848.12",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "9787.47",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "9703.31",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "10286.13",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "10221.24",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "11234.97",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "10972.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "13330.63",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "13594.04",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "16011.32",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "16781.8",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "17410.5",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "17417.97",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "17100.01",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "17229.55",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "16901.79",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "16725.67",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "16918.36",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "18104.13",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "20921.17",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "22788.2",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-01",
+          "value": "22190.14",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-31",
+          "value": "23226.26",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-01",
+          "value": "23970.31",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-30",
+          "value": "23784.34",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-01",
+          "value": "24436.41",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-31",
+          "value": "25078.09",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-01",
+          "value": "25464.42",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-30",
+          "value": "25188.11",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-01",
+          "value": "25170.31",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-31",
+          "value": "26171.17",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "26728.98",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "25684.63",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-01",
+          "value": "26600.52",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-28",
+          "value": "27427.99",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-01",
+          "value": "29871.38",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "29007.48",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-01",
+          "value": "30024.31",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-30",
+          "value": "31139.12",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-01",
+          "value": "31868.05",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-31",
+          "value": "31428.27",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-01",
+          "value": "32323.1",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "31665.25",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-07-01",
+          "value": "34443.81",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-07-31",
+          "value": "34597.22",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-08-01",
+          "value": "35501.65",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-08-31",
+          "value": "35408.65",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-09-01",
+          "value": "36059.69",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-09-30",
+          "value": "33536.29",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-10-01",
+          "value": "33646.97",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-10-31",
+          "value": "34704.41",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 1035,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.37756026437092256489",
+        "time_weighted_annual": "0.119588245130",
+        "money_weighted": "0.139691395082",
+        "money_weighted_annual": "0.047192271315",
+        "gain": "2204.41"
+      }
+    },
+    {
+      "name": "generated 11: 37 months",
+      "points": [
+        {
+          "date": "2023-12-31",
+          "value": "10000",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-01",
+          "value": "12638.07",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-01-31",
+          "value": "12023.89",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-01",
+          "value": "14623.45",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-02-29",
+          "value": "15692.66",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-01",
+          "value": "18217.88",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-03-31",
+          "value": "18014.91",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-01",
+          "value": "17650.85",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-04-30",
+          "value": "17399.37",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-01",
+          "value": "20414.87",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-05-31",
+          "value": "20301.53",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-01",
+          "value": "22618.97",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-06-30",
+          "value": "21731.77",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-01",
+          "value": "21867.51",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-07-15",
+          "value": "20818.30",
+          "inflow": "0",
+          "outflow": "1270.57"
+        },
+        {
+          "date": "2024-07-31",
+          "value": "20068.68",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-01",
+          "value": "20622.6",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-08-31",
+          "value": "20128.81",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-01",
+          "value": "19950.01",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-09-30",
+          "value": "19580.83",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-01",
+          "value": "20255.56",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-10-31",
+          "value": "20143.71",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-01",
+          "value": "21288.01",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-11-15",
+          "value": "19448.98",
+          "inflow": "0",
+          "outflow": "1621.38"
+        },
+        {
+          "date": "2024-11-30",
+          "value": "19422",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-01",
+          "value": "20037.08",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2024-12-31",
+          "value": "21477.66",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-01",
+          "value": "21593.67",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-01-15",
+          "value": "19778.37",
+          "inflow": "0",
+          "outflow": "3323.58"
+        },
+        {
+          "date": "2025-01-31",
+          "value": "19686.22",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-01",
+          "value": "21966.84",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-02-28",
+          "value": "22222.79",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-01",
+          "value": "22053.83",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-03-31",
+          "value": "23088.33",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-01",
+          "value": "23115.49",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-04-15",
+          "value": "19307.80",
+          "inflow": "0",
+          "outflow": "3849.57"
+        },
+        {
+          "date": "2025-04-30",
+          "value": "19313.17",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-01",
+          "value": "20431.37",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-05-31",
+          "value": "21493.99",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-01",
+          "value": "22373.59",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-06-30",
+          "value": "22366.24",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-01",
+          "value": "23552.54",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-07-15",
+          "value": "21284.25",
+          "inflow": "0",
+          "outflow": "2832.48"
+        },
+        {
+          "date": "2025-07-31",
+          "value": "22922.01",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-01",
+          "value": "23848.42",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-08-31",
+          "value": "24601.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-01",
+          "value": "27128.12",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-09-30",
+          "value": "29931.52",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-01",
+          "value": "30978.01",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-10-31",
+          "value": "32862.02",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-01",
+          "value": "33896.75",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-11-30",
+          "value": "34928.7",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-01",
+          "value": "35544.87",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2025-12-15",
+          "value": "31808.23",
+          "inflow": "0",
+          "outflow": "2833.91"
+        },
+        {
+          "date": "2025-12-31",
+          "value": "33303.16",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-01",
+          "value": "35344.67",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-01-31",
+          "value": "35745.43",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-01",
+          "value": "36034.68",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-02-15",
+          "value": "28286.56",
+          "inflow": "0",
+          "outflow": "7187.43"
+        },
+        {
+          "date": "2026-02-28",
+          "value": "28353.92",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-01",
+          "value": "30681.01",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-03-15",
+          "value": "26038.41",
+          "inflow": "0",
+          "outflow": "6545.59"
+        },
+        {
+          "date": "2026-03-31",
+          "value": "25530.74",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-01",
+          "value": "26657.93",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-04-30",
+          "value": "26968.25",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-01",
+          "value": "28005.63",
+          "inflow": "1000",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-05-31",
+          "value": "29918.41",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-01",
+          "value": "32032.7",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-06-30",
+          "value": "32312.65",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-07-01",
+          "value": "32577.84",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-07-31",
+          "value": "33835.21",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-08-01",
+          "value": "36120.6",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-08-31",
+          "value": "35566.35",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-09-01",
+          "value": "36072.69",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-09-30",
+          "value": "35742.88",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-10-01",
+          "value": "36459.73",
+          "inflow": "500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-10-31",
+          "value": "37015.23",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-11-01",
+          "value": "39694.45",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-11-15",
+          "value": "33266.52",
+          "inflow": "0",
+          "outflow": "6458.8"
+        },
+        {
+          "date": "2026-11-30",
+          "value": "32413.01",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-12-01",
+          "value": "35415.46",
+          "inflow": "2500",
+          "outflow": "0"
+        },
+        {
+          "date": "2026-12-31",
+          "value": "35868.64",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2027-01-01",
+          "value": "35949.81",
+          "inflow": "0",
+          "outflow": "0"
+        },
+        {
+          "date": "2027-01-31",
+          "value": "35388.41",
+          "inflow": "0",
+          "outflow": "0"
+        }
+      ],
+      "expected": {
+        "invested_since": "2023-12-31",
+        "days_at_work": 1127,
+        "gained_on_nothing": "0",
+        "time_weighted": "0.90303183935563600465",
+        "time_weighted_annual": "0.231696831469",
+        "money_weighted": "0.906104490959",
+        "money_weighted_annual": "0.232340560552",
+        "gain": "17311.72"
+      }
+    }
+  ]
+}

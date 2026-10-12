@@ -17,6 +17,7 @@ internal static class PortfolioSetup
         services.AddScoped<TransactionLedger>();
         services.AddScoped<PortfolioBooksReader>();
         services.AddScoped<PortfolioValuation>();
+        services.AddScoped<PortfolioPerformance>();
     }
 }
 

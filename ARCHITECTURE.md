@@ -189,6 +189,9 @@ curated bars ──► itrade export-closes ──► prices + sessions + manife
 PortfolioValuation.AsOfAsync(date) = books of the date + a PriceOnDate per instrument + the AppliedFxRate
                  ──► PortfolioValue: by holding place and in all, in dollars and in shekels
                      (nothing stored; what could not be valued or converted is named, not guessed)
+
+PortfolioPerformance.OverAsync(first, last) = the ledger's deposits and withdrawals + the value around each
+                 ──► PeriodReturns in dollars and in shekels: time-weighted, money-weighted, gain
 ```
 
 - **Ledger.** One entry is one signed effect on shares and/or cash at one holding place. A line of a
@@ -209,6 +212,11 @@ PortfolioValuation.AsOfAsync(date) = books of the date + a PriceOnDate per instr
   never for tax. A position without a usable price - none, or one from before a split - has no value,
   and a sum that leaves something out is not called the total. Amounts are added per currency and
   converted once, without rounding. What is provisional is said in words.
+- **Returns.** Time-weighted (what a unit of money made that was there all the time) and money-weighted
+  (the rate that explains what the owner's own contributions became), per currency. The portfolio is
+  valued only around the owner's flows. A contribution counts from the start of its day, a withdrawal
+  at the end of its day. Per-year figures from a year on. The same definitions are worked out another
+  way in Python (`python/src/itrade/accounting/returns.py`), and its fixture holds the C# code.
 
 The rules in full are the `portfolio-accounting` skill. Tax figures (phase 4) follow `israeli-tax`:
 every number there is an unverified assumption until a specialist confirms it.

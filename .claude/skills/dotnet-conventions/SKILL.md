@@ -10,6 +10,9 @@ the rest is here so new code looks like the code around it. `docs/PLAN.md` §3.1
 
 ## Money and quantities
 - `decimal` in C#, `numeric` in SQL — never `double` or `float`, also not in DTOs, JSON, logs or tests.
+  The one exception is a *rate* that needs a power or a root (a return per year, a money-weighted return):
+  computed in `double`, rounded to ten places and handed on as `decimal` (`PeriodReturns.RateScale`). The
+  amounts it is computed from and applied to stay `decimal`.
 - Use the domain types (`ITrade.Domain`): `Money(Amount, Currency)`, `Price`, `Quantity`, `FxRate`.
   Amounts of different currencies do not add up — convert with an `FxRate` (it carries date and source).
 - Amounts stay exact; rounding happens only where asked and names its rule: `Money.RoundToMinor(rule)`,
