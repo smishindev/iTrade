@@ -55,6 +55,10 @@ statistics. **Python never trades.**
   (SCOPE) — then the full phase-1 protocol (pre-registration, calibrated control, quant-reviewer, one final run).
   2021-01-04…2026-09-30 is still unseen; the closed ledgers lock it for H1–H3.
 - Only `ExecutionService` sends orders; on unknown order state reconcile, never resend.
+- The ledger (`transactions`) is append-only and written only through `TransactionLedger`; a mistake is reversed,
+  never edited. Positions, lots and balances are derived from it.
+- Tax and accounting rules do not wait for the accountant (owner, 2026-10-12): choose, record as an assumption with
+  source and date, label the result unverified.
 - Money is `decimal`/`numeric`, never floating point, in C# and SQL. Times in UTC; schedules in America/New_York.
 - Strategy, signal or backtest work → load the `research-integrity` skill first; afterwards `/review-research`.
   Pre-register variants (max 20); the final period 2021–2026 runs once.
@@ -72,10 +76,14 @@ statistics. **Python never trades.**
   **real IBKR account numbers** (use `DU0000000`), broker code in Python (always), IBKR API code in C# outside
   `src/ITrade.Broker.IBKR/` and `spikes/ibkr-feasibility/`, live ports 4001/7496 (in broker code and in settings)
   before phase 6 — the pilot phase of plan v4; the owner opens them by setting `phase = 6` (decided 2026-10-12);
-  blocks deleting raw data, reading `.env`, `pip install`.
+  blocks deleting raw data, reading `.env`, `pip install`; since phase 3 (the database holds accounting records) also
+  writing SQL to the working database from the shell (SELECT is fine; changes go through the Host), removing Docker
+  volumes, `dotnet ef database drop|update`, and edits to a migration that is on `origin/main` (add a new one).
 - PostToolUse: ruff format/fix + look-ahead flags on Python; `dotnet format whitespace` on C#; prettier + eslint on `web/`.
 - Stop: ruff + pytest when python/config/tools changed; `dotnet build` for changed spikes; solution build + unit and
   architecture tests when src/tests changed; prettier check, eslint, tsc and vitest when `web/` changed. A failure sends you back.
+- pre-commit: the same checks for what the commit touches, plus the integration tests when it touches
+  `src/ITrade.Infrastructure/` or `tests/ITrade.IntegrationTests/` (Docker running), and no change to a pushed migration.
 - Status line shows phase, roadmap progress and the next task; SessionStart injects the same.
 - If a hook blocks you, do not work around it — explain to the user what it protects.
 - Spike/broker run logs go to `spikes/**/out/` (git-ignored); only anonymised fixtures are committed.
@@ -87,6 +95,9 @@ Work goes task by task through `docs/roadmap/` (rules: `docs/roadmap/README.md`,
 `/gate-check [n]` (gate-keeper) · `/ingest [tickers]` (data-auditor) · `/cost <usd> <price> [ticker]` ·
 `/research-log <text>` · `/review-research` (quant-reviewer).
 Agent `execution-reviewer`: after any change to code that proposes, approves, sends or reconciles orders, before it is committed.
+Agent `accounting-reviewer`: after any change to code that records or computes the owner's money (ledger, statement
+imports, lots, positions, valuation, returns, reconciliation, tax amounts), before it is committed.
 Skills: `research-integrity` (strategy/backtest), `data-pipeline`, `cost-model`, `ibkr-api` (anything touching IBKR),
-`dotnet-conventions` (any C# in `src/` or `tests/`), `israeli-tax` (the Tax module, `[tax]` in `config/costs.toml`,
+`dotnet-conventions` (any C# in `src/` or `tests/`), `portfolio-accounting` (ledger, imports, lots, positions, valuation,
+reconciliation, any balance told to the owner), `israeli-tax` (the Tax module, `[tax]` in `config/costs.toml`,
 any tax figure told to the owner).

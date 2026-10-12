@@ -1,7 +1,9 @@
 """PreToolUse gate for Bash/PowerShell.
 
 Blocks shell commands that would delete or rewrite immutable raw data, touch the phase file,
-read secrets, or install packages outside uv (which would drift from uv.lock).
+read secrets, install packages outside uv (which would drift from uv.lock), or — since phase 3, when the
+database began to hold the owner's accounting records — write to the working database behind the Host's
+back, remove its Docker volume, or roll its schema back.
 """
 
 from __future__ import annotations
@@ -12,6 +14,20 @@ from _common import deny, read_input
 
 DESTRUCTIVE = r"(\brm\b|\bdel\b|\brmdir\b|Remove-Item|\bmv\b|Move-Item|Set-Content|Out-File|Clear-Content|>\s*\S)"
 RAW_DATA = r"(data|ITradeData)[/\\]+raw"
+
+# A SQL client pointed at a database from the shell. Tests never do this: they get a throw-away
+# database from Testcontainers inside the test process.
+SQL_CLIENT = r"\b(psql|dropdb)\b|itrade-postgres"
+WRITING_SQL = (
+    r"\bdropdb\b|\b(drop|truncate|alter|create|grant|revoke)\s+\w|\bdelete\s+from\b|\binsert\s+into\b"
+    r"|\bupdate\s+\S+\s+set\b|session_replication_role"
+)
+DATABASE_VOLUME = (
+    r"docker(\s+|-)compose\b.*\bdown\b.*(\s-v\b|--volumes)"
+    r"|docker\s+volume\s+(rm|remove|prune)\b"
+    r"|docker\s+system\s+prune\b.*--volumes"
+)
+EF_DATABASE = r"dotnet(\.exe)?\s+ef\s+database\s+(drop|update)\b"
 
 
 def main() -> None:
@@ -28,6 +44,22 @@ def main() -> None:
         deny("Do not read secret files.")
     if re.search(r"(^|[;&|]\s*)(python -m )?pip3? install\b", cmd, re.I):
         deny("Use `uv add <package>` (or `uv add --dev`) so uv.lock stays the source of truth.")
+    if re.search(SQL_CLIENT, cmd, re.I) and re.search(WRITING_SQL, cmd, re.I):
+        deny(
+            "The working database holds the owner's accounting records. Read it with SELECT; change it only "
+            "through the Host (migrations at start, the ledger, the import commands). A correction of the "
+            "ledger is a reversal, never SQL. Tests use their own throw-away database."
+        )
+    if re.search(DATABASE_VOLUME, cmd, re.I):
+        deny(
+            "This would remove Docker volumes - the working database lives in one (itrade-pg). "
+            "Only the owner does that, after `deploy\\backup.ps1`."
+        )
+    if re.search(EF_DATABASE, cmd, re.I):
+        deny(
+            "The Host applies migrations itself at start. Dropping the database or moving it to another "
+            "migration by hand (a roll-back drops tables with their data) is the owner's step."
+        )
 
 
 if __name__ == "__main__":

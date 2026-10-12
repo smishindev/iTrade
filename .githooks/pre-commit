@@ -2,7 +2,8 @@
 # iTrade commit gate (P2.6.02): no data/secrets/account numbers, then format, lint, build and tests —
 # only for the parts of the repository the commit touches.
 # Enabled with: git config core.hooksPath .githooks
-# Not run here (they need Docker): integration tests and the browser tests — run them before a phase gate.
+# Integration tests run only when the commit touches the database layer and Docker is running; the browser
+# tests are not run here — `python tools/ci.py` runs everything, before a phase gate at the latest.
 set -e
 
 staged=$(git diff --cached --name-only)
@@ -20,6 +21,19 @@ if git diff --cached -U0 | grep -E '^\+' | grep -oE '\bD?U[A-Z]?[0-9]{6,9}\b' | 
     echo "pre-commit: staged changes contain what looks like a real IBKR account number." >&2
     echo "Replace it with an all-zero placeholder (D)U0000000." >&2
     exit 1
+fi
+
+# A migration that is on origin/main may already be applied to a database: it is never changed or removed.
+# A schema change is a new migration.
+if git rev-parse -q --verify origin/main >/dev/null 2>&1; then
+    for file in $(git diff --cached --no-renames --name-only --diff-filter=MD -- src/ITrade.Infrastructure/Persistence/Migrations \
+        | grep -E '/[0-9]{14}_[^/]+\.cs$' || true); do
+        if git cat-file -e "origin/main:$file" 2>/dev/null; then
+            echo "pre-commit: $file is on origin/main - a pushed migration is never edited or removed." >&2
+            echo "Add a new migration instead: dotnet ef migrations add <Name> ..." >&2
+            exit 1
+        fi
+    done
 fi
 
 # Python: research archive, data pipeline, tools.
@@ -56,6 +70,17 @@ if echo "$staged" | grep -Eq '^(src|tests)/|^ITrade\.slnx$|^Directory\.(Build|Pa
     fi
     dotnet test tests/ITrade.UnitTests --no-build --nologo -v q
     dotnet test tests/ITrade.ArchitectureTests --no-build --nologo -v q
+    # What the database itself enforces (the append-only ledger, unique keys, migrations) is proved only on a
+    # real PostgreSQL: both defects of P3.1.02 were invisible to the unit tests.
+    if echo "$staged" | grep -Eq '^src/ITrade\.Infrastructure/|^tests/ITrade\.IntegrationTests/'; then
+        if docker info >/dev/null 2>&1; then
+            echo "pre-commit: .NET integration tests (PostgreSQL in Docker)" >&2
+            dotnet test tests/ITrade.IntegrationTests --no-build --nologo -v q
+        else
+            echo "pre-commit: WARNING - Docker is not running, the integration tests were NOT run." >&2
+            echo "Start Docker and run: dotnet test tests/ITrade.IntegrationTests" >&2
+        fi
+    fi
 fi
 
 # Web: generated API client is current, format, lint, types, unit tests.

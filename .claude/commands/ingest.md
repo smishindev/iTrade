@@ -1,7 +1,7 @@
 ---
 description: Refresh market data, validate it, and explain any warnings
 argument-hint: "[TICKER ...]"
-allowed-tools: Bash(uv run itrade:*), PowerShell(uv run itrade:*)
+allowed-tools: Bash(uv run itrade:*), Bash(uv run --directory python itrade:*), PowerShell(uv run itrade:*), PowerShell(uv run --directory python itrade:*)
 ---
 
 1. Run `uv run --directory python itrade ingest $ARGUMENTS -v`.

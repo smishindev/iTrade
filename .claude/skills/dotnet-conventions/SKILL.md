@@ -48,12 +48,17 @@ Broker code is reviewed by the `execution-reviewer` agent; load the `ibkr-api` s
   map through converters registered in `ConfigureConventions`.
 - Schema changes: a new migration (`dotnet ef migrations add <Name> --project src/ITrade.Infrastructure
   --startup-project src/ITrade.Infrastructure --output-dir Persistence/Migrations`) in its own commit.
-  Applied migrations are never edited.
+  Applied migrations are never edited: a migration on `origin/main` is frozen (edit hook and pre-commit), and
+  before regenerating one that is not pushed, `dotnet run --project src/ITrade.Host -- check` must still list it
+  as pending. The Host applies migrations at start; `dotnet ef database update|drop` is not used.
+- The working database is read with SELECT at most; it is changed only through the Host. Tests take a
+  throw-away database (`NewEmptyDatabaseAsync`).
 - `audit_events` is append-only (database triggers). Write to it; never update or delete.
 - `transactions` — the accounting ledger — is append-only too (triggers reject UPDATE, DELETE, TRUNCATE). Write
   through `TransactionLedger`: `RecordAsync` (a repeated import adds nothing; an entry is known by holding place,
   source and external id) and `ReverseAsync` (a mistake is cancelled by a reversal, then the right entry is
   recorded). Amounts are signed effects; the order within a trade date is the order of recording (`sequence`).
+  The accounting rules are in the `portfolio-accounting` skill.
 - A reference from a ledger row to another ledger row is mapped many-to-one with a unique index, not one-to-one:
   EF Core "moves" a one-to-one dependent by updating the old row.
 - A store used by background work writes with single statements (`ExecuteSqlAsync`, `ExecuteUpdateAsync`)

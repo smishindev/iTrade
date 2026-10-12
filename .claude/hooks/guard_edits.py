@@ -7,9 +7,14 @@ Blocks:
   - broker / order-placement code in Python (always)
   - IBKR API code in C# outside src/ITrade.Broker.IBKR/ and spikes/ibkr-feasibility/
   - live IB Gateway / TWS ports before the pilot phase (phase 6 of plan v4), in broker code and in settings
+  - edits to a database migration that is already on origin/main (it may have been applied; add a new one)
 """
 
 from __future__ import annotations
+
+import re
+import subprocess
+from pathlib import Path
 
 from _common import (
     ACCOUNT_ID,
@@ -36,6 +41,17 @@ LIVE_PORT_MESSAGE = (
     "Live IB Gateway / TWS ports (4001/7496) are blocked until the pilot phase "
     f"(phase {LIVE_PORTS_FROM_PHASE}, set by the owner in config/project.toml). Use the paper ports 4002/7497."
 )
+MIGRATIONS_DIR = "src/ITrade.Infrastructure/Persistence/Migrations"
+MIGRATION = re.compile(r"^" + re.escape(MIGRATIONS_DIR.lower()) + r"/\d{14}_[^/]+\.cs$")
+
+
+def is_pushed(rel: str, root: Path) -> bool:
+    """True when the file is on origin/main. Without that branch (no remote yet) nothing counts as pushed."""
+    listing = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", "origin/main", "--", MIGRATIONS_DIR],
+        cwd=root, capture_output=True, text=True, timeout=10,
+    )
+    return listing.returncode == 0 and rel in {line.strip().lower() for line in listing.stdout.splitlines()}
 
 
 def main() -> None:
@@ -64,6 +80,11 @@ def main() -> None:
     name = rel.rsplit("/", 1)[-1]
     if name.startswith(".env") or name.endswith(SECRET_SUFFIXES) or rel.startswith("secrets/"):
         deny("Secret files are off-limits. Credentials live in environment variables / the OS keychain.")
+    if MIGRATION.match(rel) and is_pushed(rel, root):
+        deny(
+            "This migration is on origin/main and may already be applied to a database. Applied migrations "
+            "are never edited: add a new migration (`dotnet ef migrations add <Name> ...`)."
+        )
     if rel.startswith(".claude/"):
         return  # hook/agent definitions legitimately mention the patterns below
 

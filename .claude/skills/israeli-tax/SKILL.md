@@ -7,8 +7,17 @@ description: How iTrade treats Israeli tax on the owner's investments — which 
 
 **Nothing here is tax advice, and almost nothing is confirmed.** The owner is an Israeli tax resident
 (not an oleh), an employee, investing own money through a foreign broker that withholds no Israeli tax.
-The answers come from a licensed accountant (`docs/accountant-questions.md`, 30 questions); until then
+The answers would come from a licensed accountant (`docs/accountant-questions.md`, 30 questions); until then
 every number is an assumption. `docs/PLAN.md` §6 and gate G4 win over this summary.
+
+**Owner's decision of 2026-10-12: no consultation for now — "we do it the way we think is right".**
+So work does not wait for answers: where a rule is needed, choose the most defensible one, write it down
+as an assumption with the **source it was taken from and the date** (a law or Tax Authority publication
+is a source; "general knowledge" is not one — say so when that is all there is), make it a parameter,
+and keep it labelled *unverified* wherever the owner sees its result. This does not turn an assumption
+into a fact: the wording rules below stay, and a real answer later still replaces the assumption.
+Gate G4 and `docs/SCOPE.md` still name the accountant as the check — that is the owner's to change;
+raise it when phase 4 starts instead of working around it.
 
 ## What the program assumes today
 | Assumption | Where | Status |
@@ -19,7 +28,7 @@ every number is an assumption. `docs/PLAN.md` §6 and gate G4 win over this summ
 | FX rate: Bank of Israel representative rate on the **trade** date | project decision (`docs/data-notes.md`) | date choice not verified (question 4) |
 | Lots are matched FIFO | assumption | not verified (question 5) |
 | Half-year reports and advances are due | assumption | not verified (questions 13–16) |
-| How the real gain is computed for a dollar security | — | **open** (question 3): do not invent a formula |
+| How the real gain is computed for a dollar security | — | **open** (question 3): no formula without a written source; until one is chosen and recorded, the code refuses |
 | Where to hold an index (US ETF, Irish UCITS, keren hishtalmut, Israeli broker) | — | open (questions 26–30) |
 
 When an answer arrives: replace the assumption, write the answer's **date and source** next to the
@@ -45,7 +54,8 @@ accountant's worked example as a test. A tax number changes only this way.
 - **Wash sales, fractional shares, FX on a dollar cash balance, dividends from accumulating funds**:
   open questions (7, 8, 12, 28). Until answered, the code refuses or flags these cases — it does not
   guess.
-- Tests: the accountant's examples (gate G4) are the acceptance tests; add properties that must hold
+- Tests: the accountant's examples (gate G4) are the acceptance tests when there are any; without them,
+  hand-worked examples that cite the source of the rule they follow — and say so. Add properties that must hold
   for any input (the sum over lots equals the total; a loss never produces negative tax; splitting a
   sale into two sales of the same lots changes nothing).
 
