@@ -5,7 +5,8 @@ description: How iTrade prices trades — commission (IBKR Pro Tiered minimums),
 
 # Cost model
 
-Code: `python/src/itrade/costs/model.py` (C# port in phase 4: `ITrade.Simulation/Costs`, must match to the cent).
+Code: `python/src/itrade/costs/model.py` (the reference; a C# estimate of purchase costs for the approval
+screen comes with phase 5 of plan v4 and must match it to the cent).
 Assumptions: `config/costs.toml` (IBKR Pro **Tiered**, Israeli resident).
 
 ## API
@@ -17,12 +18,16 @@ tc.total, tc.bps, tc.as_dict()
 ```
 - `shares` may be fractional; `side` is `"buy"` or `"sell"` (sell adds SEC + FINRA TAF).
 - `convert_fx=True` adds one ILS→USD conversion (min ≈ $2) — charge it on **deposits**, not per trade.
-- `capital_gains_tax(...)` is a placeholder; real tax lots and the Israeli FX rule come in phase 7 (P7.4).
+- `capital_gains_tax(...)` is a placeholder; real tax lots and the Israeli FX rule come with the Tax module
+  (phase 4 of plan v4) — see the `israeli-tax` skill.
 
 ## CLI
 `uv run --directory python itrade costs --notional 300 --price 60.61 --ticker VWO` — per-order breakdown and round trip.
 
-## What it means for this account (10,000 ILS ≈ $3,280; risk 0.25% ≈ $8.2 = 1R)
+## What it meant for active trading (phase 1; 10,000 ILS ≈ $3,280; risk 0.25% ≈ $8.2 = 1R)
+Under plan v4 the same model prices monthly purchases: the minimum commission and the ≈ $2 FX
+conversion matter per contribution, not per signal.
+
 - A typical position is $150–650, so the **minimum commission dominates**: round trip ≈ $0.8–1.0.
 - That is **≈ 0.10–0.13R per trade** before slippage on a $300 position — a big share of any realistic edge.
 - Rule (PLAN §6): skip a signal when expected round-trip costs exceed **0.15R**. Never "fix" costs by raising risk.

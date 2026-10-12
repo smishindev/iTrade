@@ -99,6 +99,22 @@ ACCOUNT_ID = re.compile(r"\bD?U[A-Z]?(?!0{6,9}\b)\d{6,9}\b")
 CSHARP_BROKER_CODE = re.compile(r"\busing\s+IBApi\b|\bIBApi\.|\bEClientSocket\b|\.placeOrder\s*\(")
 CSHARP_BROKER_DIRS = ("src/itrade.broker.ibkr/", "spikes/ibkr-feasibility/")  # lower-cased
 LIVE_PORT = re.compile(r"\b(4001|7496)\b")
+# A live port written as a setting or an address: `"Port": 4001`, `Port { get; init; } = 7496`,
+# `127.0.0.1:4001` (the word "port" and the number on one line, or the number after a local address).
+LIVE_PORT_SETTING = re.compile(
+    r"(?i)port\b[^\n]{0,40}?\b(4001|7496)\b|(127\.0\.0\.1|localhost|\[::1\]):(4001|7496)\b"
+)
+SETTINGS_SUFFIXES = (
+    ".cs", ".json", ".toml", ".yml", ".yaml", ".props", ".config", ".ps1", ".sh", ".cmd", ".bat",
+    ".ts", ".tsx",
+)
+# Plan v4: live ports open with the pilot phase, when the owner sets `phase = 6` in config/project.toml
+# (owner's decision of 2026-10-12; it was phase 8 in plan v3).
+LIVE_PORTS_FROM_PHASE = 6
+
+
+def live_ports_blocked(root: Path) -> bool:
+    return current_phase(root) < LIVE_PORTS_FROM_PHASE
 
 # Python libraries/calls that can move real money. Python never trades (docs/PLAN.md §2.5).
 BROKER_CODE = re.compile(

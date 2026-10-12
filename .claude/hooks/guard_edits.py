@@ -6,7 +6,7 @@ Blocks:
   - secret files and hard-coded credentials
   - broker / order-placement code in Python (always)
   - IBKR API code in C# outside src/ITrade.Broker.IBKR/ and spikes/ibkr-feasibility/
-  - live IB Gateway ports before the live pilot (phase 8)
+  - live IB Gateway / TWS ports before the pilot phase (phase 6 of plan v4), in broker code and in settings
 """
 
 from __future__ import annotations
@@ -17,11 +17,14 @@ from _common import (
     CSHARP_BROKER_CODE,
     CSHARP_BROKER_DIRS,
     LIVE_PORT,
+    LIVE_PORT_SETTING,
+    LIVE_PORTS_FROM_PHASE,
     SECRET_ASSIGNMENT,
-    current_phase,
+    SETTINGS_SUFFIXES,
     data_root,
     deny,
     is_under,
+    live_ports_blocked,
     new_content,
     project_dir,
     read_input,
@@ -29,6 +32,10 @@ from _common import (
 )
 
 SECRET_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
+LIVE_PORT_MESSAGE = (
+    "Live IB Gateway / TWS ports (4001/7496) are blocked until the pilot phase "
+    f"(phase {LIVE_PORTS_FROM_PHASE}, set by the owner in config/project.toml). Use the paper ports 4002/7497."
+)
 
 
 def main() -> None:
@@ -81,8 +88,12 @@ def main() -> None:
                 "IBKR API code is allowed only in src/ITrade.Broker.IBKR/ and "
                 "spikes/ibkr-feasibility/ (docs/PLAN.md §3.2). Other code uses IBrokerGateway."
             )
-        if current_phase(root) < 8 and LIVE_PORT.search(text):
-            deny("Live IB Gateway ports (4001/7496) are blocked until the live pilot (phase 8).")
+        if live_ports_blocked(root) and LIVE_PORT.search(text):
+            deny(LIVE_PORT_MESSAGE)
+
+    # Also where no broker call is in sight: a default in an options class, a settings file, a script.
+    if live_ports_blocked(root) and rel.endswith(SETTINGS_SUFFIXES) and LIVE_PORT_SETTING.search(text):
+        deny(LIVE_PORT_MESSAGE)
 
 
 if __name__ == "__main__":

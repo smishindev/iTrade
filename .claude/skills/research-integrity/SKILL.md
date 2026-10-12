@@ -5,6 +5,13 @@ description: Rules for any backtest, strategy, signal, indicator or performance-
 
 # Research integrity
 
+> **Research is frozen (plan v4, 2026-10-09).** Three pre-registered hypotheses (H1–H3) were rejected by
+> their own rules and their ledgers are closed; the final period 2021-01-04 … 2026-09-30 is still
+> unseen and stays locked. No new strategy, variant or backtest — and no rerun "just to look" — unless
+> the owner first approves a **new scope** (docs/SCOPE.md). Then the whole phase-1 protocol applies
+> again: pre-registration, calibrated control, `quant-reviewer` before and after, one final run.
+> The rules below describe that protocol and the frozen research archive under `python/`.
+
 A backtest that looks great is usually wrong. These rules catch the usual ways it happens:
 look-ahead, survivorship, missing costs, wrong fills, and multiple testing.
 The strategy spec is `docs/STRATEGY_ETF_PULLBACK_V1.md` (PLAN §5); it wins over this summary.

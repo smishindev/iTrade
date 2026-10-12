@@ -1,17 +1,26 @@
 ---
 name: ibkr-api
-description: How iTrade talks to Interactive Brokers through the official TWS API (C#) and IB Gateway — connection, orders (LOO/OPG, attached GTC stop, OCA exits), callbacks, recovery after crashes, market data types, Flex reports, and known traps. Load before writing or reviewing any code in spikes/ibkr-feasibility/ or src/ITrade.Broker.IBKR/, or when answering questions about IBKR orders.
+description: How iTrade talks to Interactive Brokers through the official TWS API (C#) and IB Gateway — connection, owner-approved orders (plan v4 - LMT or MOC buys, no stops), callbacks, recovery after crashes, market data types, Flex reports, and known traps. Load before writing or reviewing any code in spikes/ibkr-feasibility/ or src/ITrade.Broker.IBKR/, or when answering questions about IBKR orders.
 ---
 
 # IBKR API — rules and traps
+
+> **Plan v4 (2026-10-09).** The platform no longer trades actively: it sends **owner-approved buys**
+> (rare sells for rebalancing or withdrawal), `LMT` or `MOC` only — no stops, brackets, OCA groups,
+> margin or shorts. The section "Orders used by ETF_PULLBACK_V1" below is kept as the record of what
+> spike B tested (phase 1); do not build it. Connection, callbacks, recovery, market data and Flex
+> still apply. Confirmed in spike B (`docs/spikes/ibkr-feasibility.md`): reconnect through the 09:25
+> Gateway restart in ~11 s; 1100 → 1102 without losing the socket; quotes without a subscription
+> are delayed 15 minutes; the account summary matches the web interface.
 
 Facts marked **(verify)** are from IBKR documentation or general knowledge and must be confirmed in
 spike B (roadmap P1.B) before code relies on them. Record every confirmation in
 `docs/spikes/ibkr-feasibility.md` with the message log as evidence.
 
 ## Where code may live
-Only `spikes/ibkr-feasibility/` (phase 1) and `src/ITrade.Broker.IBKR/` (phase 3+). Hooks block IBApi
-code elsewhere, block Python broker code always, and block live ports before phase 8.
+Only `spikes/ibkr-feasibility/` (phase 1, done) and `src/ITrade.Broker.IBKR/` (phase 5 of plan v4). Hooks
+block IBApi code elsewhere, block Python broker code always, and block live ports (in code and in
+settings) until the owner moves the project to phase 6, the pilot phase. Changes are reviewed by the `execution-reviewer` agent.
 
 ## Connection
 - IB Gateway ports: **paper 4002**, live 4001 (TWS: 7497 / 7496). Host `127.0.0.1` only.

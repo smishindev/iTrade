@@ -22,7 +22,7 @@ Read `.claude/skills/data-pipeline/SKILL.md` first.
 5. Check coverage for the strategy universe (`config/universes/`): each ETF's first bar vs its
    inception date; dividends and splits present (ex-dates matter: no entries on t+1 ex-date);
    ILS=X covers the whole range.
-6. If IBKR bars exist (phase 3+), compare the two sources and list days with |Δclose| > 0.5%.
+6. If IBKR bars exist, compare the two sources and list days with |Δclose| > 0.5%.
 
 ## Output
 A markdown table ready to paste into `docs/data-notes.md`:

@@ -5,19 +5,25 @@ from __future__ import annotations
 import json
 import sys
 
-from _common import context, current_phase, data_root, project_dir, read_input
+from _common import (
+    LIVE_PORTS_FROM_PHASE,
+    context,
+    current_phase,
+    data_root,
+    live_ports_blocked,
+    project_dir,
+    read_input,
+)
 
-PHASES = {
+PHASES = {  # plan v4 (docs/PLAN.md §7, docs/roadmap/)
     0: "decisions",
-    1: "validation spikes A (hypothesis, Python) + B (IBKR feasibility, C#)",
+    1: "validation spikes A (hypotheses, Python) + B (IBKR feasibility, C#) - done, research frozen",
     2: "foundation (.NET, PostgreSQL, React shell)",
-    3: "data in C#",
-    4: "strategy core + backtest in C#",
-    5: "UI",
-    6: "paper execution",
-    7: "hardening",
-    8: "live pilot",
-    9: "expansion",
+    3: "accounting (instruments, transactions, lots, FX, imports, valuation)",
+    4: "taxes (Israeli real gain, dividends, half-year sums)",
+    5: "broker and plan (IBKR adapter, contributions, approval, reconciliation - paper)",
+    6: "interface and pilot (screens, first real purchase)",
+    7: "regular operation",
 }
 
 
@@ -29,8 +35,10 @@ def main() -> None:
         "Master plan: docs/PLAN.md. Exit criteria: docs/GATES.md. Scope: docs/SCOPE.md.",
         "Python never trades; IBKR API code only in src/ITrade.Broker.IBKR and spikes/ibkr-feasibility.",
     ]
-    if phase < 8:
-        lines.append("Live IB Gateway ports are blocked until the live pilot (phase 8).")
+    if live_ports_blocked(root):
+        lines.append(
+            f"Live IB Gateway ports are blocked until the pilot phase (phase {LIVE_PORTS_FROM_PHASE})."
+        )
 
     manifest = data_root(root) / "curated" / "manifest.json"
     if manifest.exists():

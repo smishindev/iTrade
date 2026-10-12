@@ -55,8 +55,8 @@ free data ingest, statistics. **Python never trades.**
 ## Guardrails (enforced by `.claude/hooks/` and `.githooks/pre-commit`)
 - PreToolUse: blocks edits under the data folder (`D:\ITradeData` per `config/paths.toml`; old `data/` too), edits to `config/project.toml`, secret files, hard-coded credentials,
   **real IBKR account numbers** (use `DU0000000`), broker code in Python (always), IBKR API code in C# outside
-  `src/ITrade.Broker.IBKR/` and `spikes/ibkr-feasibility/`, live ports 4001/7496 before phase 8 (v3 numbering;
-  becomes phase 6 in task P2.6.03 with the owner's consent);
+  `src/ITrade.Broker.IBKR/` and `spikes/ibkr-feasibility/`, live ports 4001/7496 (in broker code and in settings)
+  before phase 6 — the pilot phase of plan v4; the owner opens them by setting `phase = 6` (decided 2026-10-12);
   blocks deleting raw data, reading `.env`, `pip install`.
 - PostToolUse: ruff format/fix + look-ahead flags on Python; `dotnet format whitespace` on C#; prettier + eslint on `web/`.
 - Stop: ruff + pytest when python/config/tools changed; `dotnet build` for changed spikes; solution build + unit and
