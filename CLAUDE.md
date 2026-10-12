@@ -31,6 +31,9 @@ free data ingest, statistics. **Python never trades.**
 - .NET (repo root): `dotnet build ITrade.slnx` · `dotnet test tests/ITrade.UnitTests` · `dotnet test tests/ITrade.ArchitectureTests`
   · `dotnet test tests/ITrade.IntegrationTests` (needs Docker) · `dotnet run --project src/ITrade.Host` (a running Host locks the
   Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password`.
+- Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·
+  `.\deploy\restore.ps1 -File <dump> -Verify` (restores into a temporary database and removes it). Restore never
+  overwrites an existing database; switching the Host to a restored one is the owner's step.
 - Web (in `web/`, Node 24): `npm ci` · `npm run dev` · `npm run check` (= `gen:api:check`, `format:check`, `lint`, `test`,
   `build`) · `npm run gen:api` after an API change (see web/README.md) · `npm run e2e` (Playwright against a real Host with a
   throw-away database; needs Docker). Interface texts are English; components come from MUI.

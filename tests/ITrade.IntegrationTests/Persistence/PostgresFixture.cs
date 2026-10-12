@@ -37,6 +37,16 @@ public sealed class PostgresFixture : IAsyncLifetime
         return new NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ConnectionString;
     }
 
+    /// <summary>Runs a program inside the database container (pg_dump, pg_restore, createdb) and requires success.</summary>
+    public async Task<string> RunInContainerAsync(params string[] command)
+    {
+        var result = await _container.ExecAsync(command);
+        Assert.True(
+            result.ExitCode == 0,
+            $"{string.Join(' ', command)} exited with {result.ExitCode}: {result.Stderr}");
+        return result.Stdout;
+    }
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
