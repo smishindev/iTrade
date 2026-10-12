@@ -65,8 +65,34 @@ public sealed class PriceImportRow
 }
 
 /// <summary>
-/// `closing_prices`, `market_sessions` and `price_imports` behind <see cref="IClosingPriceStore"/>: reads the
-/// latest revisions, and inserts.
+/// Table `fund_events`: a dividend or a split of a fund on a day, as the data pipeline reports it. The domain
+/// type is <see cref="FundEvent"/>. Rows are only ever inserted (migration FundEvents); an event the source
+/// corrected is a further row of the same day and kind with the next <see cref="Revision"/>.
+/// </summary>
+public sealed class FundEventRow
+{
+    public required InstrumentId InstrumentId { get; init; }
+
+    /// <summary>The ex-date of a dividend; the first day the shares trade split. A session of the exchange.</summary>
+    public LocalDate Day { get; init; }
+
+    public FundEventKind Kind { get; init; }
+
+    public int Revision { get; init; }
+
+    /// <summary>The dividend per share as paid, or the split as new shares per old one.</summary>
+    public decimal Value { get; init; }
+
+    public required string Source { get; init; }
+
+    public Instant ImportedAt { get; init; }
+
+    public FundEvent ToDomain() => new(InstrumentId, Day, Kind, Value, Source);
+}
+
+/// <summary>
+/// `closing_prices`, `market_sessions`, `fund_events` and `price_imports` behind
+/// <see cref="IClosingPriceStore"/>: reads the latest revisions, and inserts.
 /// </summary>
 public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
 {
@@ -127,20 +153,21 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
         return row is null ? null : new ImportedExport(row.ExportedAt, row.Sha256);
     }
 
-    public async Task AddAsync(
-        IReadOnlyList<ClosingPrice> added,
-        IReadOnlyList<ClosingPrice> revised,
-        string calendar,
-        IReadOnlyList<LocalDate> sessions,
-        Instant importedAt,
-        PricesNote note,
-        ImportedExport importedExport,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<FundEvent>> ListEventsAsync(InstrumentId instrument, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(added);
-        ArgumentNullException.ThrowIfNull(revised);
-        ArgumentNullException.ThrowIfNull(sessions);
+        var rows = await db.FundEvents.AsNoTracking()
+            .Where(e => e.InstrumentId == instrument)
+            .OrderBy(e => e.Day).ThenBy(e => e.Kind).ThenBy(e => e.Revision)
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(e => (e.Day, e.Kind)).Select(revisions => revisions.Last().ToDomain()).ToList();
+    }
+
+    public async Task AddAsync(
+        PricesToStore what, Instant importedAt, PricesNote note, ImportedExport importedExport, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(what);
         ArgumentNullException.ThrowIfNull(note);
+        var (added, revised, calendar, sessions) = (what.Added, what.Revised, what.Calendar, what.Sessions);
         ArgumentNullException.ThrowIfNull(importedExport);
         if (db.ChangeTracker.HasChanges())
         {
@@ -160,18 +187,31 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
             rows.Add(Row(price, latest + 1, importedAt));
         }
 
+        var events = what.Events.Select(e => Row(e, revision: 0, importedAt)).ToList();
+        foreach (var fundEvent in what.RevisedEvents)
+        {
+            var latest = await db.FundEvents.AsNoTracking()
+                .Where(e => e.InstrumentId == fundEvent.Instrument && e.Day == fundEvent.Day && e.Kind == fundEvent.Kind)
+                .MaxAsync(e => (int?)e.Revision, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"There is no {fundEvent.Kind} of {fundEvent.Day:R} to revise for instrument {fundEvent.Instrument}.");
+            events.Add(Row(fundEvent, latest + 1, importedAt));
+        }
+
         // A first import is a couple of hundred thousand rows: no change detection over them.
         var detect = db.ChangeTracker.AutoDetectChangesEnabled;
         db.ChangeTracker.AutoDetectChangesEnabled = false;
         try
         {
-            // One transaction: the sessions, the prices, the mark of the export and the note about it all - or
-            // nothing. The sessions go first: the database takes a close only for a day that is a session.
+            // One transaction: the sessions, the prices, the fund events, the mark of the export and the note
+            // about it all - or nothing. The sessions go first: the database takes a close or an event only
+            // for a day that is a session.
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
             db.MarketSessions.AddRange(
                 sessions.Select(s => new MarketSessionRow { Calendar = calendar, Session = s, ImportedAt = importedAt }));
             await db.SaveChangesAsync(cancellationToken);
             db.ClosingPrices.AddRange(rows);
+            db.FundEvents.AddRange(events);
             db.PriceImports.Add(
                 new PriceImportRow { ExportedAt = importedExport.ExportedAt, Sha256 = importedExport.Sha256, ImportedAt = importedAt });
             db.AuditEvents.Add(
@@ -186,6 +226,17 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
             db.ChangeTracker.AutoDetectChangesEnabled = detect;
         }
     }
+
+    private static FundEventRow Row(FundEvent fundEvent, int revision, Instant importedAt) => new()
+    {
+        InstrumentId = fundEvent.Instrument,
+        Day = fundEvent.Day,
+        Kind = fundEvent.Kind,
+        Revision = revision,
+        Value = fundEvent.Value,
+        Source = fundEvent.Source,
+        ImportedAt = importedAt,
+    };
 
     private static ClosingPriceRow Row(ClosingPrice price, int revision, Instant importedAt) => new()
     {

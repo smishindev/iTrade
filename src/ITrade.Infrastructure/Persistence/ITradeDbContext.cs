@@ -36,6 +36,8 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
 
     public DbSet<PriceImportRow> PriceImports => Set<PriceImportRow>();
 
+    public DbSet<FundEventRow> FundEvents => Set<FundEventRow>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
@@ -205,6 +207,19 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.Property(s => s.Calendar).HasMaxLength(10);
             // "Was any exchange open that day?" - asked for every close that is stored (migration MarketSessions).
             e.HasIndex(s => s.Session);
+        });
+        modelBuilder.Entity<FundEventRow>(e =>
+        {
+            e.ToTable("fund_events", table =>
+            {
+                table.HasCheckConstraint("ck_fund_events_value_is_positive", "value > 0");
+                table.HasCheckConstraint("ck_fund_events_revision_is_not_negative", "revision >= 0");
+                table.HasCheckConstraint("ck_fund_events_kind_is_known", "kind IN ('Dividend', 'Split')");
+            });
+            e.HasKey(f => new { f.InstrumentId, f.Day, f.Kind, f.Revision });
+            e.Property(f => f.Kind).HasConversion<string>().HasMaxLength(10);
+            e.Property(f => f.Source).HasMaxLength(50);
+            e.HasOne<InstrumentRow>().WithMany().HasForeignKey(f => f.InstrumentId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<PriceImportRow>(e =>
         {

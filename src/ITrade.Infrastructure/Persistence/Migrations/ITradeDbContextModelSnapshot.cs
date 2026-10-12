@@ -134,6 +134,53 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("instrument_former_tickers", (string)null);
                 });
 
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.FundEventRow", b =>
+                {
+                    b.Property<Guid>("InstrumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instrument_id");
+
+                    b.Property<LocalDate>("Day")
+                        .HasColumnType("date")
+                        .HasColumnName("day");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<Instant>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("source");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("value");
+
+                    b.HasKey("InstrumentId", "Day", "Kind", "Revision")
+                        .HasName("pk_fund_events");
+
+                    b.ToTable("fund_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_fund_events_kind_is_known", "kind IN ('Dividend', 'Split')");
+
+                            t.HasCheckConstraint("ck_fund_events_revision_is_not_negative", "revision >= 0");
+
+                            t.HasCheckConstraint("ck_fund_events_value_is_positive", "value > 0");
+                        });
+                });
+
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.FxRateRow", b =>
                 {
                     b.Property<string>("BaseCurrency")
@@ -551,6 +598,16 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_instrument_former_tickers_instruments_instrument_id");
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.FundEventRow", b =>
+                {
+                    b.HasOne("ITrade.Infrastructure.Persistence.InstrumentRow", null)
+                        .WithMany()
+                        .HasForeignKey("InstrumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fund_events_instruments_instrument_id");
                 });
 
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.TransactionRow", b =>
