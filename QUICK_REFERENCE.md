@@ -1,0 +1,179 @@
+# iTrade — Quick Reference
+
+The cookbook. For *why* things are shaped this way see [ARCHITECTURE.md](ARCHITECTURE.md); for the
+process around a change see [PRE_FLIGHT_CHECKLIST.md](PRE_FLIGHT_CHECKLIST.md); for first-time setup,
+[README.md](README.md).
+
+---
+
+## Commands
+
+All from the repository root unless stated. The shell is PowerShell; Git Bash works for the same
+commands.
+
+```powershell
+# everything at once - the same command before every "done"
+python tools/ci.py                 # 16 steps: Python, .NET with integration tests, web, the Host's start check, browser tests (needs Docker)
+python tools/ci.py --fast          # without Docker
+python tools/ci.py --only dotnet   # or python | web | e2e
+
+# .NET
+dotnet build ITrade.slnx
+dotnet test tests/ITrade.UnitTests
+dotnet test tests/ITrade.ArchitectureTests
+dotnet test tests/ITrade.IntegrationTests      # real PostgreSQL in Docker, about half a minute
+dotnet format ITrade.slnx
+
+# the application and its commands (a running Host locks the Debug build - stop it before building)
+dotnet run --project src/ITrade.Host
+dotnet run --project src/ITrade.Host -- check                # can it start? changes nothing
+dotnet run --project src/ITrade.Host -- set-password
+dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv
+dotnet run --project src/ITrade.Host -- update-fx-rates
+dotnet run --project src/ITrade.Host -- retry-job fx-rates 2026-10-12
+
+# interface (in web/, Node 24)
+npm ci
+npm run dev        # http://127.0.0.1:5173 next to a running Host
+npm run check      # API client is current, format, lint, tests, build
+npm run gen:api    # after an API change
+npm run e2e        # Playwright against a real Host with a throw-away database
+
+# Python (in python/, or from the root with: uv run --directory python ...)
+uv sync
+uv run pytest
+uv run ruff check src tests tools
+uv run itrade ingest | quality | costs | sql
+
+# database
+docker compose -f deploy/docker-compose.yml up -d
+.\deploy\backup.ps1
+.\deploy\restore.ps1 -File <dump> -Verify
+
+# roadmap
+python tools/roadmap.py status
+python tools/roadmap.py next --all
+python tools/roadmap.py show P3.3.02
+```
+
+## Is it alive?
+
+```powershell
+dotnet run --project src/ITrade.Host -- check
+```
+
+It builds the Host exactly as a real start does and prints one line per thing: environment, mode,
+address, data folder, interface, database and pending migrations, owner password, daily jobs that
+are stuck, how old the exchange rates are. `OK` or `PROBLEMS: n` at the end; a line starting with
+`!` is a problem and says what to run.
+
+With the Host running: `curl.exe -k https://127.0.0.1:7120/health` → status, mode, database check.
+
+## Reading the working database
+
+Read only. Changes go through the Host; a hook blocks writing SQL from the shell.
+
+```powershell
+docker exec itrade-postgres psql -U itrade -d itrade -c "select name, trade_date, status, attempts, left(error, 120) from job_runs order by trade_date desc limit 10"
+docker exec itrade-postgres psql -U itrade -d itrade -c "select count(*), max(rate_date) from fx_rates"
+docker exec itrade-postgres psql -U itrade -d itrade -c "select occurred_at, actor, kind from audit_events order by occurred_at desc limit 10"
+docker exec itrade-postgres psql -U itrade -d itrade -c 'select migration_id from \"__EFMigrationsHistory\" order by 1'
+```
+
+Every table but the migration history has a lower-case name and needs no quotes. That one does, and
+Windows PowerShell drops plain double quotes on the way to `psql` — hence the `\"`.
+
+---
+
+## Recipes
+
+### A schema change
+1. Change the row class and its mapping in `ITradeDbContext` (constraints with names that say the
+   rule: `ck_<table>_<what_must_hold>`).
+2. `dotnet ef migrations add <Name> --project src/ITrade.Infrastructure --startup-project src/ITrade.Infrastructure --output-dir Persistence/Migrations`
+3. Triggers and functions go into the migration by hand (`migrationBuilder.Sql`), with their `DROP`
+   in `Down`.
+4. An integration test that plants a violation of each new constraint and sees it refused.
+5. Its own commit: `<task id> (schema): ...`, before the commit with the logic.
+
+A migration that is on `origin/main` is frozen — add another. Before regenerating one that is not
+pushed, `check` must still list it as pending on the working database.
+
+### A rule of the ledger, the books or the rates
+1. Load the `portfolio-accounting` skill; the rule goes into the domain type (`Transaction`,
+   `PortfolioBooks`) or the use case (`TransactionLedger`, `FxRates`), not into a store or an endpoint.
+2. If a row could now be wrong for good, repeat the rule in the database (CHECK or trigger) and add
+   its planted violation to `LedgerRulesTests` or the rates' tests.
+3. Hand-worked example in the test, to the last digit; a property (CsCheck) if the rule must hold
+   for every input.
+4. Break the rule on purpose once and see a test fail.
+5. `accounting-reviewer` before the commit.
+
+### A daily job
+1. `IDailyJob` in `ITrade.Application` — idempotent: the same date may run again after a crash.
+2. Throw when the work cannot be done. Something outside that is merely away →
+   `TemporaryFailureException` (retried hourly, never blocked); anything else counts towards the
+   five attempts.
+3. Register it in the Host behind a setting that test Hosts turn off if it reaches outside.
+4. Test with the real scheduler and a `FakeClock`; see `tests/ITrade.IntegrationTests/Fx`.
+
+### A call to something outside
+Name it in the task first: it is the second outgoing call of a platform that has one. Then:
+`AddHttpClient` with a timeout and a size limit, strict parsing (columns by name, invariant culture,
+plausible ranges, refuse anything unexpected), a switch like `ITrade:UpdateFxRates` that
+`RunningHost.Args` and `tests/ITrade.E2EHost` turn off, the service's real answer saved under
+`tests/ITrade.UnitTests/Fixtures/` byte for byte with its SHA-256 asserted.
+
+### An API endpoint
+1. Minimal API in `src/ITrade.Host/<Feature>/`, wired from `ITradeHost.Build`; `.WithName`,
+   `.Produces`, `.ProducesProblem`. Everything needs sign-in unless marked `.AllowAnonymous()`;
+   every changing request needs the antiforgery header.
+2. Errors are `Results.Problem(statusCode:, title:)`; no exception text leaves the server.
+3. Refresh the snapshot: run the API integration test with `ITRADE_UPDATE_OPENAPI=1`, then
+   `npm run gen:api` in `web/`. `npm run check` fails while the client is stale.
+
+### A command of the Host
+A static class next to its feature (`Name`, `RunAsync(app, ..., output)`), dispatched in
+`Program.cs` before the normal start. It builds the Host and does not start it; it migrates first if
+it writes. Then run it exactly as the owner would, on the real database, before telling the owner it
+works.
+
+### A screen
+Page in `web/src/pages`, route in `routes.tsx`, menu entry in `shell/navigation.ts`; data through
+the generated client and TanStack Query; MUI components; English texts. A number shown to the owner
+carries its date, currency and source — and for a converted amount, whether the rate was carried
+forward or provisional.
+
+### An instrument
+Add it to the generator's list, `uv run python tools/make_instrument_catalogue.py` in `python/`,
+then `import-instruments config/instruments.csv`. A listing that contradicts what is stored is
+reported and left alone; a ticker change is a rename with its date.
+
+---
+
+## Gotchas hit in this codebase
+
+| Symptom | Cause |
+|---|---|
+| Build fails with a locked `ITrade.Host.exe` | The Host is running. Stop it, then build |
+| `dotnet run -- import-instruments config/instruments.csv` cannot find the file | `dotnet run --project` starts in the project folder; the command looks in parent folders now. A new command taking a path needs the same |
+| Tests are green and the real Host does not start | Tests run the Host as "Testing". Run `check`, or the real thing |
+| A second Host refuses to start | By design: one Host per database (instance lock) |
+| `iTrade cannot start: ConnectionStrings:ITrade is not set` | User-secrets hold it; see README, *First start* |
+| A second reversal fails with 42501 instead of 23505 | A one-to-one EF relationship "moves" the dependent by updating the old row. Between ledger rows: many-to-one plus a unique index |
+| Entries of one day come back in a different order | Ids made in one millisecond are not ordered; the ledger's order is `sequence` |
+| `db.Database.GetConnectionString()` has no password | Npgsql drops it after opening. Pass the connection string explicitly |
+| `ON DELETE RESTRICT` gives 23001, not 23503 | PostgreSQL's own code for a restrict violation |
+| A rate or an amount prints as `3.055000` | That is the column's scale. Format with `0.######` where it is shown |
+| The job "succeeds" but the rate of today is missing | The bank publishes in the afternoon, Israel time. The figure is marked provisional until it arrives |
+| `update-fx-rates` says the bank now states another rate | Nothing was stored. After checking the bank's page, run the line it prints (`--accept-changes <code> "<why>"`) — the owner's step |
+| A daily job is `blocked` in `check` | Five real faults. Deal with the cause it names, then `retry-job <job> <date>` |
+| A commit is refused over a migration | It is on `origin/main`. Add a new migration |
+| A hook blocks an edit or a command | It protects data, secrets, the phase file or the working database. Do not work around it; say what it protects |
+| A check on an ISIN or a test secret is refused by a hook | It looks like an account number or a credential. Use `DU0000000`, an obviously fake ISIN, or generate the secret at run time |
+| `git push` fails for Claude | No credentials in that environment. The owner pushes (VS Code "Sync Changes") |
+| Text files show broken Russian | Written with Windows PowerShell `Set-Content`. Use the Edit tool or Python |
+| A Python patch script in a Bash heredoc breaks on quotes or `\n` | Write the script to a file and run it |
+| `LF will be replaced by CRLF` on every commit | Expected on this machine (`* text=auto`). Shell hooks and recorded fixtures are pinned in `.gitattributes` |
+| Browser shows a certificate warning | The development certificate is not trusted: `dotnet dev-certs https --trust` |
+| `uv` warns about an old virtual-environment path in VS Code | Select the interpreter `python\.venv\Scripts\python.exe` |

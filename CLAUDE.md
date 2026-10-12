@@ -5,7 +5,9 @@ Personal portfolio platform for one owner (Israeli tax resident, not oleh, 10,00
 contributions and rebalancing, and sends **owner-approved** purchases through IBKR. Three pre-registered trading
 hypotheses were rejected in phase 1 (docs/spikes/hypothesis-H3.md); the research engine is frozen.
 
-**Read first, once per session:** `docs/PLAN.md` (master plan, Russian), `docs/SCOPE.md`, `docs/GATES.md`.
+**Read first, once per session:** `PROJECT_STATUS.md` (what works, decisions, gaps, what is next), then
+`docs/PLAN.md` (master plan, Russian), `docs/SCOPE.md`, `docs/GATES.md`. `ARCHITECTURE.md` is the system as built,
+`QUICK_REFERENCE.md` the commands, recipes and gotchas, `PRE_FLIGHT_CHECKLIST.md` the steps around a change.
 The owner communicates in Russian — answer in Russian.
 
 ## Target stack (decided — docs/PLAN.md §2)
@@ -73,6 +75,11 @@ statistics. **Python never trades.**
   Never call a result "profit" before final-period + live evidence.
 - Each task: goal, allowed change area, invariants, required tests, expected result. Strategy, risk,
   broker adapter and DB schema changes go in separate commits.
+- A task is not done until the documents it made stale are updated in the same commit: `PROJECT_STATUS.md`
+  (something works, was verified or decided, a gap opened or closed — and its "Last updated" date),
+  `ARCHITECTURE.md` (a table, endpoint, command, job, outgoing call or guard), `QUICK_REFERENCE.md` (a command,
+  a recipe, a gotcha that cost time), `README.md` (setup, everyday commands). A command written there was run
+  as written.
 - Tests must not need the network (mark exceptions `@pytest.mark.network`). The Host calls out only to the Bank of
   Israel's public rates service; test Hosts run with `ITrade:UpdateFxRates=false` and bring a stand-in source.
 - Data files are never edited by hand; fix code and re-ingest.

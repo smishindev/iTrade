@@ -11,9 +11,20 @@ each one.
 simply holding the index, after every cost; all three were rejected by their own rules
 ([docs/spikes/hypothesis-H3.md](docs/spikes/hypothesis-H3.md)). That research is kept as a frozen archive.
 
-- Plan: [docs/PLAN.md](docs/PLAN.md) · scope: [docs/SCOPE.md](docs/SCOPE.md) · phase gates: [docs/GATES.md](docs/GATES.md)
-- Tasks: [docs/roadmap/](docs/roadmap/README.md) (`python tools/roadmap.py status`)
-- Instructions for Claude Code: [CLAUDE.md](CLAUDE.md)
+## Documentation
+
+| Document | Read it for |
+|---|---|
+| [PROJECT_STATUS.md](PROJECT_STATUS.md) | What works and what verified it, the decisions and their reasons, known gaps, what is next, what waits for the owner. **Start here when coming back to the project** |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, addresses and settings, layers, the Host, the tables, how the books are kept, what enforces the rules |
+| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | Commands, "is it alive", recipes (a migration, a job, an endpoint, a command), gotchas |
+| [PRE_FLIGHT_CHECKLIST.md](PRE_FLIGHT_CHECKLIST.md) | The process before, during and after a change; when to stop and ask |
+| [docs/PLAN.md](docs/PLAN.md) · [docs/SCOPE.md](docs/SCOPE.md) · [docs/GATES.md](docs/GATES.md) | The plan, what is in and out of scope, the criteria of each phase gate (Russian) |
+| [docs/roadmap/](docs/roadmap/README.md) | Every task with its dated note; `python tools/roadmap.py status` |
+| [CLAUDE.md](CLAUDE.md), `.claude/skills/` | The binding rules for Claude Code and the conventions of each area |
+
+The plan, [CLAUDE.md](CLAUDE.md) and the skills are the standard. The four documents at the top describe the
+system those rules govern; where they disagree, the rules win and the document is wrong.
 
 ## What you need
 
@@ -60,9 +71,9 @@ More: [web/README.md](web/README.md) (interface, API client, browser tests) and 
 ## Layout
 
 ```
-src/ITrade.Domain          money, time, ids, instruments, holding places - pure types and rules
-src/ITrade.Application     use cases (daily jobs; accounting, taxes, plan in later phases)
-src/ITrade.Infrastructure  PostgreSQL through EF Core, migrations
+src/ITrade.Domain          money, time, instruments, transactions, lots and positions - pure types and rules
+src/ITrade.Application     use cases: daily jobs, instrument catalogue, ledger, books, exchange rates
+src/ITrade.Infrastructure  PostgreSQL through EF Core, migrations, the Bank of Israel rates client
 src/ITrade.Broker.IBKR     the only code that may talk to the broker (empty until phase 5)
 src/ITrade.Host            HTTP API, sign-in, events, background jobs; serves the interface
 tests/                     unit, architecture, integration (Docker) and the Host for browser tests
@@ -82,7 +93,8 @@ Data (market snapshots, logs, backups) lives outside the repository, in the fold
 - Only one service may send orders, and only after the owner's approval; an order in an unknown state is
   reconciled, never resent. Python never talks to a broker.
 - Live broker ports are blocked until the pilot phase; no real account number or credential may enter the repository.
-- Money is `decimal` everywhere; the audit journal in the database is append-only.
+- Money is `decimal` everywhere; the audit journal, the accounting ledger and the exchange rates are append-only
+  in the database itself.
 
 Hooks in `.claude/hooks/` and `.githooks/pre-commit` (enable once with `git config core.hooksPath .githooks`),
 architecture tests and database triggers check these on every change.
