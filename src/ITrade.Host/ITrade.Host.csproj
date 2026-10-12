@@ -19,6 +19,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="ITrade.UnitTests" />
     <InternalsVisibleTo Include="ITrade.IntegrationTests" />
+    <InternalsVisibleTo Include="ITrade.E2EHost" />
   </ItemGroup>
 
   <ItemGroup>

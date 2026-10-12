@@ -29,7 +29,9 @@ free data ingest, statistics. **Python never trades.**
 - .NET (repo root): `dotnet build ITrade.slnx` · `dotnet test tests/ITrade.UnitTests` · `dotnet test tests/ITrade.ArchitectureTests`
   · `dotnet test tests/ITrade.IntegrationTests` (needs Docker) · `dotnet run --project src/ITrade.Host` (a running Host locks the
   Debug build — stop it first) · `dotnet run --project src/ITrade.Host -- set-password`.
-- Web (in `web/`, Node 24): `npm ci` · `npm run dev` · `npm run check` (= `format:check`, `lint`, `test`, `build`).
+- Web (in `web/`, Node 24): `npm ci` · `npm run dev` · `npm run check` (= `gen:api:check`, `format:check`, `lint`, `test`,
+  `build`) · `npm run gen:api` after an API change (see web/README.md) · `npm run e2e` (Playwright against a real Host with a
+  throw-away database; needs Docker). Interface texts are English; components come from MUI.
 
 ## Working rules
 - **Stay inside the current phase** (`config/project.toml`, names in docs/GATES.md). Next: phase 2 (foundation) once

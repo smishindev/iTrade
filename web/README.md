@@ -28,6 +28,15 @@ Node 24 (see `.nvmrc`). From this folder:
 The Host sends a Content-Security-Policy: scripts, data and frames from its own origin only. A library that
 needs anything else (a CDN font, an inline script) will not work — bundle it instead.
 
+## End-to-end tests
+
+`npm run e2e` runs Playwright (`e2e/`) in the installed Microsoft Edge against the real Host. It builds the
+interface and starts `tests/ITrade.E2EHost`: a throw-away PostgreSQL in Docker, its own port (7199) and data
+folder, and an owner secret generated for the run. The owner's database and settings are not involved, and
+the container is removed afterwards. Needs Docker; a Host started by hand must be stopped first (it locks
+the build). Not part of `npm run check` — run it before a phase gate and after changes to sign-in, routing
+or the Host's static files and security headers.
+
 ## API client
 
 `src/api/generated/schema.d.ts` is generated from `openapi/v1.json` — never edit it by hand. After a change

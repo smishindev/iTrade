@@ -9,7 +9,7 @@ import tseslint from 'typescript-eslint'
 // Type-aware rules are on: an unawaited promise or an `any` near money is a bug, not a style issue.
 // Formatting belongs to Prettier (eslint-config-prettier switches the overlapping rules off).
 export default defineConfig([
-  globalIgnores(['dist', 'coverage', 'src/api/generated']),
+  globalIgnores(['dist', 'coverage', 'src/api/generated', 'test-results', 'playwright-report']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

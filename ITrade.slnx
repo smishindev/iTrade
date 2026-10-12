@@ -9,6 +9,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/ITrade.ArchitectureTests/ITrade.ArchitectureTests.csproj" />
     <Project Path="tests/ITrade.BrokerContractTests/ITrade.BrokerContractTests.csproj" />
+    <Project Path="tests/ITrade.E2EHost/ITrade.E2EHost.csproj" />
     <Project Path="tests/ITrade.IntegrationTests/ITrade.IntegrationTests.csproj" />
     <Project Path="tests/ITrade.ReplayTests/ITrade.ReplayTests.csproj" />
     <Project Path="tests/ITrade.UnitTests/ITrade.UnitTests.csproj" />
