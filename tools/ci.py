@@ -70,6 +70,13 @@ STEPS = (
         ("dotnet", "test", "tests/ITrade.IntegrationTests", "--no-build", "--nologo", "-v", "q"),
         needs_docker=True,
     ),
+    # Recorded broker messages, no network (empty until phase 5). ITrade.BrokerContractTests is
+    # left out on purpose: it needs a paper account and is run by hand.
+    Step(
+        "dotnet",
+        "replay tests",
+        ("dotnet", "test", "tests/ITrade.ReplayTests", "--no-build", "--nologo", "-v", "q"),
+    ),
     Step("web", "API client is current", ("npm", "run", "--silent", "gen:api:check"), "web"),
     Step("web", "prettier", ("npm", "run", "--silent", "format:check"), "web"),
     Step("web", "eslint", ("npm", "run", "--silent", "lint"), "web"),
