@@ -14,6 +14,7 @@ Node 24 (see `.nvmrc`). From this folder:
 | `npm run lint`    | ESLint with type-aware rules; warnings fail                          |
 | `npm run format`  | format with Prettier (`format:check` only checks)                    |
 | `npm run gen:api` | regenerate the typed API client from `openapi/v1.json`               |
+| `npm run e2e`     | browser tests against the real Host (needs Docker)                   |
 | `npm run check`   | everything a commit must pass: API client, format, lint, test, build |
 
 ## Running
