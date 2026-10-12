@@ -1,6 +1,8 @@
 #!/bin/sh
-# iTrade commit gate: no data/secrets/account numbers, then lint, format, tests and builds
-# for the parts that changed. Enabled with: git config core.hooksPath .githooks
+# iTrade commit gate (P2.6.02): no data/secrets/account numbers, then format, lint, build and tests —
+# only for the parts of the repository the commit touches.
+# Enabled with: git config core.hooksPath .githooks
+# Not run here (they need Docker): integration tests and the browser tests — run them before a phase gate.
 set -e
 
 staged=$(git diff --cached --name-only)
@@ -19,12 +21,15 @@ if git diff --cached -U0 | grep -E '^\+' | grep -E '\bD?U[A-Z]?[0-9]{6,9}\b' | g
     exit 1
 fi
 
+# Python: research archive, data pipeline, tools.
 if echo "$staged" | grep -Eq '^python/|^config/|^tools/'; then
+    echo "pre-commit: python (ruff format, ruff check, pytest)" >&2
     (cd python && uv run --quiet ruff format --check src tests tools \
         && uv run --quiet ruff check src tests tools \
         && uv run --quiet pytest -q -m "not network")
 fi
 
+# Spikes: each changed spike must build.
 if echo "$staged" | grep -q '^spikes/[^/]*/' && command -v dotnet >/dev/null 2>&1; then
     # only files inside a spike folder (spikes/<name>/...); files directly in spikes/ are shared settings
     for dir in $(echo "$staged" | grep '^spikes/[^/]*/' | cut -d/ -f2 | sort -u); do
@@ -38,8 +43,32 @@ if echo "$staged" | grep -q '^spikes/[^/]*/' && command -v dotnet >/dev/null 2>&
     done
 fi
 
-if echo "$staged" | grep -Eq '^(src|tests)/|^ITrade\.slnx$|^Directory\.(Build|Packages)\.props$|^global\.json$'     && command -v dotnet >/dev/null 2>&1; then
+# .NET solution: build (warnings are errors), code style, unit and architecture tests.
+# web/dist is copied into the Host's output, so a rebuilt interface is picked up by the build as well.
+if echo "$staged" | grep -Eq '^(src|tests)/|^ITrade\.slnx$|^Directory\.(Build|Packages)\.props$|^global\.json$|^\.editorconfig$' \
+    && command -v dotnet >/dev/null 2>&1; then
+    echo "pre-commit: .NET (build, format, unit and architecture tests)" >&2
     dotnet build ITrade.slnx --nologo -v q
+    if ! dotnet format ITrade.slnx --verify-no-changes --no-restore -v q; then
+        echo "pre-commit: C# formatting or style differs; run: dotnet format ITrade.slnx" >&2
+        exit 1
+    fi
+    dotnet test tests/ITrade.UnitTests --no-build --nologo -v q
+    dotnet test tests/ITrade.ArchitectureTests --no-build --nologo -v q
+fi
+
+# Web: generated API client is current, format, lint, types, unit tests.
+if echo "$staged" | grep -q '^web/'; then
+    if ! command -v npm >/dev/null 2>&1 || [ ! -d web/node_modules ]; then
+        echo "pre-commit: web/ changed but its tools are not installed; run: npm ci (in web/)" >&2
+        exit 1
+    fi
+    echo "pre-commit: web (API client, format, lint, types, tests)" >&2
+    (cd web && npm run --silent gen:api:check \
+        && npm run --silent format:check \
+        && npm run --silent lint \
+        && npm run --silent typecheck \
+        && npm test --silent)
 fi
 
 exit 0
