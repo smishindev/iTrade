@@ -30,6 +30,12 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
 
     public DbSet<FxRateRow> FxRates => Set<FxRateRow>();
 
+    public DbSet<ClosingPriceRow> ClosingPrices => Set<ClosingPriceRow>();
+
+    public DbSet<MarketSessionRow> MarketSessions => Set<MarketSessionRow>();
+
+    public DbSet<PriceImportRow> PriceImports => Set<PriceImportRow>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
@@ -179,6 +185,34 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.Property(r => r.Source).HasMaxLength(50);
             e.Property(r => r.Reason).HasMaxLength(FxRateStore.MaxReasonLength);
             e.Property(r => r.Rate).HasPrecision(12, 6);
+        });
+        modelBuilder.Entity<ClosingPriceRow>(e =>
+        {
+            e.ToTable("closing_prices", table =>
+            {
+                table.HasCheckConstraint("ck_closing_prices_close_is_positive", "close > 0");
+                table.HasCheckConstraint("ck_closing_prices_revision_is_not_negative", "revision >= 0");
+            });
+            e.HasKey(p => new { p.InstrumentId, p.Session, p.Revision });
+            e.Property(p => p.Source).HasMaxLength(50);
+            e.HasOne<InstrumentRow>().WithMany().HasForeignKey(p => p.InstrumentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(p => p.Session);
+        });
+        modelBuilder.Entity<MarketSessionRow>(e =>
+        {
+            e.ToTable("market_sessions");
+            e.HasKey(s => new { s.Calendar, s.Session });
+            e.Property(s => s.Calendar).HasMaxLength(10);
+            // "Was any exchange open that day?" - asked for every close that is stored (migration MarketSessions).
+            e.HasIndex(s => s.Session);
+        });
+        modelBuilder.Entity<PriceImportRow>(e =>
+        {
+            e.ToTable("price_imports", table => table.HasCheckConstraint(
+                "ck_price_imports_sha256_is_lower_case_hex", "sha256 ~ '^[0-9a-f]{64}$'"));
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Sha256).HasMaxLength(64);
+            e.HasIndex(i => i.ExportedAt);
         });
     }
 

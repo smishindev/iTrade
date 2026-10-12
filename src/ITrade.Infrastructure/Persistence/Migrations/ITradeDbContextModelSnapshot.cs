@@ -60,6 +60,55 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_events", (string)null);
                 });
 
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.ClosingPriceRow", b =>
+                {
+                    b.Property<Guid>("InstrumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instrument_id");
+
+                    b.Property<LocalDate>("Session")
+                        .HasColumnType("date")
+                        .HasColumnName("session");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<decimal>("Close")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("close");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<Instant>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("source");
+
+                    b.HasKey("InstrumentId", "Session", "Revision")
+                        .HasName("pk_closing_prices");
+
+                    b.HasIndex("Session")
+                        .HasDatabaseName("ix_closing_prices_session");
+
+                    b.ToTable("closing_prices", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_closing_prices_close_is_positive", "close > 0");
+
+                            t.HasCheckConstraint("ck_closing_prices_revision_is_not_negative", "revision >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.FormerTickerRow", b =>
                 {
                     b.Property<Guid>("InstrumentId")
@@ -269,6 +318,63 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.ToTable("job_runs", (string)null);
                 });
 
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.MarketSessionRow", b =>
+                {
+                    b.Property<string>("Calendar")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("calendar");
+
+                    b.Property<LocalDate>("Session")
+                        .HasColumnType("date")
+                        .HasColumnName("session");
+
+                    b.Property<Instant>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.HasKey("Calendar", "Session")
+                        .HasName("pk_market_sessions");
+
+                    b.HasIndex("Session")
+                        .HasDatabaseName("ix_market_sessions_session");
+
+                    b.ToTable("market_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.PriceImportRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Instant>("ExportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("exported_at");
+
+                    b.Property<Instant>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.HasKey("Id")
+                        .HasName("pk_price_imports");
+
+                    b.HasIndex("ExportedAt")
+                        .HasDatabaseName("ix_price_imports_exported_at");
+
+                    b.ToTable("price_imports", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_price_imports_sha256_is_lower_case_hex", "sha256 ~ '^[0-9a-f]{64}$'");
+                        });
+                });
+
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.Setting", b =>
                 {
                     b.Property<string>("Key")
@@ -425,6 +531,16 @@ namespace ITrade.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_transactions_source_is_known", "source IN ('Manual', 'Flex', 'ApiExecution')");
                         });
+                });
+
+            modelBuilder.Entity("ITrade.Infrastructure.Persistence.ClosingPriceRow", b =>
+                {
+                    b.HasOne("ITrade.Infrastructure.Persistence.InstrumentRow", null)
+                        .WithMany()
+                        .HasForeignKey("InstrumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_closing_prices_instruments_instrument_id");
                 });
 
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.FormerTickerRow", b =>
