@@ -1,4 +1,5 @@
 # Current project phase. ONLY THE OWNER EDITS THIS FILE, after `/gate-check` passes.
-# Claude Code hooks block edits here, and block broker / order-placement code while phase < 4.
-# Phases: 0 scope, 1 data, 2 backtester + costs, 3 research, 4 paper trading, 5 small live, 6 scale.
-phase = 2
+# Claude Code hooks block edits here; live IBKR ports stay blocked while phase < 6.
+# Phases (plan v4): 0 decisions, 1 validation spikes, 2 foundation, 3 accounting, 4 taxes,
+# 5 broker and plan (paper), 6 interface and pilot, 7 regular operation.
+phase = 3
