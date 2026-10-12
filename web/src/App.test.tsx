@@ -77,7 +77,9 @@ describe('not signed in', () => {
     installFakeServer({ signedIn: false })
     const app = renderApp('/taxes')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Sign in to iTrade' }),
+    ).toBeInTheDocument()
     expect(app.path()).toBe('/login')
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
   })
@@ -93,7 +95,9 @@ describe('not signed in', () => {
       .query({ queryKey: ['positions'], queryFn: () => getJson('/api/positions') })
       .catch(() => undefined)
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Sign in to iTrade' }),
+    ).toBeInTheDocument()
     expect(app.path()).toBe('/login')
   })
 })

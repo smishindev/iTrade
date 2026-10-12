@@ -2,10 +2,14 @@
 export class ApiError extends Error {
   readonly status: number
 
-  constructor(status: number, title: string) {
+  /** Seconds the server asks to wait (`Retry-After`), when it said so. */
+  readonly retryAfterSeconds: number | undefined
+
+  constructor(status: number, title: string, retryAfterSeconds?: number) {
     super(title)
     this.name = 'ApiError'
     this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -31,6 +35,16 @@ export async function problemTitle(response: Response): Promise<string> {
   return response.statusText || `HTTP ${String(response.status)}`
 }
 
+/** The error for an answer that is not a success. */
+export async function apiError(response: Response): Promise<ApiError> {
+  const wait = Number(response.headers.get('Retry-After'))
+  return new ApiError(
+    response.status,
+    await problemTitle(response),
+    Number.isFinite(wait) && wait > 0 ? wait : undefined,
+  )
+}
+
 /** GET a JSON document from the Host (same origin, with the session cookie). */
 export async function getJson(path: string, signal?: AbortSignal): Promise<unknown> {
   const response = await fetch(path, {
@@ -39,7 +53,7 @@ export async function getJson(path: string, signal?: AbortSignal): Promise<unkno
     ...(signal ? { signal } : {}),
   })
   if (!response.ok) {
-    throw new ApiError(response.status, await problemTitle(response))
+    throw await apiError(response)
   }
 
   return response.json()

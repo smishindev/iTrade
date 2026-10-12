@@ -1,6 +1,6 @@
 import createClient, { type Middleware } from 'openapi-fetch'
 import type { components, paths } from './generated/schema'
-import { ApiError, problemTitle } from './http'
+import { ApiError, apiError } from './http'
 
 export type Schemas = components['schemas']
 
@@ -26,7 +26,7 @@ const antiforgery: Middleware = {
 const errors: Middleware = {
   async onResponse({ response }) {
     if (!response.ok) {
-      throw new ApiError(response.status, await problemTitle(response.clone()))
+      throw await apiError(response.clone())
     }
 
     return response

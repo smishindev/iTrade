@@ -1,5 +1,6 @@
 import DarkModeOutlined from '@mui/icons-material/DarkModeOutlined'
 import LightModeOutlined from '@mui/icons-material/LightModeOutlined'
+import LogoutOutlined from '@mui/icons-material/LogoutOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
@@ -36,11 +37,13 @@ export interface ShellStatus {
 
 interface AppShellProps {
   status: ShellStatus
+  /** Shows the sign-out button when given. */
+  onSignOut?: (() => void) | undefined
   children: ReactNode
 }
 
 /** The frame of every screen: a header that never scrolls away, the menu of six screens, the content. */
-export function AppShell({ status, children }: AppShellProps) {
+export function AppShell({ status, onSignOut, children }: AppShellProps) {
   const theme = useTheme()
   const wide = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true })
   const { pathname } = useLocation()
@@ -99,6 +102,13 @@ export function AppShell({ status, children }: AppShellProps) {
           <StatusChip name="Account" value={status.account} />
           <StatusChip name="Reconciliation" value={status.reconciliation} />
           <ThemeToggle />
+          {onSignOut && (
+            <Tooltip title="Sign out">
+              <IconButton edge="end" aria-label="Sign out" onClick={onSignOut}>
+                <LogoutOutlined />
+              </IconButton>
+            </Tooltip>
+          )}
         </Toolbar>
       </AppBar>
 
@@ -170,7 +180,6 @@ function ThemeToggle() {
   return (
     <Tooltip title={label}>
       <IconButton
-        edge="end"
         aria-label={label}
         onClick={() => {
           setMode(next)
