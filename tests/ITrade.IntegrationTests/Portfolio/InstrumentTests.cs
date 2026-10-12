@@ -86,6 +86,28 @@ public sealed class InstrumentTests(PostgresFixture pg)
         Directory.Delete(dataDir, recursive: true);
     }
 
+    /// <summary>
+    /// `dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv` runs in the project
+    /// folder, not where the owner typed the command (found on 2026-10-12: the documented command failed).
+    /// </summary>
+    [Fact]
+    public void RelativePathIsFoundFromAFolderBelowTheOneItWasTypedIn()
+    {
+        var root = Directory.CreateTempSubdirectory("itrade-locate-").FullName;
+        var project = Directory.CreateDirectory(Path.Combine(root, "src", "ITrade.Host")).FullName;
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var file = Path.Combine(root, "config", "instruments.csv");
+        File.WriteAllText(file, "ticker,exchange,currency,name,isin,ibkr_con_id");
+        var relative = Path.Combine("config", "instruments.csv");
+
+        Assert.Equal(file, ImportInstrumentsCommand.Locate(relative, project));
+        Assert.Equal(file, ImportInstrumentsCommand.Locate(relative, root));
+        Assert.Equal(file, ImportInstrumentsCommand.Locate(file, project));
+        Assert.Equal(Path.Combine("config", "missing.csv"), ImportInstrumentsCommand.Locate(Path.Combine("config", "missing.csv"), project));
+
+        Directory.Delete(root, recursive: true);
+    }
+
     [Fact]
     public async Task InstrumentIsFoundUnderTheTickerItHadOnTheDate()
     {

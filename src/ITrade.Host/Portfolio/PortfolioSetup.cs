@@ -30,6 +30,7 @@ internal static class ImportInstrumentsCommand
     /// <param name="output">Where the summary goes.</param>
     public static async Task<int> RunAsync(WebApplication app, string path, TextWriter output)
     {
+        path = Locate(path, Directory.GetCurrentDirectory());
         IReadOnlyList<InstrumentListing> listings;
         try
         {
@@ -73,5 +74,30 @@ internal static class ImportInstrumentsCommand
         }
 
         return result.Conflicts.Count == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// A relative path is looked up in the starting folder and then in each folder above it. `dotnet run
+    /// --project src/ITrade.Host` starts the Host in the project folder, while the owner types paths as seen
+    /// from the repository root (config/instruments.csv). A path that is found nowhere is returned as given,
+    /// so the error names what was typed.
+    /// </summary>
+    public static string Locate(string path, string startDirectory)
+    {
+        if (Path.IsPathFullyQualified(path))
+        {
+            return path;
+        }
+
+        for (var folder = new DirectoryInfo(startDirectory); folder is not null; folder = folder.Parent)
+        {
+            var candidate = Path.Combine(folder.FullName, path);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return path;
     }
 }
