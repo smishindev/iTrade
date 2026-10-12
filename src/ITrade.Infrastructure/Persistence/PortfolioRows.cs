@@ -60,6 +60,12 @@ public sealed class TransactionRow
 {
     public required TransactionId Id { get; init; }
 
+    /// <summary>
+    /// The order of recording, numbered by the database. Entries of one trade date are read in this order —
+    /// the order of the statement — which is what first-in-first-out lot matching needs within a day.
+    /// </summary>
+    public long Sequence { get; init; }
+
     public required HoldingPlaceId HoldingPlaceId { get; init; }
 
     public TransactionKind Kind { get; init; }

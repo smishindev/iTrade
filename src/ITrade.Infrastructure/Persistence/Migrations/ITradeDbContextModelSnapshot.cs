@@ -302,6 +302,13 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("reverses");
 
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Sequence"));
+
                     b.Property<LocalDate>("SettlementDate")
                         .HasColumnType("date")
                         .HasColumnName("settlement_date");
@@ -325,6 +332,10 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                     b.HasIndex("Reverses")
                         .IsUnique()
                         .HasDatabaseName("ix_transactions_reverses");
+
+                    b.HasIndex("Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ix_transactions_sequence");
 
                     b.HasIndex("HoldingPlaceId", "TradeDate")
                         .HasDatabaseName("ix_transactions_holding_place_id_trade_date");
@@ -376,8 +387,8 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_transactions_transactions_related_to");
 
                     b.HasOne("ITrade.Infrastructure.Persistence.TransactionRow", null)
-                        .WithOne()
-                        .HasForeignKey("ITrade.Infrastructure.Persistence.TransactionRow", "Reverses")
+                        .WithMany()
+                        .HasForeignKey("Reverses")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_transactions_transactions_reverses");
                 });

@@ -103,6 +103,8 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
                 table.HasCheckConstraint("ck_transactions_changes_something", "quantity_change <> 0 OR cash_amount <> 0");
             });
             e.HasKey(t => t.Id);
+            e.Property(t => t.Sequence).UseIdentityAlwaysColumn();
+            e.HasIndex(t => t.Sequence).IsUnique();
             e.Property(t => t.Kind).HasConversion<string>().HasMaxLength(20);
             e.Property(t => t.Source).HasConversion<string>().HasMaxLength(20);
             e.Property(t => t.ExternalId).HasMaxLength(Transaction.MaxExternalIdLength);
@@ -111,7 +113,10 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
             e.HasOne<HoldingPlaceRow>().WithMany().HasForeignKey(t => t.HoldingPlaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<InstrumentRow>().WithMany().HasForeignKey(t => t.InstrumentId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<TransactionRow>().WithMany().HasForeignKey(t => t.RelatedTo).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<TransactionRow>().WithOne().HasForeignKey<TransactionRow>(t => t.Reverses).OnDelete(DeleteBehavior.Restrict);
+            // Declared as many-to-one on purpose, with the unique index below doing the "at most one reversal".
+            // As a one-to-one relationship EF Core would "move" the reversal: adding a second one made it try to
+            // null the first one's reference - an UPDATE of the ledger (stopped only by the append-only trigger).
+            e.HasOne<TransactionRow>().WithMany().HasForeignKey(t => t.Reverses).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(t => new { t.HoldingPlaceId, t.TradeDate });
             e.HasIndex(t => new { t.InstrumentId, t.TradeDate });
             // What a repeated import recognises an entry by; entries typed in by hand have no external id.

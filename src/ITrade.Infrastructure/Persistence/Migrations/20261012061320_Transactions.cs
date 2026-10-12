@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using NodaTime;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -17,6 +18,8 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
+                    sequence = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityAlwaysColumn),
                     holding_place_id = table.Column<Guid>(type: "uuid", nullable: false),
                     kind = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     trade_date = table.Column<LocalDate>(type: "date", nullable: false),
@@ -89,6 +92,12 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                 name: "ix_transactions_reverses",
                 table: "transactions",
                 column: "reverses",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_transactions_sequence",
+                table: "transactions",
+                column: "sequence",
                 unique: true);
 
             // P3.1.02: the ledger is append-only, enforced by the database itself (also for the owner role).
