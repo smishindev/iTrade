@@ -71,4 +71,6 @@ Work goes task by task through `docs/roadmap/` (rules: `docs/roadmap/README.md`,
 `/next-task` · `/task <ID>` · `/roadmap-status`. Commit messages start with the task ID.
 `/gate-check [n]` (gate-keeper) · `/ingest [tickers]` (data-auditor) · `/cost <usd> <price> [ticker]` ·
 `/research-log <text>` · `/review-research` (quant-reviewer).
-Skills: `research-integrity` (strategy/backtest), `data-pipeline`, `cost-model`, `ibkr-api` (anything touching IBKR).
+Agent `execution-reviewer`: after any change to code that proposes, approves, sends or reconciles orders, before it is committed.
+Skills: `research-integrity` (strategy/backtest), `data-pipeline`, `cost-model`, `ibkr-api` (anything touching IBKR),
+`dotnet-conventions` (any C# in `src/` or `tests/`).
