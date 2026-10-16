@@ -6,7 +6,7 @@ picking the project back up. Task-level detail — every card with its dated not
 
 **Last updated:** 16 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
-**Roadmap:** phases 0–2: 105 of 106 tasks (the open one is the owner's: IBKR Mobile);
+**Roadmap:** phases 0–2: all 106 tasks;
 phase 3: 9 of 12 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
@@ -233,7 +233,6 @@ Small steps, one task at a time (`/next-task`):
 
 ## Waiting on the owner
 
-- **Install IBKR Mobile** for two-factor sign-in (P0.2.03).
 - **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is
