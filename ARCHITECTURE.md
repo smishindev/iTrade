@@ -54,8 +54,8 @@ Settings come from `appsettings.json`, `appsettings.Paper.json`, user-secrets (n
 (only `Paper` is accepted before the pilot), `Port`, `DataDir`, `HeartbeatSeconds`,
 `JobsTickSeconds`, `UpdateFxRates`.
 
-**Secrets live in `dotnet user-secrets`** of `src/ITrade.Host`: `ConnectionStrings:ITrade` today;
-`Flex:Token` and `Flex:QueryId` when the Flex import arrives. The database password is also in
+**Secrets live in `dotnet user-secrets`** of `src/ITrade.Host`: `ConnectionStrings:ITrade`, and
+`Flex:Token` and `Flex:QueryId` for `fetch-statement` (typed in by the owner). The database password is also in
 `deploy/.env` (git-ignored; Claude neither reads nor writes it). Nothing secret is in the repository,
 and hooks reject credential literals and real IBKR account numbers (placeholders: `DU0000000`).
 
@@ -72,8 +72,8 @@ src/ITrade.Application     use cases and the interfaces of what they need: daily
                            InstrumentCatalogue, TransactionLedger, PortfolioBooksReader, FxRates
 src/ITrade.Infrastructure  EF Core / PostgreSQL (context, rows, stores, migrations), instance lock,
                            Bank of Israel rates client, instrument catalogue file, weekday calendar
-src/ITrade.Broker.IBKR     the only place IBKR API code may live - empty until the Flex import (phase 3)
-                           and the adapter (phase 5)
+src/ITrade.Broker.IBKR     everything about IBKR: the Flex statement (reader, ledger entries, import, Web
+                           Service client - Flex/); the API adapter arrives in phase 5, the only place for IBApi
 src/ITrade.Host            the executable: HTTP API, sign-in, events hub, background services, commands,
                            and the built interface as static files
 tests/ITrade.UnitTests            Domain, Application, parsers - no I/O
@@ -126,7 +126,9 @@ Every changing request needs the antiforgery header `X-XSRF-TOKEN`. Five failure
 
 **Commands** of the same executable (`dotnet run --project src/ITrade.Host -- <command>`):
 `check [--offline]`, `set-password`, `import-instruments <file>`, `update-fx-rates`,
-`import-prices [file]`, `retry-job <job> <date>`. A command builds the Host but does not start it.
+`import-prices [file]`, `fetch-statement`, `import-statement <file>`, `reverse-entry <id> "<why>"`,
+`retry-job <job> <date>`. A command
+builds the Host but does not start it.
 
 **Tests run the Host in-process as "Testing".** That hid two broken real launches in phase 2, so
 `check` exists, CI runs it, and anything that depends on the difference is run for real before it is
@@ -163,6 +165,11 @@ repeated as CHECK constraints and triggers, each tested with a planted violation
 Host at start. One that is on `origin/main` is frozen — a schema change is a new migration, in its own
 commit. `dotnet ef database update|drop` is not used.
 
+**Files in the data folder** the Host writes: `flex/flex-<generated>.xml` (statements `fetch-statement`
+downloaded; the owner puts the ones from the portal there too) and `statements/flex/<last day>-<sha256[..12]>.xml`
+(every statement `import-statement` recorded, byte for byte, named by its SHA-256 — the audit event
+`statement.imported` carries the whole hash). Both hold the real account number: they never leave the data folder.
+
 **The working database** is the owner's. Claude reads it with `SELECT` at most; changes go through
 the Host. Backups are `deploy/backup.ps1` (manual until phase 7), verified by restoring into a
 temporary database.
@@ -172,6 +179,14 @@ temporary database.
 ## Accounting
 
 ```
+Flex Web Service ──► fetch-statement ──► <data>/flex/*.xml ◄── or downloaded in the portal
+                                               │
+                                               ▼ import-statement
+FlexStatementFile.Read ──► FlexLedgerEntries.From ──► FlexImport.PrepareAsync ──► RecordAsync
+                           (an entry per execution;     (paper or another account? the ledger's cash
+                            refuses what it has not      before the first day = IBKR's; ledger + new
+                            seen; a day's cash = IBKR's)  entries after the last day = IBKR's cash and positions)
+                                               │
 statement / manual entry ──► TransactionLedger.RecordAsync ──► transactions (append-only)
                                       ▲ ReverseAsync                 │
                                                                      ▼
@@ -199,6 +214,15 @@ PortfolioPerformance.OverAsync(first, last) = the ledger's deposits and withdraw
 - **Ledger.** One entry is one signed effect on shares and/or cash at one holding place. A line of a
   source is known by (place, source, external id, revision) and recorded once however often a
   statement is imported; a line that now says something else is reported, not applied.
+- **Statements.** IBKR's Activity Flex statement (XML) is the source of the ledger: every execution is
+  an entry with its commission linked to it, a conversion two linked legs, cash transactions by their
+  type. What has not been seen on a real statement yet (a cancelled trade, a corporate action, a
+  transfer, a dividend that is not ordinary, another kind of cash) stops the whole statement. So does a
+  day whose cash, currency by currency, is not what IBKR's own Cash Report says, and a statement that does
+  not agree with the ledger at its ends: the ledger's cash the evening before its first day must be the
+  cash IBKR starts with, and after its last day the ledger with the new entries must hold IBKR's cash and
+  positions. A gap between downloads, an unread line, shares moved without cash all show there. A paper
+  account's statement is never recorded.
 - **Books.** Derived every time, so they cannot drift from the ledger. Lots are matched FIFO — an
   assumption, a parameter, named in the result. What the ledger cannot mean is refused.
 - **Rates.** A stored rate is never overwritten. A change by the bank, or a new rate that moves
@@ -241,8 +265,11 @@ real faults the date is blocked and holds back later ones until the owner releas
 One job so far: `fx-rates`, due 11:00 New York. The session calendar is `WeekdayCalendar` — a
 stand-in without holidays, not for money decisions.
 
-**Outgoing calls.** Exactly one: the Bank of Israel's public rates service, read without a key,
-sending nothing about the owner. Test Hosts run with `ITrade:UpdateFxRates=false`.
+**Outgoing calls.** Two. The Bank of Israel's public rates service, read by the daily job without a
+key, sending nothing about the owner; test Hosts run with `ITrade:UpdateFxRates=false`. And IBKR's Flex
+Web Service (`ndcdyn.interactivebrokers.com`, then the address it names on an IBKR host), only when the
+owner runs `fetch-statement`: the token goes in the address and nowhere else, through a client without
+logging. Tests answer with a stand-in.
 
 ---
 

@@ -9,12 +9,13 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03, P3.3.01, P3.3.02, P3.4.01, P3.4.02, P3.4.04)
+## What exists (P3.1.01 – P3.1.03, P3.2.02, P3.3.01, P3.3.02, P3.4.01, P3.4.02, P3.4.04)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
 | Where it is held | `HoldingPlace` (broker, study fund, other; read automatically or by hand). In use: IBKR only — the owner decided on 2026-10-12 not to keep keren hishtalmut in the platform; the `StudyFund` kind stays in the code unused | `holding_places` |
 | What happened | `Transaction`; `TransactionLedger` (`RecordAsync`, `ReverseAsync`) | `transactions` |
+| What the broker says happened | `FlexStatementFile.Read` → `FlexLedgerEntries.From` → `FlexImport` (`ITrade.Broker.IBKR/Flex`); `FlexWebService`; commands `fetch-statement`, `import-statement` | `transactions` (through the ledger), `audit_events` (`statement.imported`) |
 | Exchange rates | `FxRate`, `AppliedFxRate`; `FxRates` (`UpdateAsync`, `OnAsync`), job `fx-rates`; source `BankOfIsraelRates` | `fx_rates` |
 | Closing prices | `ClosingPrice`, `PriceOnDate`; `ClosingPrices` (`ImportAsync`, `OnAsync`); file `ClosingPricesFile` | `closing_prices`, `market_sessions`, `price_imports` |
 | What a fund paid and how it split | `FundEvent` (dividend per share as paid, split ratio); `ClosingPrices.EventsAsync` | `fund_events` |
@@ -64,8 +65,12 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   a line the ledger holds with other facts (the report names every differing fact and the stored
   entry); a line whose recording was reversed while the source still states the same; a line that
   hangs on either of those, or on a reversed entry. Nothing is ever overwritten.
-- **A corrected line**: the owner reverses the old recording, the next import records the line again as
+- **A corrected line**: the owner reverses the old recording (`reverse-entry <id> "<why>"` — the owner's step,
+  never Claude's), the next import records the line again as
   the next `ExternalRevision` (0, 1, …), and what hung on it comes back with it.
+- **`PlanAsync` is `RecordAsync` without the writing**: the same decisions (what is new, already there, left out
+  and why, the next revision), nothing stored. An import holds the plan against its source before recording —
+  never its own guess of what the ledger would do.
 - **A broken batch throws and records nothing**: a link to nowhere, a second level of links, a link
   across holding places, a reversal that is not the opposite of its target, a second reversal.
 - **The database repeats these rules** (migration `LedgerRules`: CHECK constraints for kinds, signs,
@@ -80,6 +85,57 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   (phase 5) — do not record both as two trades.
 - All writes go through `TransactionLedger`. Nothing else inserts into `transactions`, and nothing —
   no code, no migration, no SQL by hand — changes or removes a row.
+
+## The broker's statement (`FlexImport`, P3.2.02)
+- **The Activity Flex statement is the source of the IBKR ledger.** Query `iTrade` (card of P3.2.01): XML, last
+  30 days, one `FlexStatement` per day, dates `yyyyMMdd`, times `yyyyMMdd;HHmmss` **New York time without a zone**.
+  Overlapping downloads are normal; the ledger knows a line by its `transactionID` and records it once.
+- **One entry per execution**, external id = `transactionID`; its commission (`ibCommission`, six decimals) a Fee
+  linked to it, `<id>/commission`. One order is many executions (100 VT came as 18); the first carries IBKR's
+  minimum commission, so the first lot carries it — in IBKR's own lots as here. Executions are recorded in the
+  order of their `dateTime` (then `transactionID`), not of the file: a sale has to follow the purchase it sells.
+- **A conversion** (`assetCategory="CASH"`, `symbol="USD.ILS"`, base currency first) is two FxConversion legs:
+  the base currency by `quantity`, `<id>`; the other by `proceeds`, `<id>/<currency>`, linked to the first. Its
+  commission is in `ibCommissionCurrency` (USD while the row is in ILS), linked to the first leg. Settles T+2.
+- **Cash transactions** (`levelOfDetail="DETAIL"`; the SUMMARY rows have no id and are skipped):
+  Deposits/Withdrawals by sign (the description is left out: it can carry bank details); Dividends only when
+  described "(Ordinary Dividend)" — a return of capital or a capital gain comes as "Dividends" too and means
+  something else for cost and tax; Withholding Tax linked by IBKR's `actionID` to the one dividend of that event in
+  the same statement; Broker Interest Received/Paid as Interest; Other Fees as Fee. A row must be booked on the day
+  it is dated (`reportDate` = date of `dateTime`, inside its period, `settleDate` not earlier). Order within a
+  day: deposits and withdrawals, trades by execution time, dividends, the rest.
+- **Not guessed — the whole statement is refused and nothing recorded** when it holds what has not been seen on
+  a real statement yet: a trade that is not a plain `ExchTrade` or has notes other than none or `P` (TradeCancel,
+  BookTrade, `Ca`, `Co`, …), Trades not at the level of executions, another asset category, a row of
+  CorporateActions, Transfers, TransactionTaxes, SalesTaxes and the like, a dividend that is not ordinary, a tax
+  without its dividend, a cash row whose dates differ, another kind of cash transaction, a currency the platform
+  has no minor units for, a contract that is not in the catalogue (by `conid`, ISIN checked), shares × price off
+  the proceeds by more than a cent, proceeds + commission ≠ net cash, a commission in another currency than its
+  share trade. Splits, broker cancellations and corrections are among these on purpose (owner's rule: formats are
+  not guessed) — the first real one is how the import learns it: keep the file, test from it (anonymised), then
+  extend. A period that lacks Trades, CashTransactions, CashReport, OpenPositions or any section that is not read
+  is refused too: a query that lost CorporateActions would let a split pass.
+- **The cash of a day must be IBKR's own** where IBKR reports it per currency: the entries' cash equals
+  `CashReport` endingCash − startingCash. Which days carry rows per currency depends on the download, not on the
+  account; a day with only the `BASE_SUMMARY` row (which translates other currencies) is not checked alone.
+- **The statement must agree with the ledger, at both ends.** The ledger's cash per currency on the evening
+  before the first day equals IBKR's startingCash of that day — a gap between two downloads, or a first statement
+  without the history before it, shows here; after the last day, the ledger with the new entries holds IBKR's
+  endingCash of every currency and its `OpenPositions` of every contract — a missed line, a split or a transfer
+  that moved shares without cash shows here. The new entries are what `TransactionLedger.PlanAsync` would add; a
+  line it would leave out is named next to the difference it makes. After recording, the ledger is read again
+  and held against the same figures. `BASE_SUMMARY` stands in only when the books hold the base currency alone. An older statement imported after a newer one adds nothing and agrees too (later entries are not in the
+  books of its dates).
+- **Accounts.** A paper or demo account (`D…`) is never recorded: its money is not the owner's and the ledger
+  keeps every entry. One account per statement, and the same one as before (a SHA-256 key of the whole number in
+  the audit event of the previous import; shown masked, `U…123`). The holding place `IBKR` is created by the first import that records something.
+- **What is kept**: the imported file, byte for byte, as `<data>/statements/flex/<last day>-<sha256[..12]>.xml`,
+  written before anything is recorded, and an audit event `statement.imported` (kept name, SHA-256, account key and
+  label, period, counts) — not the owner's file name, which may hold the account number. Fixtures in the
+  repository are anonymised with `python -I tools/anonymise_flex.py <statement> <fixture> <days>` (`U0000000`,
+  no name, e-mail, country; it writes the committed fixture byte for byte).
+- **Not read**: MTD/YTD fields (they are of the day of the download), `twr` (in percent), accruals, `StmtFunds`
+  and the positions' prices and costs (they are for the reconciliation, P3.4.03).
 
 ## The books (`PortfolioBooks`, P3.1.03)
 - **Derived, not stored as truth.** Lots, positions and cash are computed from the ledger by a pure

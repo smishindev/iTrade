@@ -68,7 +68,18 @@ settings) until the owner moves the project to phase 6, the pilot phase. Changes
 
 ## Reports
 Flex Web Service (token + query id, kept in user-secrets, never in files) → Activity Statement XML,
-end-of-day. Use for reconciliation and tax data, not for real-time state.
+end-of-day. Use for reconciliation and tax data, not for real-time state. Built in P3.2.02
+(`src/ITrade.Broker.IBKR/Flex`, confirmed against IBKR on 2026-10-16):
+- v3: `GET https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest?t=<token>&q=<query>&v=3`
+  → `<FlexStatementResponse><Status>Success</Status><ReferenceCode>…</ReferenceCode><Url>…GetStatement</Url>`;
+  then `GET <Url>?t=<token>&q=<reference>&v=3` → the statement, or `Status Warn, ErrorCode 1019` (being generated)
+  — ask again after a pause. 1009 busy and 1018 too many requests are retried too; 1012 token expired, 1015
+  invalid token, 1014/1020 query problems are not. A `User-Agent` header is required. At most 1 request a second
+  and 10 a minute per token.
+- The token is in the address: a plain `HttpClient` without logging handlers, no address in any message, and the
+  `Url` of the answer is followed only to an `https` IBKR host.
+- A token belongs to the login it was made under: the paper login's token downloads the paper account. The
+  "last 30 days" end with yesterday in New York.
 
 ## Paper ≠ live
 The paper simulator fills from top-of-book and simulates stops and complex orders; partial-fill

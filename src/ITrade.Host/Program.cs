@@ -29,6 +29,36 @@ if (args is [ImportInstrumentsCommand.Name, ..])
     return await ImportInstrumentsCommand.RunAsync(cli, file, Console.Out);
 }
 
+if (args is [ImportStatementCommand.Name, ..])
+{
+    if (args is not [_, var statement, .. var statementArgs] || statement.StartsWith('-'))
+    {
+        await Console.Error.WriteLineAsync($"Usage: {ImportStatementCommand.Name} <file>, e.g. D:\\ITradeData\\flex\\iTrade.xml");
+        return 2;
+    }
+
+    await using var cli = ITradeHost.Build(statementArgs);
+    return await ImportStatementCommand.RunAsync(cli, statement, Console.Out);
+}
+
+if (args is [ReverseEntryCommand.Name, ..])
+{
+    if (args is not [_, var entry, var reason, .. var reverseArgs] || entry.StartsWith('-') || reason.StartsWith('-'))
+    {
+        await Console.Error.WriteLineAsync($"Usage: {ReverseEntryCommand.Name} <entry id> \"<why>\"");
+        return 2;
+    }
+
+    await using var cli = ITradeHost.Build(reverseArgs);
+    return await ReverseEntryCommand.RunAsync(cli, entry, reason, Console.Out);
+}
+
+if (args is [FetchStatementCommand.Name, .. var fetchArgs])
+{
+    await using var cli = ITradeHost.Build(fetchArgs);
+    return await FetchStatementCommand.RunAsync(cli, Console.Out);
+}
+
 if (args is [UpdateFxRatesCommand.Name, .. var fxArgs])
 {
     var (accepted, hostArgs) = UpdateFxRatesCommand.Parse(fxArgs);

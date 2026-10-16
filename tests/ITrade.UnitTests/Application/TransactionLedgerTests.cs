@@ -54,6 +54,28 @@ public sealed class TransactionLedgerTests
     private decimal Usd() => _store.Rows.Where(t => t.Cash.Currency == Currency.Usd).Sum(t => t.Cash.Amount);
 
     [Fact]
+    public async Task APlanDecidesAsRecordingWouldAndRecordsNothing()
+    {
+        // P3.2.02: an import holds the plan against the broker first. Here the corrected line after a reversal:
+        // the plan has the next revision with its commission, linked to the corrected trade, and the ledger is
+        // as it was until the entries are recorded.
+        await RecordAsync(Statement());
+        await ReverseAsync(Stored("T-1"), "the broker corrected the amount");
+        var rows = _store.Rows.Count;
+        var buy = Buy(cash: -1203.60m);
+        Transaction[] corrected = [buy, FeeOf(buy), Deposit(1000m, "D-7")];
+
+        var plan = await _ledger.PlanAsync(corrected, CancellationToken.None);
+
+        Assert.Equal(rows, _store.Rows.Count);
+        Assert.Equal((2, 1, 0), (plan.ToAdd.Count, plan.AlreadyRecorded, plan.NotRecorded.Count));
+        Assert.Equal((1, 1, (TransactionId?)plan.ToAdd[0].Id), (plan.ToAdd[0].ExternalRevision, plan.ToAdd[1].ExternalRevision, plan.ToAdd[1].RelatedTo));
+        var recorded = await RecordAsync(corrected);
+        Assert.Equal((plan.ToAdd.Count, plan.AlreadyRecorded), (recorded.Added, recorded.AlreadyRecorded));
+        Assert.Equal(plan.ToAdd.Select(e => e.Id), _store.Rows.Skip(rows).Select(e => e.Id));
+    }
+
+    [Fact]
     public async Task ImportingTheSameStatementAgainRecordsNothing()
     {
         var first = await RecordAsync(Statement());

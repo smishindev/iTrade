@@ -82,6 +82,31 @@ public sealed partial class ArchitectureRules
     }
 
     [Fact]
+    public void OnlyTheTransactionLedgerWritesTheLedger()
+    {
+        // P3.2.02: an import, a command or a job records through TransactionLedger, which checks every entry
+        // against the ledger first. Calls from inside an async method sit in a nested state machine type, hence
+        // the prefix. The callers found must include the ledger itself, or the rule would see nothing at all.
+        var callers = Architecture.Types
+            .SelectMany(t => t.Dependencies.OfType<MethodCallDependency>()
+                .Select(d => (Source: t.FullName, Member: d.TargetMember.FullName)))
+            .Where(d => d.Member.Contains("ITrade.Application.Portfolio.ITransactionStore::AddAsync(", StringComparison.Ordinal))
+            .Select(d => d.Source)
+            .Distinct()
+            .ToList();
+        Assert.Contains(callers, c => c.StartsWith("ITrade.Application.Portfolio.TransactionLedger", StringComparison.Ordinal));
+        var bad = callers.Where(c => !c.StartsWith("ITrade.Application.Portfolio.TransactionLedger", StringComparison.Ordinal)).ToList();
+        Assert.True(bad.Count == 0, "only TransactionLedger may add to the ledger: " + string.Join(", ", bad));
+
+        // And nothing goes around the store to the table: only the store and the database context know its rows.
+        var rows = Violations(
+                Architecture.Types.Where(t => !Regex.IsMatch(
+                    t.FullName, @"^ITrade\.Infrastructure\.Persistence\.(TransactionStore|ITradeDbContext|TransactionRow)\b")),
+                new Regex(@"^ITrade\.Infrastructure\.Persistence\.TransactionRow$"));
+        Assert.True(rows.Count == 0, string.Join(Environment.NewLine, rows));
+    }
+
+    [Fact]
     public void OnlyTheExecutionServiceSendsOrders()
     {
         // IOrderSender arrives with the broker work (P5.2.04); the rule is in force from the start.

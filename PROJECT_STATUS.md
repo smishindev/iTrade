@@ -7,13 +7,14 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 16 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: all 106 tasks;
-phase 3: 9 of 12 (one more was dropped by the owner).
+phase 3: 10 of 12 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993 — but they are empty: no
-statement has been imported yet. The broker account is funded (16 October), a paper account and a
-Flex query exist, and three statements of the paper account were read by hand; the import is the
-next task. No real money has moved through the platform. Mode is PAPER.
+statement of the real account has been imported yet. The import of IBKR's statement exists and was
+proven on three statements of the paper account (16 October) — the paper account itself is never
+recorded; the real account needs its own Flex query and token. No real money has moved through the
+platform. Mode is PAPER.
 
 ## In one paragraph
 
@@ -27,9 +28,9 @@ platform becomes an accounting and execution-with-approval tool. Phase 2 built t
 .NET 10 Host on loopback HTTPS with sign-in, PostgreSQL 18, daily jobs with catch-up, a React shell,
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
 ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded, the
-value of the portfolio on a date, its returns and their comparison with the index, and the broker's
-statement format, read on three statements of the paper account. Left of phase 3: the statement
-import and the reconciliation.
+value of the portfolio on a date, its returns and their comparison with the index, and the import of
+the broker's statement, held against IBKR's own figures. Left of phase 3: the reconciliation and the
+gate check.
 
 ---
 
@@ -41,7 +42,7 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 301 unit, 5 architecture, 109 integration on a real PostgreSQL 18 (Testcontainers) |
+| .NET tests | ✅ | 373 unit, 6 architecture, 123 integration on a real PostgreSQL 18 (Testcontainers) — 16 October |
 | Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
@@ -63,7 +64,7 @@ read in the code.
 | Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
-| Statement (Flex) import | ❌ not built | the format is known from three paper-account statements (14–16 October): buys, commissions, a currency conversion, a deposit, interest; the token and query id are in the Host's user-secrets |
+| Statement (Flex) import | ✅ paper statements only | `fetch-statement` downloaded a statement with the owner's token; three real paper-account statements (anonymised copies) imported one after another and again into a throw-away database, each agreeing with IBKR at its start and end (cash per currency, positions); the working database refused the paper statement, as it must. 14 integration and 73 unit tests; three rounds of `accounting-reviewer`. Not yet seen: a dividend, a sale, a split, a cancellation — each is refused until seen |
 | Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
 | Comparison with the index | ✅ tests only | the same contributions put into the index fund (VT) at each day's close, its dividends put back after withholding; a portfolio that holds only the index matches it; a split of the index is no fall. 60 deliberate breakages caught. No real flows yet |
 | Dividends and splits of the funds | ✅ | 2,538 events of 28 funds in the working database (2,524 dividends, 14 splits; one dividend the vendor lacks comes from the recorded corrections); with them one share reproduces the vendor's total-return series within 0.005% a year over up to 33 years |
@@ -160,6 +161,17 @@ more after withholding; the result is measured by the same two returns. The fund
 index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
 ex-date - and says so.
 
+### 17. The statement import refuses what it has not seen and agrees with IBKR or records nothing (16 October)
+Every execution is an entry (as IBKR keeps its lots), a conversion two linked legs. A cancelled or
+corrected trade, a corporate action, a transfer, a distribution that is not an ordinary dividend, a tax
+without its dividend — formats never seen on a real statement — stop the whole statement instead of
+being guessed into a ledger that keeps every entry. Before recording, the ledger's cash on the evening
+before the statement must be IBKR's opening cash, and the ledger with what it would add must hold
+IBKR's closing cash and positions; after recording the same is checked on what was written. A paper
+account's statement never enters the books. The reviewer's three rounds found a gap between downloads
+that would have gone unnoticed, a split that would have passed if the query lost a section, and a check
+that would have blocked every import after the owner's first reversal; all fixed before the commit.
+
 ### 16. The statement format is read before the import is written (12–16 October)
 Flex queries live in a part of the IBKR portal that appears only after the first deposit, so the
 import waited for the account to be funded. Then the owner bought on the paper account and
@@ -176,9 +188,10 @@ Notes on the card of P3.2.01.
 Ordered roughly by how much they would hurt.
 
 1. **Nothing here was checked against the broker's books.** The ledger and the lots are proven on
-   hand-made examples only. The statements read so far showed ids on every line and six decimals
-   on commissions; a dividend with withholding, a sale, a split, a cancelled trade and cash in lieu
-   have not been seen yet (cards of P3.2.01 and P3.2.02).
+   hand-made examples and paper-account statements. A dividend with withholding, a sale, a split, a
+   cancelled or corrected trade, interest booked on another day than it is dated have not been seen:
+   the import refuses each of them until it has (cards of P3.2.01 and P3.2.02). The first such
+   statement stops the imports until the import is taught from it.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
    applies to a trade. The formula for the real gain on a dollar security is not chosen yet. Gate G4
    cannot be passed as written (decision 9).
@@ -221,6 +234,13 @@ Ordered roughly by how much they would hurt.
     it cannot be withdrawn yet.
 19. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
+20. **The Host runs on ASP.NET Core 10.0.10**, older than the fix of a SignalR advisory of 16 October
+    (GHSA-334f-vvp4-7g6p; the test package was raised to 10.0.13). The owner updates the .NET 10 SDK.
+21. **IBKR leaves the Cash Report's rows per currency out of some days**, differently from download to
+    download. A day without them is not checked alone; a first or last day without them, once the
+    account holds two currencies, refuses the statement - download it again.
+22. **Two imports run at the same moment** are kept apart only by the ledger's unique keys; what one
+    records may differ from what it checked, and the check after recording then says so.
 
 ---
 
@@ -228,11 +248,15 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.2.02** (import of the Flex statement) → **P3.4.03** (reconciliation with the broker) →
-   **P3.G.01** (gate check).
+1. **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
+2. With the owner: a Flex query on the **real** account (the same settings as `iTrade`) and its own
+   token, then the first real `fetch-statement` / `import-statement`.
 
 ## Waiting on the owner
 
+- **Create the Flex query and token on the real account** (the paper login's token downloads the
+  paper account, which is never recorded); **update the .NET 10 SDK** (runtime 10.0.10 predates a
+  SignalR fix).
 - **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is

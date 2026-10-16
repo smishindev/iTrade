@@ -48,8 +48,12 @@ ingest, statistics. **Python never trades.**
   daily job `fx-rates` does; needs the internet; `--accept-changes <code> "<why>"` is the owner's step when the bank
   changed a stored rate — never run it for the owner) · `-- import-prices` loads the closing prices the Python
   pipeline exported (`itrade ingest --universe etf_pullback_v1` — the catalogue's funds — or `itrade export-closes`;
-  `--accept-changes <code>` again is the owner's) · `-- retry-job <job> <yyyy-MM-dd>` releases a daily job that `check`
-  shows as blocked.
+  `--accept-changes <code>` again is the owner's) · `-- fetch-statement` downloads the IBKR Flex statement into
+  `<data>/flex` (token and query id in user-secrets, typed in by the owner) · `-- import-statement "<file>"` records it
+  in the ledger (repeatable; refuses a paper account, anything not seen on a real statement yet, and a day whose cash
+  differs from IBKR's Cash Report — and then records nothing) · `-- reverse-entry <id> "<why>"` cancels a ledger entry
+  by its exact opposite (the owner's step when IBKR restated a line — never run it for the owner) ·
+  `-- retry-job <job> <yyyy-MM-dd>` releases a daily job that `check` shows as blocked.
 - Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·
   `.\deploy\restore.ps1 -File <dump> -Verify` (restores into a temporary database and removes it). Restore never
   overwrites an existing database; switching the Host to a restored one is the owner's step.
@@ -96,7 +100,10 @@ ingest, statistics. **Python never trades.**
   a recipe, a gotcha that cost time), `README.md` (setup, everyday commands). A command written there was run
   as written.
 - Tests must not need the network (mark exceptions `@pytest.mark.network`). The Host calls out only to the Bank of
-  Israel's public rates service; test Hosts run with `ITrade:UpdateFxRates=false` and bring a stand-in source.
+  Israel's public rates service and, when the owner runs `fetch-statement`, to IBKR's Flex Web Service; test Hosts run
+  with `ITrade:UpdateFxRates=false` and bring a stand-in source, and the Flex tests a stand-in IBKR.
+- A paper account's statement never goes into the working ledger; Flex fixtures in the repository are anonymised
+  (`U0000000`, no name, e-mail or country).
 - Data files are never edited by hand; fix code and re-ingest.
 - Fee and tax numbers are assumptions: when changing them, add source + date in a comment.
 - Do not rewrite text files with Windows PowerShell `Get-Content`/`Set-Content` (it corrupts UTF-8); use Edit or Python.

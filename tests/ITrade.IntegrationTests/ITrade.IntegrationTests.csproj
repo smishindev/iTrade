@@ -26,4 +26,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The anonymised Flex statement of the unit tests (P3.2.02), imported here through the real Host. -->
+    <None Include="..\ITrade.UnitTests\Fixtures\flex-statement.xml" Link="Fixtures\flex-statement.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

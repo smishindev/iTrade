@@ -31,6 +31,9 @@ dotnet run --project src/ITrade.Host -- set-password
 dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv
 dotnet run --project src/ITrade.Host -- update-fx-rates
 dotnet run --project src/ITrade.Host -- import-prices        # after: uv run --directory python itrade ingest --universe etf_pullback_v1
+dotnet run --project src/ITrade.Host -- fetch-statement      # IBKR's Flex statement into <data>/flex (token in user-secrets)
+dotnet run --project src/ITrade.Host -- import-statement "D:\ITradeData\flex\flex-20261016-101638.xml"   # record it; again adds nothing
+dotnet run --project src/ITrade.Host -- reverse-entry <entry id> "<why>"   # the owner's step: cancel an entry IBKR restated, then import again
 dotnet run --project src/ITrade.Host -- retry-job fx-rates 2026-10-12
 
 # interface (in web/, Node 24)
@@ -185,6 +188,17 @@ reported and left alone; a ticker change is a rename with its date.
 | The job "succeeds" but the rate of today is missing | The bank publishes in the afternoon, Israel time. The figure is marked provisional until it arrives |
 | `update-fx-rates` says the bank now states another rate | Nothing was stored. After checking the bank's page, run the line it prints (`--accept-changes <code> "<why>"`) — the owner's step |
 | A daily job is `blocked` in `check` | Five real faults. Deal with the cause it names, then `retry-job <job> <date>` |
+| A Flex statement downloaded after midnight in Israel lacks the day's trades | IBKR's "last 30 days" ends with yesterday **in New York**. Download after 07:00 Israel time (midnight in New York) to get the previous New York day |
+| `import-statement`: "is a paper (demo) account" | By design: a paper account's statement never enters the owner's books (the ledger keeps every entry). The token made under the paper login downloads the paper account; the real account needs its own Flex query and token |
+| `import-statement`: "the entries move ... and IBKR's Cash Report ..." | Something of that day moved cash that the import does not read, or the query lost a section. Nothing was recorded. Look at the day in the file before changing any code |
+| `import-statement`: "At the evening of ... IBKR's cash is ... and the ledger's ..." | The statement starts later than the ledger ends (a gap between downloads: "last 30 days" slides), or it is the first one and the account had history before it. Download a period that starts where the ledger ends (Flex query → Run with a custom date range) |
+| `import-statement`: "The ledger would leave out Flex <id>: the ledger holds this line differently" | IBKR restated a line already recorded (a commission finalised, another settle date). The owner checks the statement, then `reverse-entry <entry id> "<why>"` with the id it names, and imports again: the line comes in as its next revision |
+| `import-statement`: "IBKR holds ... of VT and the ledger with this statement ..." | Shares moved without cash (a split, a transfer) or a trade is not in the ledger. Nothing was recorded; look at the statement's CorporateActions and Transfers |
+| `import-statement`: "has no row per currency ... Download the statement again" | IBKR left the per-currency rows out of the Cash Report of the first or last day (it varies from download to download) while the account holds more than one currency |
+| `import-statement` refuses a 'TradeCancel', a corporate action, a kind of cash transaction | Never seen on a real statement, so not guessed. The first real one is how the import learns it: keep the file, write a test from it (anonymised), then extend `FlexLedgerEntries` |
+| Flex times look 7 hours off | Flex writes New York time without a zone (`dateTime="20261015;154021"` was 22:40 in Israel) |
+| IBKR's `twr` in `ChangeInNAV` is 100 times the platform's | It is in percent; the platform's returns are fractions |
+| MTD/YTD fields of an old day's Flex statement show later trades | They are of the day of the download, not of the statement's day. The import does not read them |
 | A commit is refused over a migration | It is on `origin/main`. Add a new migration |
 | A hook blocks an edit or a command | It protects data, secrets, the phase file or the working database. Do not work around it; say what it protects |
 | A check on an ISIN or a test secret is refused by a hook | It looks like an account number or a credential. Use `DU0000000`, an obviously fake ISIN, or generate the secret at run time |

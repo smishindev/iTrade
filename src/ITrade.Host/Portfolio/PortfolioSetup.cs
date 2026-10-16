@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ITrade.Application.Portfolio;
+using ITrade.Broker.IBKR.Flex;
 using ITrade.Infrastructure.Persistence;
 using ITrade.Infrastructure.Portfolio;
 using NodaTime;
@@ -15,6 +16,7 @@ internal static class PortfolioSetup
         services.AddScoped<InstrumentCatalogue>();
         services.AddScoped<ITransactionStore, TransactionStore>();
         services.AddScoped<TransactionLedger>();
+        services.AddScoped<FlexImport>();
         services.AddScoped<PortfolioBooksReader>();
         services.AddScoped<PortfolioValuation>();
         services.AddScoped<PortfolioPerformance>();

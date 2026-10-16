@@ -10,6 +10,13 @@ namespace ITrade.Application.Portfolio;
 /// </summary>
 public sealed record LedgerResult(int Added, int AlreadyRecorded, IReadOnlyList<string> NotRecorded);
 
+/// <summary>
+/// What <see cref="TransactionLedger.RecordAsync"/> would do with a batch, decided and not done:
+/// <paramref name="ToAdd"/> the entries it would add (as they would be stored: links moved to the stored entries,
+/// the revision set), and the rest as in <see cref="LedgerResult"/>.
+/// </summary>
+public sealed record LedgerPlan(IReadOnlyList<Transaction> ToAdd, int AlreadyRecorded, IReadOnlyList<string> NotRecorded);
+
 /// <summary>The accounting ledger (table `transactions`). Entries are only ever added.</summary>
 public interface ITransactionStore
 {
@@ -59,6 +66,22 @@ public sealed class TransactionLedger(ITransactionStore store, IClock clock)
     /// the opposite of its target) is a fault of the caller: it throws and records nothing.
     /// </summary>
     public async Task<LedgerResult> RecordAsync(IEnumerable<Transaction> entries, CancellationToken cancellationToken)
+    {
+        var plan = await PlanAsync(entries, cancellationToken);
+        if (plan.ToAdd.Count > 0)
+        {
+            await store.AddAsync(plan.ToAdd, cancellationToken);
+        }
+
+        return new LedgerResult(plan.ToAdd.Count, plan.AlreadyRecorded, plan.NotRecorded);
+    }
+
+    /// <summary>
+    /// Decides what <see cref="RecordAsync"/> would record of the entries, by the same rules, and records nothing:
+    /// an import can hold the result against its source first. A batch that breaks the ledger's own rules throws
+    /// here as it would there.
+    /// </summary>
+    public async Task<LedgerPlan> PlanAsync(IEnumerable<Transaction> entries, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(entries);
         var toAdd = new List<Transaction>();
@@ -192,12 +215,7 @@ public sealed class TransactionLedger(ITransactionStore store, IClock clock)
             }
         }
 
-        if (toAdd.Count > 0)
-        {
-            await store.AddAsync(toAdd, cancellationToken);
-        }
-
-        return new LedgerResult(toAdd.Count, already, notRecorded);
+        return new LedgerPlan(toAdd, already, notRecorded);
     }
 
     /// <summary>
