@@ -4,15 +4,16 @@ Running memory of what exists, what verified it, and why it is the way it is. Re
 picking the project back up. Task-level detail — every card with its dated note — is in
 [docs/roadmap/](docs/roadmap/README.md); live numbers come from `python tools/roadmap.py status`.
 
-**Last updated:** 13 October 2026
+**Last updated:** 16 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
-**Roadmap:** phases 0–2: 103 of 106 tasks (the three open ones are the owner's, at IBKR);
-phase 3: 8 of 12 (one more was dropped by the owner).
+**Roadmap:** phases 0–2: 105 of 106 tasks (the open one is the owner's: IBKR Mobile);
+phase 3: 9 of 12 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993 — but they are empty: no
-statement has been imported yet, because the broker account is not funded and the statement service
-is not available before that. No real money has moved through the platform. Mode is PAPER.
+statement has been imported yet. The broker account is funded (16 October), a paper account and a
+Flex query exist, and three statements of the paper account were read by hand; the import is the
+next task. No real money has moved through the platform. Mode is PAPER.
 
 ## In one paragraph
 
@@ -26,8 +27,9 @@ platform becomes an accounting and execution-with-approval tool. Phase 2 built t
 .NET 10 Host on loopback HTTPS with sign-in, PostgreSQL 18, daily jobs with catch-up, a React shell,
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
 ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded, the
-value of the portfolio on a date, its returns and their comparison with the index. Everything that is
-left of phase 3 - the statement import and the reconciliation - waits for the funded account.
+value of the portfolio on a date, its returns and their comparison with the index, and the broker's
+statement format, read on three statements of the paper account. Left of phase 3: the statement
+import and the reconciliation.
 
 ---
 
@@ -61,7 +63,7 @@ read in the code.
 | Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
-| Statement (Flex) import | ❌ not built | waits for a funded account (see *Waiting on the owner*) |
+| Statement (Flex) import | ❌ not built | the format is known from three paper-account statements (14–16 October): buys, commissions, a currency conversion, a deposit, interest; the token and query id are in the Host's user-secrets |
 | Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
 | Comparison with the index | ✅ tests only | the same contributions put into the index fund (VT) at each day's close, its dividends put back after withholding; a portfolio that holds only the index matches it; a split of the index is no fall. 60 deliberate breakages caught. No real flows yet |
 | Dividends and splits of the funds | ✅ | 2,538 events of 28 funds in the working database (2,524 dividends, 14 splits; one dividend the vendor lacks comes from the recorded corrections); with them one share reproduces the vendor's total-return series within 0.005% a year over up to 33 years |
@@ -158,9 +160,14 @@ more after withholding; the result is measured by the same two returns. The fund
 index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
 ex-date - and says so.
 
-### 16. The statement import waits for the funded account (12 October)
-Flex queries live in a part of the IBKR portal that appears only after the first deposit, and the
-demo account has no reports. The steps for the owner are written on the card of P3.2.01.
+### 16. The statement format is read before the import is written (12–16 October)
+Flex queries live in a part of the IBKR portal that appears only after the first deposit, so the
+import waited for the account to be funded. Then the owner bought on the paper account and
+downloaded three statements, and the format was read before any code: one order arrives as many
+executions, the first one carrying the minimum commission; times are New York time without a zone;
+a conversion books its commission in another currency; unfilled orders are absent; the month and
+year totals of a day's statement belong to the day of download; IBKR's own return is in percent.
+Notes on the card of P3.2.01.
 
 ---
 
@@ -169,9 +176,9 @@ demo account has no reports. The steps for the owner are written on the card of 
 Ordered roughly by how much they would hurt.
 
 1. **Nothing here was checked against the broker's books.** The ledger and the lots are proven on
-   hand-made examples only. The first real statement will show what the import has to handle:
-   whether every line has its own id, how many decimals commissions carry, how corrections,
-   cancellations, splits and cash in lieu look (listed on the cards of P3.2.01 and P3.2.02).
+   hand-made examples only. The statements read so far showed ids on every line and six decimals
+   on commissions; a dividend with withholding, a sale, a split, a cancelled trade and cash in lieu
+   have not been seen yet (cards of P3.2.01 and P3.2.02).
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
    applies to a trade. The formula for the real gain on a dollar security is not chosen yet. Gate G4
    cannot be passed as written (decision 9).
@@ -221,15 +228,13 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. Nothing of phase 3 is left that does not need the broker's statement.
-2. When the account is funded: **P3.2.01** (the owner creates the Flex query) → **P3.2.02** (import)
-   → **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
+1. **P3.2.02** (import of the Flex statement) → **P3.4.03** (reconciliation with the broker) →
+   **P3.G.01** (gate check).
 
 ## Waiting on the owner
 
-- **Fund the IBKR account** (P0.2.07), then create the paper account (P0.2.05) and install IBKR
-  Mobile for two-factor sign-in (P0.2.03). The statement import and the reconciliation cannot start
-  before this.
+- **Install IBKR Mobile** for two-factor sign-in (P0.2.03).
+- **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is
   wanted: `uv run --directory python itrade ingest --universe etf_pullback_v1`, then
