@@ -5,9 +5,10 @@ picking the project back up. Task-level detail — every card with its dated not
 [docs/roadmap/](docs/roadmap/README.md); live numbers come from `python tools/roadmap.py status`.
 
 **Last updated:** 17 October 2026
-**Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
+**Phase:** 4 of 7 — taxes (`config/project.toml`; the owner moved it on 17 October after gate G3).
 **Roadmap:** phases 0–2: all 106 tasks;
-phase 3: all 13 (one more was dropped by the owner); gate G3 passed on 17 October.
+phase 3: all 13 (one more was dropped by the owner); gate G3 passed on 17 October;
+phase 4: 0 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
 **State:** phase 3 is finished and gate G3 passed (17 October); the move to phase 4 (taxes) is the
 owner's. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
@@ -121,7 +122,7 @@ An independent gate check, two rounds, every criterion with evidence. The owner 
 ### 9. No accountant for now (12 October)
 The owner decided not to wait for a consultation: tax and accounting rules are chosen by us,
 recorded as assumptions with source and date, and their results stay labelled as unverified. Gate G4
-and the scope still name the accountant as the check — open question below.
+and the scope were rewritten to match on 17 October (decision 21).
 
 ### 10. Only IBKR is kept in the platform (12 October)
 Keren hishtalmut is not tracked. With one holding place whose entries all come from statements, the
@@ -162,6 +163,15 @@ The owner's contributions, on their days, buy the index fund at that day's close
 more after withholding; the result is measured by the same two returns. The fund that stands for the
 index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
 ex-date - and says so.
+
+### 21. Phase 4 works from first-hand sources; the accountant checks before the first filing (17 October)
+Following decision 9, the owner approved on 17 October a phase 4 and a gate G4 that do not wait for an
+accountant: every tax rule and parameter is taken from the law or a Tax Authority publication, with the
+source and date (`docs/tax-sources.md`, task P4.0.01), and where none is found the case is refused;
+calculations are tested on hand-worked examples that cite their rule and are labelled "estimate, not
+checked by an accountant". The owner is an Israeli tax resident living in Israel, not an oleh. A
+consultation (P4.3.01) is the owner's, before the first annual return with a capital gain, and not a
+condition of the gate. PLAN §6 and SCOPE (rule 2, stop criterion 2, instruments) say the same.
 
 ### 20. A session or a fund event is withdrawn only by the owner, by the code of what is named (17 October)
 A day the calendar library wrongly took for a session made every fund read "missing" for it and, once the
@@ -227,8 +237,8 @@ Ordered roughly by how much they would hurt.
    not been seen: the import refuses each of them until it has (cards of P3.2.01 and P3.2.02). The
    first such statement stops the imports until the import is taught from it.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
-   applies to a trade. The formula for the real gain on a dollar security is not chosen yet. Gate G4
-   cannot be passed as written (decision 9).
+   applies to a trade. The formula for the real gain on a dollar security is not chosen yet; the
+   first-hand sources are task P4.0.01. No accountant checks them before P4.3.01 (decision 21).
 3. **The session calendar of the daily jobs has no holidays** (`WeekdayCalendar`). Harmless for the
    rates job; not good enough for settlement dates or anything that decides about money. The real
    sessions are in `market_sessions` now, but only as far as the last import of prices.
@@ -273,9 +283,9 @@ Ordered roughly by how much they would hurt.
     account holds two currencies, refuses the statement - download it again.
 21. **Two imports run at the same moment** are kept apart only by the ledger's unique keys; what one
     records may differ from what it checked, and the check after recording then says so.
-22. **The real account's Flex query has no Breakout by Day**: IBKR sends 30 days as one period, whose
-    cash is checked only as a whole (the import says so). A cash row on the wrong day inside it would
-    pass. Turning it on is the owner's step; the first such statement also verifies decision 18.
+22. **No statement broken out by day has been imported yet**: the owner turned on Breakout by Day in
+    the real account's Flex query on 17 October; the statement imported before came as one period,
+    checked only as a whole. The first one broken out by day also verifies decision 18.
 
 ---
 
@@ -283,16 +293,12 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. The owner moves the project to **phase 4** (taxes; `phase = 4` in `config/project.toml`), then the
-   first task of `docs/roadmap/P4-*.md` (`/next-task`).
+1. **P4.0.01** (first-hand sources of the tax rules) → P4.0.02 (where to hold the index: a comparison)
+   and P4.1.01 (tax parameters with sources) → the calculations of phase 4.
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner
 
-- **Move the project to phase 4** after reading the gate result (card P3.G.01): `phase = 4` in
-  `config/project.toml`.
-- **Turn on Breakout by Day** in the real account's Flex query `iTrade` (Delivery Configuration;
-  gap 22).
 - **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is
@@ -302,9 +308,5 @@ Small steps, one task at a time (`/next-task`):
 
 ## Open questions for the owner
 
-- **Gate G4 and the scope name the accountant as the check of the tax module.** Without a
-  consultation, what replaces it? Recommendation: pass the gate on documented assumptions with
-  hand-worked examples from written sources, and make a consultation mandatory before the first sale
-  or the first report to the tax authority.
-- **Where to hold the index** (US ETF, Irish UCITS, an Israeli broker) and the target weights — the
-  decision gate G4 asks for.
+- **Where to hold the index** (US ETF, Irish UCITS) and the target weights — the decision gate G4
+  asks for, after the comparison of P4.0.02.
