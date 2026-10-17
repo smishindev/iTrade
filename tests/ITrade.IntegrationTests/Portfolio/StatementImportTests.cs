@@ -86,7 +86,7 @@ public sealed class StatementImportTests(PostgresFixture pg)
             "Statement of U…000, 2026-10-07 to 2026-10-15 (4 day(s)): 46 entries; 46 recorded, 0 already in the ledger, 0 left out.",
             first.Output[0]);
         Assert.Equal(
-            "The ledger agrees with IBKR: the cash at the start and the end of the statement, and the shares at its end; 1 day(s) IBKR reported only in the base currency were not checked one by one.",
+            "The ledger agrees with IBKR: the cash at the start and the end of the statement, and the shares at its end; 1 period(s) IBKR reported only in the base currency were not checked one by one.",
             first.Output[1]);
         Assert.Equal(0, again.Code);
         Assert.Equal(
@@ -332,6 +332,77 @@ public sealed class StatementImportTests(PostgresFixture pg)
 
         Assert.Equal(1, code);
         Assert.Contains(output, l => l.StartsWith("! 2026-10-15: trade 11013041293 (USD.ILS) is a 'TradeCancel'", StringComparison.Ordinal));
+        await using var db = DbSetup.Create(world.Database);
+        Assert.Equal(0, await db.Transactions.CountAsync());
+    }
+
+    private static readonly string FirstDeposit = Path.Combine(AppContext.BaseDirectory, "Fixtures", "flex-first-deposit.xml");
+
+    /// <summary>
+    /// The real account's first statement as a query broken out by day would give one of its days: the same rows,
+    /// the period (and IBKR's Cash Report of it) of that day alone.
+    /// </summary>
+    private static string DayOfFirstDeposit(World world, string day)
+    {
+        var document = XDocument.Load(FirstDeposit);
+        foreach (var attribute in document.Descendants().Attributes().Where(a => a.Name.LocalName is "fromDate" or "toDate"))
+        {
+            attribute.Value = day;
+        }
+
+        var path = Path.Combine(world.DataDir, $"day-{day}.xml");
+        document.Save(path);
+        return path;
+    }
+
+    [Fact]
+    public async Task TheFirstDepositOfTheRealAccountIsRecordedOnTheDayIbkrBookedIt()
+    {
+        // 100 ILS dated and settling 13 October, booked by IBKR on the 14th; one period of 30 days.
+        var world = await NewAsync();
+
+        var first = await ImportAsync(world, FirstDeposit);
+        var again = await ImportAsync(world, FirstDeposit);
+
+        Assert.Equal(0, first.Code);
+        Assert.Equal(
+            "Statement of U…000, 2026-09-17 to 2026-10-16 (1 period(s), not broken out by day): 1 entries; 1 recorded, 0 already in the ledger, 0 left out.",
+            first.Output[0]);
+        Assert.Equal(
+            "The ledger agrees with IBKR: the cash at the start and the end of the statement, and the shares at its end; 1 period(s) of several days were checked only as a whole, not day by day (turn on Breakout by Day in the Flex query).",
+            first.Output[1]);
+        Assert.Equal((0, "Statement of U…000, 2026-09-17 to 2026-10-16 (1 period(s), not broken out by day): 1 entries; 0 recorded, 1 already in the ledger, 0 left out."), (again.Code, again.Output[0]));
+        await using var db = DbSetup.Create(world.Database);
+        var deposit = await db.Transactions.SingleAsync();
+        Assert.Equal(
+            (TransactionKind.Deposit, new LocalDate(2026, 10, 14), new LocalDate(2026, 10, 14), 100m, Currency.Ils, (string?)"43408377031", (string?)"dated 2026-10-13 by IBKR, booked 2026-10-14"),
+            (deposit.Kind, deposit.TradeDate, deposit.SettlementDate, deposit.CashAmount, deposit.CashCurrency, deposit.ExternalId, deposit.Note));
+    }
+
+    [Fact]
+    public async Task TheDayOfTheBookingBrokenOutLaterAgreesWithTheLedgerAndAddsNothing()
+    {
+        // The reason for taking the day of the booking: a statement of the 14th alone starts from IBKR's cash of the
+        // evening of the 13th, nothing - the ledger has to hold nothing then, and the deposit on the 14th.
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, FirstDeposit)).Code);
+
+        var (code, output) = await ImportAsync(world, DayOfFirstDeposit(world, "20261014"));
+
+        Assert.Equal(0, code);
+        Assert.Equal("Statement of U…000, 2026-10-14 to 2026-10-14 (1 day(s)): 1 entries; 0 recorded, 1 already in the ledger, 0 left out.", output[0]);
+        Assert.Equal("The ledger agrees with IBKR: the cash at the start and the end of the statement, and the shares at its end; the cash of every day too.", output[1]);
+    }
+
+    [Fact]
+    public async Task ADepositListedOnTheDayItIsDatedButBookedLaterIsRefused()
+    {
+        var world = await NewAsync();
+
+        var (code, output) = await ImportAsync(world, DayOfFirstDeposit(world, "20261013"));
+
+        Assert.Equal(1, code);
+        Assert.Contains("! 2026-10-13: cash transaction 43408377031 (Deposits/Withdrawals) is dated 2026-10-13, booked on 2026-10-14 and settles on 2026-10-13; a row whose dates differ has not been seen yet and is not guessed.", output);
         await using var db = DbSetup.Create(world.Database);
         Assert.Equal(0, await db.Transactions.CountAsync());
     }

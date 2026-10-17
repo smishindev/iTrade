@@ -9,9 +9,14 @@ namespace ITrade.Broker.IBKR.Flex;
 /// not at all: a missing line would leave the books wrong while looking complete. <paramref name="DaysNotChecked"/>
 /// are the periods whose cash IBKR reported only in the base currency, so the cash of each currency could not be
 /// held against it day by day (the import then holds the whole statement against its first and last day).
+/// <paramref name="CheckedOnlyAsAWhole"/> are the periods of several days (a query without Breakout by Day) whose
+/// cash was held against IBKR's only for the period, not for each of its days; both lists name a period by its first day.
 /// </summary>
 public sealed record FlexEntries(
-    IReadOnlyList<Transaction> Entries, IReadOnlyList<string> Refusals, IReadOnlyList<LocalDate> DaysNotChecked);
+    IReadOnlyList<Transaction> Entries,
+    IReadOnlyList<string> Refusals,
+    IReadOnlyList<LocalDate> DaysNotChecked,
+    IReadOnlyList<LocalDate> CheckedOnlyAsAWhole);
 
 /// <summary>
 /// Turns the rows of a Flex statement into ledger entries (docs/roadmap/P3-accounting.md, P3.2.01 and P3.2.02).
@@ -28,7 +33,8 @@ public sealed record FlexEntries(
 /// </list>
 /// Anything the import has not seen on a real statement yet — a cancelled or corrected trade, a note on a trade
 /// other than a partial fill, a corporate action, a transfer of shares, a dividend that is not an ordinary one,
-/// another kind of cash transaction, a row booked on another day than it is dated — is refused and named, not
+/// another kind of cash transaction, a row booked on another day than it is dated (but for a deposit booked a few
+/// days after its day, which the ledger takes on the day of the booking) — is refused and named, not
 /// guessed. A period that lacks a section the import needs is refused. And on every day IBKR reports its cash per
 /// currency, the cash has to come out as its `CashReport` says: what is not read cannot hide.
 /// </summary>
@@ -43,6 +49,12 @@ public static class FlexLedgerEntries
     /// <summary>How IBKR describes the only kind of dividend the import records.</summary>
     public const string OrdinaryDividend = "(Ordinary Dividend)";
 
+    /// <summary>
+    /// How many days after its date a deposit may be booked: one was seen; four cover a weekend and a holiday.
+    /// Widened only when a real statement shows more.
+    /// </summary>
+    public const int MostDaysBookedLater = 4;
+
     private const string Execution = "EXECUTION";
     private const string ExchangeTrade = "ExchTrade";
 
@@ -54,6 +66,7 @@ public static class FlexLedgerEntries
         var entries = new List<Transaction>();
         var refusals = new List<string>();
         var notChecked = new List<LocalDate>();
+        var asAWhole = new List<LocalDate>();
         var dividends = new Dictionary<string, List<Transaction>>(StringComparer.Ordinal); // actionID → dividends
         foreach (var period in statement.Periods)
         {
@@ -65,9 +78,13 @@ public static class FlexLedgerEntries
             {
                 notChecked.Add(period.From);
             }
+            else if (period.From != period.To)
+            {
+                asAWhole.Add(period.From);
+            }
         }
 
-        return new FlexEntries(entries, refusals, notChecked);
+        return new FlexEntries(entries, refusals, notChecked, asAWhole);
     }
 
     /// <summary>The cash each currency moved by the entries of a set.</summary>
@@ -286,9 +303,12 @@ public static class FlexLedgerEntries
                 return; // nothing moved
             }
 
-            // Only what has been seen: booked on the day it is dated, in the period of that day, settling then or later.
-            if (line.ReportDate != line.Date || line.Date < period.From || line.Date > period.To
-                || line.SettleDate is { } early && early < line.Date)
+            // Only what has been seen: booked on the day it is dated, in the period of that day, settling then or later;
+            // or a deposit IBKR booked a few days after the day it is dated (see BookedLater).
+            var bookedLater = BookedLater(line);
+            if (bookedLater is null
+                && (line.ReportDate != line.Date || line.Date < period.From || line.Date > period.To
+                    || line.SettleDate is { } early && early < line.Date))
             {
                 Refuse(Invariant($"{label} is dated {line.Date:R}, booked on {line.ReportDate?.ToString("R", CultureInfo.InvariantCulture) ?? "no date"} and settles on {line.SettleDate?.ToString("R", CultureInfo.InvariantCulture) ?? "no date"}; a row whose dates differ has not been seen yet and is not guessed"));
                 return;
@@ -297,16 +317,19 @@ public static class FlexLedgerEntries
             try
             {
                 var money = new Money(line.Amount, Currency.Of(line.Currency));
-                var settlement = line.SettleDate ?? line.Date;
+                var date = bookedLater ?? line.Date;
+                var settlement = bookedLater ?? line.SettleDate ?? line.Date;
                 Transaction Entry(TransactionKind kind, InstrumentId? instrument = null, TransactionId? relatedTo = null, string? note = null) =>
-                    new(TransactionId.New(), place, kind, line.Date, settlement, money, TransactionSource.Flex, recordedAt,
+                    new(TransactionId.New(), place, kind, date, settlement, money, TransactionSource.Flex, recordedAt,
                         instrument, externalId: line.TransactionId, relatedTo: relatedTo, note: note);
 
                 switch (line.Type)
                 {
                     case "Deposits/Withdrawals":
                         // The description can carry the owner's bank details; it is left out.
-                        Entries.Add(Entry(line.Amount > 0m ? TransactionKind.Deposit : TransactionKind.Withdrawal));
+                        Entries.Add(Entry(
+                            line.Amount > 0m ? TransactionKind.Deposit : TransactionKind.Withdrawal,
+                            note: bookedLater is null ? null : Invariant($"dated {line.Date:R} by IBKR, booked {bookedLater:R}")));
                         break;
                     case "Dividends":
                         Dividend(line, label, Entry);
@@ -330,6 +353,26 @@ public static class FlexLedgerEntries
                 Refuse($"{label}: {e.Message}");
             }
         }
+
+        /// <summary>
+        /// The day IBKR booked a deposit that is dated (and settles) a few days earlier, as the owner's first deposit
+        /// on the real account (statement of 17 October 2026: dated and settling 13 October, booked 14 October, the
+        /// account's `dateFunded` 14 October). The ledger takes the day of the booking: IBKR's own cash of each day
+        /// counts the money from then (`EquitySummaryByReportDateInBase`: nothing on the 13th, the deposit on the
+        /// 14th; `StatementOfFunds.reportDate`, `dateFunded`). An assumption of 17 October 2026, not yet seen on a
+        /// statement broken out by day - the first such statement over a deposit confirms it, or its per-day cash
+        /// check refuses it. Known difference: IBKR names the dated day as `availableForTradingDate`, so the index
+        /// comparison buys one close later than the money could have been. The dated day is kept in the note. Null for anything
+        /// else, which stays refused: a withdrawal (a returned deposit would read as the owner taking money out),
+        /// a longer gap than <see cref="MostDaysBookedLater"/>, interest or a dividend booked later.
+        /// </summary>
+        private LocalDate? BookedLater(FlexCash line) =>
+            line.Type == "Deposits/Withdrawals" && line.Amount > 0m
+            && line.ReportDate is { } booked && booked > line.Date && booked >= period.From && booked <= period.To
+            && Period.Between(line.Date, booked, PeriodUnits.Days).Days <= MostDaysBookedLater
+            && line.SettleDate is { } settles && settles >= line.Date && settles <= booked
+                ? booked
+                : null;
 
         private void Dividend(
             FlexCash line, string label, Func<TransactionKind, InstrumentId?, TransactionId?, string?, Transaction> entry)

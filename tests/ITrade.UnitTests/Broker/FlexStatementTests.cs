@@ -334,6 +334,67 @@ public sealed class FlexStatementTests
         Assert.Contains(Entries(document).Refusals, r => r.StartsWith("2026-10-15: cash transaction 9003 (Broker Interest Received) is dated", StringComparison.Ordinal) && r.EndsWith("a row whose dates differ has not been seen yet and is not guessed.", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ADepositIbkrBookedAfterTheDayItIsDatedIsRecordedOnTheDayOfTheBooking()
+    {
+        // As the first deposit of the real account (17 October 2026): dated and settling one day, booked the next.
+        var line = CashLine("9010", "Deposits/Withdrawals", 100m, description: "CASH RECEIPTS / ELECTRONIC FUND TRANSFERS");
+        line.SetAttributeValue("dateTime", "20261014");
+        line.SetAttributeValue("settleDate", "20261014");
+        var built = Entries(WithCash(100m, line));
+
+        Assert.Empty(built.Refusals);
+        var deposit = built.Entries.Single(e => e.ExternalId == "9010");
+        Assert.Equal(
+            (TransactionKind.Deposit, Day(15), Day(15), Money.Usd(100m), (string?)"dated 2026-10-14 by IBKR, booked 2026-10-15"),
+            (deposit.Kind, deposit.TradeDate, deposit.SettlementDate, deposit.Cash, deposit.Note));
+        Assert.Equal(Money.Usd(983_754.099691m), PortfolioBooks.From(built.Entries, Day(15)).CashOf(Place, Currency.Usd));
+    }
+
+    [Fact]
+    public void FourDaysBetweenTheDateAndTheBookingAreRead()
+    {
+        // A deposit dated on a Friday before a holiday Monday and booked on the Tuesday.
+        var line = CashLine("9012", "Deposits/Withdrawals", 100m);
+        line.SetAttributeValue("dateTime", "20261011");
+        line.SetAttributeValue("settleDate", "20261011");
+
+        Assert.Equal(Day(15), Entries(WithCash(100m, line)).Entries.Single(e => e.ExternalId == "9012").TradeDate);
+    }
+
+    [Fact]
+    public void ASeveralDayPeriodIsCheckedOnlyAsAWholeAndSaysSo()
+    {
+        var built = Entries(Fixture());
+        var document = Fixture();
+        Statement(document, "20261015").SetAttributeValue("toDate", "20261016");
+
+        Assert.Empty(built.CheckedOnlyAsAWhole);
+        Assert.Equal("4 day(s)", Read(Fixture()).Shape);
+        Assert.Equal([Day(15)], Entries(document).CheckedOnlyAsAWhole);
+        Assert.Equal("4 period(s), not broken out by day", Read(document).Shape);
+    }
+
+    [Theory]
+    [InlineData("Deposits/Withdrawals", 100, "20261014", "20261014", "20261016")] // booked after the period it is listed in
+    [InlineData("Deposits/Withdrawals", 100, "20261012", "20261012", "20261014")] // booked before the period it is listed in
+    [InlineData("Deposits/Withdrawals", 100, "20261014", "20261016", "20261015")] // settles after it was booked
+    [InlineData("Deposits/Withdrawals", 100, "20261014", "20261013", "20261015")] // settles before it is dated
+    [InlineData("Deposits/Withdrawals", 100, "20261014", "", "20261015")] // no settlement date
+    [InlineData("Deposits/Withdrawals", 100, "20261010", "20261010", "20261015")] // five days later: not seen
+    [InlineData("Deposits/Withdrawals", -100, "20261014", "20261014", "20261015")] // a withdrawal, or a returned deposit
+    [InlineData("Other Fees", -10, "20261014", "20261014", "20261015")] // booked later, but not a deposit
+    public void OnlyADepositBookedAFewDaysLaterWithinThePeriodIsRead(string type, int amount, string dated, string settles, string booked)
+    {
+        var line = CashLine("9011", type, amount);
+        line.SetAttributeValue("dateTime", dated);
+        line.SetAttributeValue("settleDate", settles);
+        line.SetAttributeValue("reportDate", booked);
+        var document = WithCash(amount, line);
+
+        Assert.Contains(Entries(document).Refusals, r => r.StartsWith($"2026-10-15: cash transaction 9011 ({type}) is dated", StringComparison.Ordinal) && r.EndsWith("a row whose dates differ has not been seen yet and is not guessed.", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("Payment In Lieu Of Dividends")]
     [InlineData("Commission Adjustments")]

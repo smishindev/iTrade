@@ -113,20 +113,30 @@ internal static class ImportStatementCommand
                 alreadyRecorded = ledger.AlreadyRecorded,
                 notRecorded = ledger.NotRecorded.Count,
                 daysNotCheckedPerCurrency = plan.DaysNotChecked.Count,
+                periodsCheckedOnlyAsAWhole = plan.CheckedOnlyAsAWhole.Count,
                 disagreementsAfterRecording = recorded.Disagreements.Count,
             }),
         });
         await db.SaveChangesAsync();
 
         await output.WriteLineAsync(Invariant(
-            $"Statement of {plan.Account.Label}, {plan.From:R} to {plan.To:R} ({statement.Periods.Count} day(s)): {plan.Entries.Count} entries; {ledger.Added} recorded, {ledger.AlreadyRecorded} already in the ledger, {ledger.NotRecorded.Count} left out."));
+            $"Statement of {plan.Account.Label}, {plan.From:R} to {plan.To:R} ({statement.Shape}): {plan.Entries.Count} entries; {ledger.Added} recorded, {ledger.AlreadyRecorded} already in the ledger, {ledger.NotRecorded.Count} left out."));
         if (recorded.Disagreements.Count == 0)
         {
+            var partly = new List<string>();
+            if (plan.DaysNotChecked.Count > 0)
+            {
+                partly.Add(Invariant($"{plan.DaysNotChecked.Count} period(s) IBKR reported only in the base currency were not checked one by one"));
+            }
+
+            if (plan.CheckedOnlyAsAWhole.Count > 0)
+            {
+                partly.Add(Invariant($"{plan.CheckedOnlyAsAWhole.Count} period(s) of several days were checked only as a whole, not day by day (turn on Breakout by Day in the Flex query)"));
+            }
+
             await output.WriteLineAsync(
                 "The ledger agrees with IBKR: the cash at the start and the end of the statement, and the shares at its end" +
-                (plan.DaysNotChecked.Count == 0
-                    ? "; the cash of every day too."
-                    : Invariant($"; {plan.DaysNotChecked.Count} day(s) IBKR reported only in the base currency were not checked one by one.")));
+                (partly.Count == 0 ? "; the cash of every day too." : $"; {string.Join("; ", partly)}."));
         }
         else
         {

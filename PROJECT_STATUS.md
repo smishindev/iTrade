@@ -10,11 +10,10 @@ picking the project back up. Task-level detail — every card with its dated not
 phase 3: 10 of 12 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
-funds since 1993 — but they are empty: no
-statement of the real account has been imported yet. The import of IBKR's statement exists and was
-proven on three statements of the paper account (16 October) — the paper account itself is never
-recorded; the real account needs its own Flex query and token. No real money has moved through the
-platform. Mode is PAPER.
+funds since 1993. The first statement of the real account was imported on 17 October: one entry,
+the owner's first deposit of 100 ILS, agreeing with IBKR's cash. The import was proven before on
+three statements of the paper account, which itself is never recorded. Nothing has been bought yet.
+Mode is PAPER.
 
 ## In one paragraph
 
@@ -42,16 +41,16 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 373 unit, 6 architecture, 123 integration on a real PostgreSQL 18 (Testcontainers) — 16 October |
+| .NET tests | ✅ | 384 unit, 6 architecture, 126 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402 |
 | Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
 | One Host per database | ✅ | a second instance refused by the instance lock (integration test; seen on the real database on 12 October) |
 | Sign-in, lockout, session end | ✅ | integration tests and browser tests; the owner's password is set on the working database |
-| Working database | ✅ | 11 migrations applied; backups before each schema change, the latest `itrade-20261012-215529Z.dump` |
+| Working database | ✅ | 11 migrations applied; backups before each schema change and before the first real import, the latest `itrade-20261017-050036Z.dump` (restore verified) |
 | Backup and restore | ✅ | `backup.ps1`, then `restore.ps1 -Verify` into a temporary database (phase 2 gate) |
 | Instrument catalogue | ✅ | 29 ETFs imported; importing again: 29 unchanged |
-| Ledger: repeated import, reversal, corrected line | ✅ tests only | unit and PostgreSQL tests, 7 deliberate breakages caught. **No real statement imported yet** — the table is empty |
+| Ledger: repeated import, reversal, corrected line | ✅ tests only | unit and PostgreSQL tests, 7 deliberate breakages caught. In the working database: 1 entry from the real account's statement (17 October); importing it again added nothing |
 | Ledger rules in the database | ✅ | 17 planted violations of the constraints and 6 of the link trigger are refused |
 | Lots, positions, cash | ✅ tests only | hand-worked examples (partial sale, split, sale after a split), two properties over random ledgers, 7 deliberate breakages caught |
 | Exchange rates | ✅ | 5332 Bank of Israel rates, 2005-01-03 … 2026-10-09, loaded into the working database; a second run: 0 new, 11 compared |
@@ -64,7 +63,7 @@ read in the code.
 | Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
-| Statement (Flex) import | ✅ paper statements only | `fetch-statement` downloaded a statement with the owner's token; three real paper-account statements (anonymised copies) imported one after another and again into a throw-away database, each agreeing with IBKR at its start and end (cash per currency, positions); the working database refused the paper statement, as it must. 14 integration and 73 unit tests; three rounds of `accounting-reviewer`. Not yet seen: a dividend, a sale, a split, a cancellation — each is refused until seen |
+| Statement (Flex) import | ✅ | **Real account, 17 October:** `fetch-statement` with the owner's token, `import-statement` into the working database — the first deposit (100 ILS, booked by IBKR the day after its date: recorded on the day of the booking, decision 18), agreeing with IBKR's cash at the start and end; the statement came as one 30-day period, so not checked day by day (gap 22). Before that: three paper-account statements imported one after another and again into a throw-away database, each agreeing at both ends; the paper statement refused by the working database. 17 integration and 84 unit tests; `accounting-reviewer` five rounds. Not yet seen: a dividend, a sale, a split, a cancellation — each is refused until seen |
 | Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
 | Comparison with the index | ✅ tests only | the same contributions put into the index fund (VT) at each day's close, its dividends put back after withholding; a portfolio that holds only the index matches it; a split of the index is no fall. 60 deliberate breakages caught. No real flows yet |
 | Dividends and splits of the funds | ✅ | 2,538 events of 28 funds in the working database (2,524 dividends, 14 splits; one dividend the vendor lacks comes from the recorded corrections); with them one share reproduces the vendor's total-return series within 0.005% a year over up to 33 years |
@@ -161,6 +160,15 @@ more after withholding; the result is measured by the same two returns. The fund
 index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
 ex-date - and says so.
 
+### 18. A deposit IBKR booked after its date counts from the day of the booking (17 October)
+The owner's first deposit (100 ILS) is dated and settles 13 October and was booked by IBKR on the 14th.
+The ledger takes the 14th, as IBKR's own cash of each day does (`EquitySummaryByReportDateInBase`,
+`dateFunded`); with the 13th, a statement starting on the 14th would find the ledger holding money that
+IBKR's opening cash does not. An assumption until a statement broken out by day shows such a deposit.
+Known difference: IBKR says the money could be traded from the 13th, so the index comparison invests
+it one close later. Only a deposit booked 1–4 days late is read so; anything else with differing dates
+is still refused - a returned deposit must not read as the owner taking money out.
+
 ### 17. The statement import refuses what it has not seen and agrees with IBKR or records nothing (16 October)
 Every execution is an entry (as IBKR keeps its lots), a conversion two linked legs. A cancelled or
 corrected trade, a corporate action, a transfer, a distribution that is not an ordinary dividend, a tax
@@ -187,9 +195,10 @@ Notes on the card of P3.2.01.
 
 Ordered roughly by how much they would hurt.
 
-1. **Nothing here was checked against the broker's books.** The ledger and the lots are proven on
-   hand-made examples and paper-account statements. A dividend with withholding, a sale, a split, a
-   cancelled or corrected trade, interest booked on another day than it is dated have not been seen:
+1. **Little here was checked against the broker's books.** The ledger and the lots are proven on
+   hand-made examples, paper-account statements and one real deposit. A trade on the real account, a
+   dividend with withholding, a sale, a split, a cancelled or corrected trade, interest booked on
+   another day than it is dated have not been seen:
    the import refuses each of them until it has (cards of P3.2.01 and P3.2.02). The first such
    statement stops the imports until the import is taught from it.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
@@ -239,6 +248,9 @@ Ordered roughly by how much they would hurt.
     account holds two currencies, refuses the statement - download it again.
 21. **Two imports run at the same moment** are kept apart only by the ledger's unique keys; what one
     records may differ from what it checked, and the check after recording then says so.
+22. **The real account's Flex query has no Breakout by Day**: IBKR sends 30 days as one period, whose
+    cash is checked only as a whole (the import says so). A cash row on the wrong day inside it would
+    pass. Turning it on is the owner's step; the first such statement also verifies decision 18.
 
 ---
 
@@ -247,13 +259,12 @@ Ordered roughly by how much they would hurt.
 Small steps, one task at a time (`/next-task`):
 
 1. **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
-2. With the owner: a Flex query on the **real** account (the same settings as `iTrade`) and its own
-   token, then the first real `fetch-statement` / `import-statement`.
+2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner
 
-- **Create the Flex query and token on the real account** (the paper login's token downloads the
-  paper account, which is never recorded).
+- **Turn on Breakout by Day** in the real account's Flex query `iTrade` (Delivery Configuration;
+  gap 22).
 - **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is

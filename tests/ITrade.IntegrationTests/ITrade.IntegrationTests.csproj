@@ -29,6 +29,8 @@
   <ItemGroup>
     <!-- The anonymised Flex statement of the unit tests (P3.2.02), imported here through the real Host. -->
     <None Include="..\ITrade.UnitTests\Fixtures\flex-statement.xml" Link="Fixtures\flex-statement.xml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The first statement of the real account (17 October 2026), anonymised the same way. -->
+    <None Include="..\ITrade.UnitTests\Fixtures\flex-first-deposit.xml" Link="Fixtures\flex-first-deposit.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

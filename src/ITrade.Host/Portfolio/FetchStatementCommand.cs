@@ -76,7 +76,7 @@ internal static class FetchStatementCommand
         var to = statement.Periods.Max(p => p.To);
         await output.WriteLineAsync(string.Create(
             CultureInfo.InvariantCulture,
-            $"Downloaded the statement of {from:R} to {to:R} ({statement.Periods.Count} day(s)) to {path}."));
+            $"Downloaded the statement of {from:R} to {to:R} ({statement.Shape}) to {path}."));
         await output.WriteLineAsync($"To record it: dotnet run --project src/ITrade.Host -- {ImportStatementCommand.Name} \"{path}\"");
         return 0;
     }

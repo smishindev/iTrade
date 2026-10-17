@@ -102,13 +102,19 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   described "(Ordinary Dividend)" — a return of capital or a capital gain comes as "Dividends" too and means
   something else for cost and tax; Withholding Tax linked by IBKR's `actionID` to the one dividend of that event in
   the same statement; Broker Interest Received/Paid as Interest; Other Fees as Fee. A row must be booked on the day
-  it is dated (`reportDate` = date of `dateTime`, inside its period, `settleDate` not earlier). Order within a
-  day: deposits and withdrawals, trades by execution time, dividends, the rest.
+  it is dated (`reportDate` = date of `dateTime`, inside its period, `settleDate` not earlier) — with one
+  exception seen on the real account (17 October 2026): a **deposit** booked 1–4 days after its date, booked inside
+  the period, settling between the two, is recorded on the **day of the booking** (trade and settlement date), the
+  dated day in the note. Assumption (from `dateFunded` and `StatementOfFunds.reportDate`): IBKR's cash counts it
+  from the booking; the first statement broken out by day over such a deposit confirms it or refuses. A withdrawal
+  booked later (a returned deposit would read as the owner's money going out), a longer gap, interest or a dividend
+  booked later stay refused. Order within a day: deposits and withdrawals, trades by execution time, dividends,
+  the rest.
 - **Not guessed — the whole statement is refused and nothing recorded** when it holds what has not been seen on
   a real statement yet: a trade that is not a plain `ExchTrade` or has notes other than none or `P` (TradeCancel,
   BookTrade, `Ca`, `Co`, …), Trades not at the level of executions, another asset category, a row of
   CorporateActions, Transfers, TransactionTaxes, SalesTaxes and the like, a dividend that is not ordinary, a tax
-  without its dividend, a cash row whose dates differ, another kind of cash transaction, a currency the platform
+  without its dividend, a cash row whose dates differ (but the deposit above), another kind of cash transaction, a currency the platform
   has no minor units for, a contract that is not in the catalogue (by `conid`, ISIN checked), shares × price off
   the proceeds by more than a cent, proceeds + commission ≠ net cash, a commission in another currency than its
   share trade. Splits, broker cancellations and corrections are among these on purpose (owner's rule: formats are
@@ -117,7 +123,9 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   is refused too: a query that lost CorporateActions would let a split pass.
 - **The cash of a day must be IBKR's own** where IBKR reports it per currency: the entries' cash equals
   `CashReport` endingCash − startingCash. Which days carry rows per currency depends on the download, not on the
-  account; a day with only the `BASE_SUMMARY` row (which translates other currencies) is not checked alone.
+  account; a day with only the `BASE_SUMMARY` row (which translates other currencies) is not checked alone. A
+  query without Breakout by Day gives one period of 30 days: its cash is checked only as a whole, and the import
+  says so (`CheckedOnlyAsAWhole`) instead of "every day".
 - **The statement must agree with the ledger, at both ends.** The ledger's cash per currency on the evening
   before the first day equals IBKR's startingCash of that day — a gap between two downloads, or a first statement
   without the history before it, shows here; after the last day, the ledger with the new entries holds IBKR's

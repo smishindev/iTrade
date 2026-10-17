@@ -95,6 +95,14 @@ public sealed record FlexStatement(string QueryName, LocalDateTime Generated, IR
 {
     /// <summary>Every account the statement speaks of.</summary>
     public IReadOnlyList<string> Accounts => Periods.Select(p => p.Account).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// How the statement is divided, for the owner: "4 day(s)" when the Flex query breaks it out by day,
+    /// "1 period(s), not broken out by day" otherwise - then no single day's cash can be held against IBKR's.
+    /// </summary>
+    public string Shape => Periods.All(p => p.From == p.To)
+        ? string.Create(CultureInfo.InvariantCulture, $"{Periods.Count} day(s)")
+        : string.Create(CultureInfo.InvariantCulture, $"{Periods.Count} period(s), not broken out by day");
 }
 
 /// <summary>
@@ -256,6 +264,11 @@ public static class FlexStatementFile
             var stamp = Required(row, "dateTime", element);
             var settle = Optional(row, "settleDate");
             var report = Optional(row, "reportDate");
+
+            // A summary row carries only the date, a detail row the date and the time.
+            var dated = stamp.Contains(';', StringComparison.Ordinal)
+                ? ParseDateTime(stamp, "dateTime").Date
+                : ParseDate(stamp, "dateTime");
             return new FlexCash(
                 id,
                 Optional(row, "levelOfDetail"),
@@ -264,10 +277,7 @@ public static class FlexStatementFile
                 ConId(row),
                 Optional(row, "symbol"),
                 Number(row, "amount"),
-                // A summary row carries only the date, a detail row the date and the time.
-                stamp.Contains(';', StringComparison.Ordinal)
-                    ? ParseDateTime(stamp, "dateTime").Date
-                    : ParseDate(stamp, "dateTime"),
+                dated,
                 settle.Length > 0 ? ParseDate(settle, "settleDate") : null,
                 report.Length > 0 ? ParseDate(report, "reportDate") : null,
                 Optional(row, "actionID"),

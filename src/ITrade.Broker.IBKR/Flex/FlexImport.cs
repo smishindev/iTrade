@@ -41,6 +41,7 @@ public sealed record FlexImportPlan(
     IReadOnlyList<Transaction> Entries,
     IReadOnlyList<string> Refusals,
     IReadOnlyList<LocalDate> DaysNotChecked,
+    IReadOnlyList<LocalDate> CheckedOnlyAsAWhole,
     HoldingPlace? PlaceToCreate)
 {
     public bool CanBeRecorded => Refusals.Count == 0;
@@ -88,7 +89,7 @@ public sealed class FlexImport(
         var account = accounts.Count == 1
             ? FlexAccount.Of(accounts[0])
             : new FlexAccount("", string.Join(", ", accounts.Select(FlexAccount.Mask)));
-        FlexImportPlan Refused(params string[] why) => new(account, first.From, last.To, [], why, [], null);
+        FlexImportPlan Refused(params string[] why) => new(account, first.From, last.To, [], why, [], [], null);
 
         if (accounts.Count != 1)
         {
@@ -141,7 +142,7 @@ public sealed class FlexImport(
         var create = place is null && built.Entries.Count > 0
             ? new HoldingPlace(placeId, HoldingPlaceName, HoldingPlaceKind.Broker, IntegrationKind.Broker)
             : null;
-        return new FlexImportPlan(account, first.From, last.To, built.Entries, [], built.DaysNotChecked, create)
+        return new FlexImportPlan(account, first.From, last.To, built.Entries, [], built.DaysNotChecked, built.CheckedOnlyAsAWhole, create)
         {
             First = first,
             Last = last,
