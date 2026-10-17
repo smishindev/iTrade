@@ -8,7 +8,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Phase:** 4 of 7 — taxes (`config/project.toml`; the owner moved it on 17 October after gate G3).
 **Roadmap:** phases 0–2: all 106 tasks;
 phase 3: all 13 (one more was dropped by the owner); gate G3 passed on 17 October;
-phase 4: 1 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
+phase 4: 2 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
 **State:** phase 3 is finished and gate G3 passed (17 October); the move to phase 4 (taxes) is the
 owner's. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
@@ -295,8 +295,8 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P4.0.02** (where to hold the index: a comparison) and **P4.1.01** (tax parameters with sources,
-   from `docs/tax-sources.md`) → the calculations of phase 4.
+1. **P4.1.01** (tax parameters with sources, from `docs/tax-sources.md`) → the calculations of phase 4;
+   the owner decides where to hold the index (P4.0.03) from `docs/index-placement.md`.
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner
@@ -311,4 +311,5 @@ Small steps, one task at a time (`/next-task`):
 ## Open questions for the owner
 
 - **Where to hold the index** (US ETF, Irish UCITS) and the target weights — the decision gate G4
-  asks for, after the comparison of P4.0.02.
+  asks for (P4.0.03). The comparison is `docs/index-placement.md`; its main open point - whether
+  Israel taxes an accumulating foreign fund yearly - has no first-hand source.
