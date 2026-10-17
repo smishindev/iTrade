@@ -7,8 +7,9 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 17 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: all 106 tasks;
-phase 3: 12 of 13 (one more was dropped by the owner).
-**State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
+phase 3: all 13 (one more was dropped by the owner); gate G3 passed on 17 October.
+**State:** phase 3 is finished and gate G3 passed (17 October); the move to phase 4 (taxes) is the
+owner's. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993. The first statement of the real account was imported on 17 October: one entry,
 the owner's first deposit of 100 ILS, agreeing with IBKR's cash. The import was proven before on
@@ -30,7 +31,7 @@ ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing pric
 value of the portfolio on a date, its returns and their comparison with the index, and the import of
 the broker's statement, held against IBKR's own figures, and the reconciliation of the ledger with the
 broker and with the split days of the prices, and the owner's withdrawal of a wrong session or fund
-event. Left of phase 3: the gate check.
+event. Gate G3 passed on 17 October.
 
 ---
 
@@ -42,7 +43,7 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 397 unit, 6 architecture, 138 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
+| .NET tests | ✅ | 398 unit, 6 architecture, 138 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
 | Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
@@ -65,7 +66,7 @@ read in the code.
 | A wrong session or fund event is withdrawn by the owner | ✅ tests only | never needed for real. Tests: a withdrawn session is a closed day (no "missing"), a withdrawn dividend is out of the index portfolio, nothing goes without the owner's code and reason, a stale code is refused, 22 events or 6 sessions at once get no code, other funds' events on the day go with it (PostgreSQL), `check` names it; 11 planted violations of the new database rules; 24 deliberate breakages, 23 caught (the 24th changes nothing). `accounting-reviewer` two rounds |
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
-| Statement (Flex) import | ✅ | **Real account, 17 October:** `fetch-statement` with the owner's token, `import-statement` into the working database — the first deposit (100 ILS, booked by IBKR the day after its date: recorded on the day of the booking, decision 18), agreeing with IBKR's cash at the start and end; the statement came as one 30-day period, so not checked day by day (gap 22). Before that: three paper-account statements imported one after another and again into a throw-away database, each agreeing at both ends; the paper statement refused by the working database. 17 integration and 84 unit tests; `accounting-reviewer` five rounds. Not yet seen: a dividend, a sale, a split, a cancellation — each is refused until seen |
+| Statement (Flex) import | ✅ | **Real account, 17 October:** `fetch-statement` with the owner's token, `import-statement` into the working database — the first deposit (100 ILS, booked by IBKR the day after its date: recorded on the day of the booking, decision 18), agreeing with IBKR's cash at the start and end; the statement came as one 30-day period, so not checked day by day (gap 22). Before that: three paper-account statements imported one after another and again into a throw-away database, each agreeing at both ends; the paper statement refused by the working database. 17 integration and 85 unit tests; `accounting-reviewer` five rounds. A sale (sold first-in-first-out in the books) and an ordinary dividend with its withheld tax are read - tested on rows written by hand, not seen on a real statement yet. A split or other corporate action, a cancellation or correction, a transfer, a distribution that is not an ordinary dividend are refused until seen |
 | Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
 | Comparison with the index | ✅ tests only | the same contributions put into the index fund (VT) at each day's close, its dividends put back after withholding; a portfolio that holds only the index matches it; a split of the index is no fall. 60 deliberate breakages caught. No real flows yet |
 | Dividends and splits of the funds | ✅ | 2,538 events of 28 funds in the working database (2,524 dividends, 14 splits; one dividend the vendor lacks comes from the recorded corrections); with them one share reproduces the vendor's total-return series within 0.005% a year over up to 33 years |
@@ -219,11 +220,12 @@ Notes on the card of P3.2.01.
 Ordered roughly by how much they would hurt.
 
 1. **Little here was checked against the broker's books.** The ledger and the lots are proven on
-   hand-made examples, paper-account statements and one real deposit. A trade on the real account, a
-   dividend with withholding, a sale, a split, a cancelled or corrected trade, interest booked on
-   another day than it is dated have not been seen:
-   the import refuses each of them until it has (cards of P3.2.01 and P3.2.02). The first such
-   statement stops the imports until the import is taught from it.
+   hand-made examples, paper-account statements and one real deposit. A sale and an ordinary dividend
+   with its withheld tax are read, but only tested on rows written by hand - the first real ones are
+   to be looked at. A split or other corporate action, a cancelled or corrected trade, a transfer, a
+   distribution that is not an ordinary dividend, interest booked on another day than it is dated have
+   not been seen: the import refuses each of them until it has (cards of P3.2.01 and P3.2.02). The
+   first such statement stops the imports until the import is taught from it.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
    applies to a trade. The formula for the real gain on a dollar security is not chosen yet. Gate G4
    cannot be passed as written (decision 9).
@@ -281,11 +283,14 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.G.01** (gate check of phase 3).
+1. The owner moves the project to **phase 4** (taxes; `phase = 4` in `config/project.toml`), then the
+   first task of `docs/roadmap/P4-*.md` (`/next-task`).
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner
 
+- **Move the project to phase 4** after reading the gate result (card P3.G.01): `phase = 4` in
+  `config/project.toml`.
 - **Turn on Breakout by Day** in the real account's Flex query `iTrade` (Delivery Configuration;
   gap 22).
 - **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).

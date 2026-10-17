@@ -161,6 +161,48 @@ public sealed class FlexStatementTests
     }
 
     [Fact]
+    public void ASaleIsReadAndTheBooksSellTheFirstLotsFirst()
+    {
+        // Not yet seen on a real statement: 7 VT sold at 160 on the 15th, after that day's purchases, as IBKR
+        // writes a sale - negative quantity, positive proceeds, the commission taken from them.
+        var document = Fixture();
+        var sale = new XElement(Statement(document, "20261014").Element("Trades")!.Elements("Trade").First());
+        foreach (var (name, value) in new[]
+        {
+            ("transactionID", "11099999999"), ("tradeID", "9999999999"), ("tradeDate", "20261015"), ("dateTime", "20261015;160000"),
+            ("settleDateTarget", "20261016"), ("buySell", "SELL"), ("quantity", "-7"), ("tradePrice", "160"), ("proceeds", "1120"),
+            ("ibCommission", "-1.000021"), ("netCash", "1118.999979"), ("openCloseIndicator", "C"),
+        })
+        {
+            sale.SetAttributeValue(name, value);
+        }
+
+        var day = Statement(document, "20261015");
+        day.Element("Trades")!.Add(sale);
+        AddToCash(day, "USD", 1118.999979m);
+
+        var built = Entries(document);
+
+        Assert.Empty(built.Refusals);
+        var sold = built.Entries.Single(e => e.ExternalId == "11099999999");
+        Assert.Equal(
+            (TransactionKind.Sell, Day(15), Day(16), Money.Usd(1120m), -7m, (Price?)new Price(160m, Currency.Usd)),
+            (sold.Kind, sold.TradeDate, sold.SettlementDate, sold.Cash, sold.QuantityChange, sold.Price));
+        var fee = built.Entries.Single(e => e.ExternalId == "11099999999/commission");
+        Assert.Equal((Money.Usd(-1.000021m), (TransactionId?)sold.Id), (fee.Cash, fee.RelatedTo));
+
+        // FIFO: the 5 shares of the first execution of the 14th, then 2 of the second.
+        var books = PortfolioBooks.From(built.Entries, Day(15));
+        var buys = built.Entries.Where(e => e.Kind == TransactionKind.Buy).ToList();
+        Assert.Equal(96m, Assert.Single(books.Positions).Quantity.Value);
+        Assert.Equal(
+            [(buys[0].Id, 5m, 788.35m, 800m), (buys[1].Id, 2m, 315.34m, 320m)],
+            books.Disposals.Select(d => (d.Lot, d.Quantity.Value, d.Cost.Amount, d.Proceeds.Amount)));
+        Assert.Equal(1.000021m, books.Disposals.Sum(d => d.SaleFees.Amount)); // the sale's commission as a cost, shared by the lots
+        Assert.Equal(Money.Usd(983_654.099691m + 1118.999979m), books.CashOf(Place, Currency.Usd));
+    }
+
+    [Fact]
     public void AnInstrumentThatIsNotInTheCatalogueStopsTheStatement()
     {
         var built = Entries(Fixture(), new Dictionary<int, Instrument>());
