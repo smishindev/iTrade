@@ -169,3 +169,5 @@ the year it was filed in (ORD s.145(a)(2)). Foreign tax is credited only against
 | O6 | 2026 indexed figures of the filing exemptions, and any filing extension for 2026 | R11 | 2025 figures with their year, labelled |
 | O7 | A retention period for an individual's records | R12 | everything is kept |
 | O8 | When the marginal rate is below 25% (R1), or the additional tax applies (R6) | the owner's other income is not in the platform | 25% shown as the ceiling; the additional tax named, not computed |
+| O9 | A sale at a loss with the same fund bought again around it (what the US calls a wash sale): is the loss offsettable in full? | a loss used against gains | the loss is computed and **named** in the result when the same fund was bought within 30 days before or after the sale |
+| O10 | A part of a share sold (IBKR sells fractions): any rule of its own? | the lots | computed like whole shares and **named** in the result |

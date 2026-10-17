@@ -100,6 +100,13 @@ public enum IncomeRateDay
     DayPaid,
 }
 
+/// <summary>How the real gain of a security in foreign currency is computed (R2).</summary>
+public enum RealGainRule
+{
+    /// <summary>The exchange rate is the index; a negative inflationary amount is 0; its part of a loss is not offset.</summary>
+    ExchangeRateAsIndex,
+}
+
 /// <summary>What a loss carried to later years may be offset against (R5).</summary>
 public enum LossCarryforward
 {
@@ -120,7 +127,9 @@ public sealed record TaxParameters(
     TaxParameter<decimal> SurtaxRate,
     TaxParameter<decimal> SurtaxCapitalRate,
     TaxParameter<decimal> SurtaxThresholdIls,
+    TaxParameter<RealGainRule> RealGain,
     TaxParameter<LotMatching> LotMatching,
+    TaxParameter<decimal> LotMatchingAbroad,
     TaxParameter<TaxExchangeRate> ExchangeRate,
     TaxParameter<TradeRateDay> ExchangeRateDayOfATrade,
     TaxParameter<IncomeRateDay> ExchangeRateDayOfIncome,
@@ -132,17 +141,22 @@ public sealed record TaxParameters(
     TaxParameter<AnnualDate> ForeignIncomeAdvanceDue,
     TaxParameter<AnnualDate> AnnualReturnDue,
     TaxParameter<decimal> ExchangeDifferencesOnCash,
-    TaxParameter<decimal> UsFundDistributionKinds)
+    TaxParameter<decimal> UsFundDistributionKinds,
+    TaxParameter<decimal> RepurchaseAfterALoss,
+    TaxParameter<decimal> FractionalShares)
 {
+    /// <summary>The file the parameters were read from, as a result names it.</summary>
+    public string Origin { get; init; } = "";
+
     /// <summary>Every parameter by its name: what a result lists as the assumptions it rests on.</summary>
     public IReadOnlyList<(string Name, TaxSource Source, string? OpenQuestion)> Listed =>
     [
         Of(CapitalGainsRate), Of(DividendRate), Of(UsDividendWithholding), Of(ForeignTaxCreditCarryforwardYears),
-        Of(InterestRate), Of(SurtaxRate), Of(SurtaxCapitalRate), Of(SurtaxThresholdIls), Of(LotMatching),
-        Of(ExchangeRate), Of(ExchangeRateDayOfATrade), Of(ExchangeRateDayOfIncome),
+        Of(InterestRate), Of(SurtaxRate), Of(SurtaxCapitalRate), Of(SurtaxThresholdIls), Of(RealGain), Of(LotMatching),
+        Of(LotMatchingAbroad), Of(ExchangeRate), Of(ExchangeRateDayOfATrade), Of(ExchangeRateDayOfIncome),
         Of(LossOffsetAgainstDividendsAndInterest), Of(LossAbroadFirst), Of(LossCarryforward),
         Of(LossCarryforwardNeedsAReturn), Of(HalfYearReportDue), Of(ForeignIncomeAdvanceDue), Of(AnnualReturnDue),
-        Of(ExchangeDifferencesOnCash), Of(UsFundDistributionKinds),
+        Of(ExchangeDifferencesOnCash), Of(UsFundDistributionKinds), Of(RepurchaseAfterALoss), Of(FractionalShares),
     ];
 
     private static (string, TaxSource, string?) Of<T>(TaxParameter<T> parameter)

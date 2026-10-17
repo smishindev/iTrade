@@ -8,6 +8,7 @@ using ITrade.Host.Jobs;
 using ITrade.Host.Logging;
 using ITrade.Host.Portfolio;
 using ITrade.Host.Prices;
+using ITrade.Host.Tax;
 using ITrade.Host.Web;
 using ITrade.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -77,6 +78,7 @@ public static partial class ITradeHost
         builder.Services.AddPortfolio();
         builder.Services.AddFxRates(options);
         builder.Services.AddPrices();
+        builder.Services.AddTax();
 
         // Every error leaves as RFC 9457 problem details, in every environment (P2.4.03).
         builder.Services.AddProblemDetails();

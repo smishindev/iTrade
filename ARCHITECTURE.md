@@ -68,9 +68,11 @@ The project phase is `config/project.toml`. Only the owner edits it; hooks key o
 ```
 src/ITrade.Domain          pure types and rules: Money, Price, Quantity, FxRate, TradeDate, Instrument,
                            HoldingPlace, Transaction, PortfolioBooks (lots, positions, cash), TaxParameters
-                           (each tax figure with its first-hand source; an open question refuses)
+                           (each tax figure with its first-hand source; an open question refuses), RealGain
+                           (a sale of a dollar security in shekels: real gain or offsettable loss)
 src/ITrade.Application     use cases and the interfaces of what they need: daily jobs and their scheduler,
-                           InstrumentCatalogue, TransactionLedger, PortfolioBooksReader, FxRates
+                           InstrumentCatalogue, TransactionLedger, PortfolioBooksReader, FxRates,
+                           CapitalGains (the sales of a tax year in shekels, what could not be computed named)
 src/ITrade.Infrastructure  EF Core / PostgreSQL (context, rows, stores, migrations), instance lock,
                            Bank of Israel rates client, instrument catalogue file, weekday calendar,
                            config/tax.toml reader (Tax/TaxParametersFile, Tomlyn)

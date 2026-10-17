@@ -36,8 +36,10 @@ public sealed partial class TaxParametersFileTests
             (tax.CapitalGainsRate.Source.Rule, tax.CapitalGainsRate.Source.Citation, tax.CapitalGainsRate.Source.Read));
 
         // Not one of them is checked by an accountant (owner, 2026-10-12): every result is an estimate.
-        Assert.Equal(21, tax.Listed.Count);
+        Assert.Equal(25, tax.Listed.Count);
+        Assert.Equal(["lot_matching_abroad", "exchange_differences_on_cash", "us_fund_distribution_kinds", "repurchase_after_a_loss", "fractional_shares"], tax.Listed.Where(p => p.OpenQuestion is not null).Select(p => p.Name));
         Assert.All(tax.Listed, p => Assert.False(p.Source.CheckedByAccountant));
+        Assert.Equal((RealGainRule.ExchangeRateAsIndex, Path.GetFullPath(FilePath)), (tax.RealGain.Value, tax.Origin));
     }
 
     [Fact]

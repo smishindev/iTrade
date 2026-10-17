@@ -67,6 +67,7 @@ internal static class CheckCommand
                 Problem("interface", "not built - run `npm run build` in web/, then build the Host");
             }
 
+            CheckTaxParameters(Line, Problem);
             if (offline)
             {
                 Line("database", "not checked (--offline)");
@@ -79,6 +80,28 @@ internal static class CheckCommand
 
         await output.WriteLineAsync(problems == 0 ? "OK" : $"PROBLEMS: {problems}");
         return problems == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// config/tax.toml is read the first time a tax figure is asked for; here it is read now, so a file that would
+    /// be refused is found before then. A missing file stops nothing but the tax figures.
+    /// </summary>
+    private static void CheckTaxParameters(Action<string, string> line, Action<string, string> problem)
+    {
+        try
+        {
+            var tax = ITrade.Infrastructure.Tax.TaxParametersFile.Read(Tax.TaxSetup.Locate());
+            var open = tax.Listed.Count(p => p.OpenQuestion is not null);
+            line("tax parameters", $"{tax.Origin}: {tax.Listed.Count} parameters, {open} open; estimates, none checked by an accountant");
+        }
+        catch (FileNotFoundException e)
+        {
+            line("tax parameters", $"not found - {e.Message} No tax figure can be computed.");
+        }
+        catch (FormatException e)
+        {
+            problem("tax parameters", e.Message);
+        }
     }
 
     private static async Task CheckDatabaseAsync(

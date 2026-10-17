@@ -8,7 +8,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Phase:** 4 of 7 — taxes (`config/project.toml`; the owner moved it on 17 October after gate G3).
 **Roadmap:** phases 0–2: all 106 tasks;
 phase 3: all 13 (one more was dropped by the owner); gate G3 passed on 17 October;
-phase 4: 3 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
+phase 4: 4 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
 **State:** phase 3 is finished and gate G3 passed (17 October); the move to phase 4 (taxes) is the
 owner's. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
@@ -44,7 +44,7 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 418 unit, 6 architecture, 138 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
+| .NET tests | ✅ | 429 unit, 6 architecture, 141 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
 | Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
@@ -65,7 +65,8 @@ read in the code.
 | A price for any date says what it is | ✅ tests only | the session's own, carried over a closed day, missing, unavailable; nothing values a position with it yet. 88 deliberate breakages of the prices code caught |
 | Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
 | A wrong session or fund event is withdrawn by the owner | ✅ tests only | never needed for real. Tests: a withdrawn session is a closed day (no "missing"), a withdrawn dividend is out of the index portfolio, nothing goes without the owner's code and reason, a stale code is refused, 22 events or 6 sessions at once get no code, other funds' events on the day go with it (PostgreSQL), `check` names it; 11 planted violations of the new database rules; 24 deliberate breakages, 23 caught (the 24th changes nothing). `accounting-reviewer` two rounds |
-| Tax parameters with their sources | ✅ tests only | config/tax.toml: 21 parameters, each with its rule of docs/tax-sources.md, the first-hand source and the day read, none checked by an accountant; two open questions refuse instead of giving a zero. 20 tests: the file reads, every rule is in the sources, a parameter without a source or outside what it can be is refused. No tax is computed yet |
+| Tax parameters with their sources | ✅ tests only | config/tax.toml: 25 parameters, each with its rule of docs/tax-sources.md, the first-hand source and the day read, none checked by an accountant; five open questions (O1, O2, O3, O9, O10) refuse instead of giving a zero. `check` reads the file and says how many are open. Tests: the file reads, every rule is in the sources, a parameter without a source or outside what it can be is refused |
+| Real gain of a sale | ✅ tests only | `RealGain` (one lot's part of a sale in shekels) and `CapitalGains.OfYearAsync` (the sales of a tax year, all holding places): the exchange rate as the index (s.88), commissions in cost and proceeds (also one booked after 31 December), the Bank of Israel rate of each trade day or, on a day without one, the last before it. The Tax Authority's circular 10/2025 examples 1-4 come out to the agora, plus three hand-worked ledgers through the real Host. Not computed - and said - for corporate-action cash, a lot bought before 2006, a missing, provisional or other rate, a security not in dollars; the sums are not given then. A running year is said to be one (not the year's figures). A loss with the fund bought again within 30 days at any broker, or with those days not over (O9), and a fraction of a share (O10) are computed and named as resting on an open question. 28 deliberate breakages caught; `accounting-reviewer` three rounds. No sale has happened, so no real figure exists; an estimate, not checked by an accountant |
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
 | Statement (Flex) import | ✅ | **Real account, 17 October:** `fetch-statement` with the owner's token, `import-statement` into the working database — the first deposit (100 ILS, booked by IBKR the day after its date: recorded on the day of the booking, decision 18), agreeing with IBKR's cash at the start and end; the statement came as one 30-day period, so not checked day by day (gap 22). Before that: three paper-account statements imported one after another and again into a throw-away database, each agreeing at both ends; the paper statement refused by the working database. 17 integration and 85 unit tests; `accounting-reviewer` five rounds. A sale (sold first-in-first-out in the books) and an ordinary dividend with its withheld tax are read - tested on rows written by hand, not seen on a real statement yet. A split or other corporate action, a cancellation or correction, a transfer, a distribution that is not an ordinary dividend are refused until seen |
@@ -239,9 +240,10 @@ Ordered roughly by how much they would hurt.
    first such statement stops the imports until the import is taught from it.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
    applies to a trade. The first-hand sources are now in `docs/tax-sources.md` (P4.0.01: rules R1–R12,
-   open questions O1–O8, among them exchange-rate differences on dollar cash and what a US ETF's
-   distribution consists of), their figures in `config/tax.toml` (P4.1.01); no tax calculation uses
-   them yet, and no accountant checks them before P4.3.01 (decision 21).
+   open questions O1–O10, among them exchange-rate differences on dollar cash, what a US ETF's
+   distribution consists of, a repurchase after a loss and fractional shares), their figures in
+   `config/tax.toml` (P4.1.01). The real gain of a sale is computed from them (P4.1.02); no
+   accountant checks them before P4.3.01 (decision 21).
 3. **The session calendar of the daily jobs has no holidays** (`WeekdayCalendar`). Harmless for the
    rates job; not good enough for settlement dates or anything that decides about money. The real
    sessions are in `market_sessions` now, but only as far as the last import of prices.
@@ -296,7 +298,7 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P4.1.02** (the real gain of a sale) and **P4.1.03** (dividends, interest, the US credit) → P4.1.04
+1. **P4.1.03** (dividends, interest, the US credit) → P4.1.04
    (losses) → P4.2.01 (half-year sums) → P4.2.02 (the yearly export); the owner decides where to hold
    the index (P4.0.03) from `docs/index-placement.md`.
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.

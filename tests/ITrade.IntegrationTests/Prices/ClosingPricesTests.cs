@@ -727,6 +727,8 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         }
 
         var withdrawn = await CheckAsync();
+        // The tax parameters are read here too, so a file that would be refused is found before a figure is asked for.
+        Assert.Contains("tax.toml: 25 parameters, 5 open; estimates, none checked by an accountant", withdrawn, StringComparison.Ordinal);
         Assert.Contains($"  closing prices   up to session {today.PlusDays(-2):R}, 2 day(s) old{Environment.NewLine}", withdrawn, StringComparison.Ordinal);
         Assert.Contains(
             $"  closing prices   withdrawn by the owner: 1 session(s) ({today.PlusDays(-1):R}), 0 dividend(s) or split(s) - closed days and events that did not happen, from then on",

@@ -16,7 +16,7 @@ namespace ITrade.Infrastructure.Fx;
 /// </summary>
 public sealed class BankOfIsraelRates(HttpClient http) : IFxRateSource
 {
-    public const string SourceName = "BOI representative";
+    public const string SourceName = FxSources.BankOfIsraelRepresentative;
     public const string SeriesCode = "RER_USD_ILS";
 
     public static readonly Uri Series = new(

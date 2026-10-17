@@ -2,6 +2,13 @@ using NodaTime;
 
 namespace ITrade.Domain;
 
+/// <summary>The names the sources of rates go by.</summary>
+public static class FxSources
+{
+    /// <summary>The Bank of Israel's representative rate (שער יציג): the one rate Israeli tax converts with.</summary>
+    public const string BankOfIsraelRepresentative = "BOI representative";
+}
+
 /// <summary>
 /// "1 <see cref="From"/> = <see cref="Rate"/> <see cref="To"/>" on a date, from a named source (e.g. the Bank of
 /// Israel representative rate, PLAN §6). Conversion is always explicit. In the direction of the quote

@@ -24,22 +24,30 @@ public static partial class TaxParametersFile
 
     private static readonly AnnualDatePattern MonthDay = AnnualDatePattern.CreateWithInvariantCulture("MM'-'dd");
 
-    /// <summary>The file in the repository's config folder, found from the starting folder upwards.</summary>
-    public static string Locate(string startDirectory)
+    /// <summary>
+    /// The file in the repository's config folder, found from each starting folder upwards in turn - the commands
+    /// look from the folder they run in, as for config/instruments.csv.
+    /// </summary>
+    public static string Locate(params string[] startDirectories)
     {
-        for (var folder = new DirectoryInfo(startDirectory); folder is not null; folder = folder.Parent)
+        ArgumentNullException.ThrowIfNull(startDirectories);
+        foreach (var start in startDirectories)
         {
-            var candidate = Path.Combine(folder.FullName, "config", "tax.toml");
-            if (File.Exists(candidate))
+            for (var folder = new DirectoryInfo(start); folder is not null; folder = folder.Parent)
             {
-                return candidate;
+                var candidate = Path.Combine(folder.FullName, "config", "tax.toml");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
             }
         }
 
-        throw new FileNotFoundException($"config/tax.toml is not in {startDirectory} or any folder above it.");
+        throw new FileNotFoundException($"config/tax.toml is not in {string.Join(" or ", startDirectories)} or any folder above it.");
     }
 
-    public static TaxParameters Read(string path) => Parse(File.ReadAllText(path), Path.GetFileName(path));
+    public static TaxParameters Read(string path) =>
+        Parse(File.ReadAllText(path), Path.GetFileName(path)) with { Origin = Path.GetFullPath(path) };
 
     public static TaxParameters Parse(string text, string where = "tax.toml")
     {
@@ -63,7 +71,9 @@ public static partial class TaxParametersFile
             reader.Take("surtax_rate", Rate),
             reader.Take("surtax_capital_rate", Rate),
             reader.Take("surtax_threshold_ils", Shekels),
+            reader.Take("real_gain", Named(new Dictionary<string, RealGainRule>(StringComparer.Ordinal) { ["exchange-rate-as-index"] = RealGainRule.ExchangeRateAsIndex })),
             reader.Take("lot_matching", Named(new Dictionary<string, LotMatching>(StringComparer.Ordinal) { ["fifo"] = LotMatching.Fifo })),
+            reader.Take("lot_matching_abroad", Rate),
             reader.Take("exchange_rate", Named(new Dictionary<string, TaxExchangeRate>(StringComparer.Ordinal) { ["bank-of-israel-representative"] = TaxExchangeRate.BankOfIsraelRepresentative })),
             reader.Take("exchange_rate_day_of_a_trade", Named(new Dictionary<string, TradeRateDay>(StringComparer.Ordinal) { ["earlier-of-trade-and-payment"] = TradeRateDay.EarlierOfTradeAndPayment })),
             reader.Take("exchange_rate_day_of_income", Named(new Dictionary<string, IncomeRateDay>(StringComparer.Ordinal) { ["day-paid"] = IncomeRateDay.DayPaid })),
@@ -75,7 +85,9 @@ public static partial class TaxParametersFile
             reader.Take("foreign_income_advance_due", Day),
             reader.Take("annual_return_due", Day),
             reader.Take("exchange_differences_on_cash", Rate),
-            reader.Take("us_fund_distribution_kinds", Rate));
+            reader.Take("us_fund_distribution_kinds", Rate),
+            reader.Take("repurchase_after_a_loss", Rate),
+            reader.Take("fractional_shares", Rate));
         reader.NothingElse();
         return parameters;
     }

@@ -23,7 +23,7 @@ first annual return with a capital gain, not a condition of the gate.
 
 ## What the program assumes today
 The first-hand sources are in `docs/tax-sources.md` (P4.0.01, 17 October 2026): rules R1–R12 with section, URL,
-excerpt and version, and open questions O1–O8. Read it before any tax code; cite its rule ID in the code and tests.
+excerpt and version, and open questions O1–O10. Read it before any tax code; cite its rule ID in the code and tests.
 The figures are in `config/tax.toml` (P4.1.01): each a table with `value` (or `open = "O…"`), `rule`, `source`,
 `read`, `checked_by_accountant`, read by `TaxParametersFile` into `TaxParameters` (Domain) - a parameter without a
 source is refused, an open one throws `TaxRuleOpenException` when its value is asked for.
@@ -40,6 +40,28 @@ source is refused, an open one throws `TaxRuleOpenException` when its value is a
 | Half-year report and advance (31 July, 31 January); annual advance on foreign income (30 April); annual return 30 April | `*_due` | sourced: R9–R11; the half-year form is open (O5) |
 | Exchange-rate differences on dollar cash | `exchange_differences_on_cash` (open) | **open** (O3): named as untaxed by assumption, flagged |
 | Where to hold an index (US ETF, Irish UCITS) | — | P4.0.02 compares, the owner decides (P4.0.03); keren hishtalmut is out (owner, 2026-10-12) |
+
+## What exists (P4.1.01 – P4.1.02)
+- `TaxParameters` (Domain) from `config/tax.toml` through `TaxParametersFile` (Infrastructure); the Host reads the
+  file the first time a tax figure needs it (`AddTax`).
+- `RealGain.Of(disposal, purchaseRate, saleRate)` → `SaleInShekels` (Domain): cost = (cost + purchase commission) ×
+  the purchase rate, proceeds = (proceeds − sale commission) × the sale rate; the inflationary amount = the dollars
+  paid × the change of the rate; a gain: real = nominal − the inflationary amount between 0 and nominal; a loss: all
+  of it when the shekel weakened, only the dollar loss at the sale rate when it strengthened (R2, Moses). Dollar
+  securities only; refused: a rate that is provisional, of another day or not the Bank of Israel's representative
+  one, and a lot bought before 2006 (transitional rules, not built). Tested on circular 10/2025's examples 1–4.
+- `CapitalGains.OfYearAsync(year)` (Application): the books of each holding place as of today (a commission dated
+  after 31 December stays with its sale), the parts of the sales of that year, the Bank of Israel rates of the
+  trade days (`FxRates.FindAsync`; a day without a rate takes the last one before it once a later one is stored,
+  R3). Refuses to run when `config/tax.toml` names another real-gain, lot or rate rule, or answers O2/O9/O10.
+  What cannot be computed (corporate-action cash, a lot before 2006, no rate, a provisional or foreign one) is
+  named in `NotComputed` and the sums are null then. `YearOver` is false while the year runs (New York date):
+  `IsComplete` needs both. `Remarks` name the year not over, a loss with the fund bought at any holding place
+  within 30 days or those days not over (O9), a fraction of a share (O10) - they may over-name (a lot sold in the
+  same sale counts as a purchase around it; a fraction left by a split), never under-name. `Assumptions` lists the
+  parameters it rests on, `ParametersFrom` the file. A sale not imported yet is not counted: the ledger is all it
+  knows.
+  No tax amount yet: the rate and the offsets of losses come with P4.1.04.
 
 When an answer arrives: replace the assumption, write the answer's **date and source** next to the
 number (its `source` and `read` in `config/tax.toml`, `checked_by_accountant = true`, the row in

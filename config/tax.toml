@@ -3,7 +3,7 @@
 #
 # ESTIMATES, NOT CHECKED BY AN ACCOUNTANT (owner, 2026-10-12; the check is P4.3.01). Every parameter names the rule
 # of docs/tax-sources.md it comes from (R1-R12), the first-hand source and the day it was read; a parameter without
-# them is refused (TaxParametersFile). One that has no first-hand source yet is `open` (O1-O8) and has no value:
+# them is refused (TaxParametersFile). One that has no first-hand source yet is `open` (O1-O10) and has no value:
 # the code refuses its case instead of using a zero. A value changes only with a newer source or an accountant's
 # answer - then its source and date change with it, and `checked_by_accountant` becomes true.
 
@@ -63,10 +63,23 @@ source = "Tax Authority monthly withholding booklet 2026 (after the budget law o
 read = 2026-10-17
 checked_by_accountant = false
 
+[real_gain]                        # a security in dollars: the exchange rate is the index; a negative inflationary amount is 0;
+value = "exchange-rate-as-index"   # the exchange-rate part of a loss is not offset (our reading: a shekel loss that is all of it, 0)
+rule = "R2"
+source = "Income Tax Ordinance s.88 'index' (Nevo, version 2026-09-27); Tax Authority circular 10/2025 appendix, examples 1-4 (2025-11-27); Moses, CA 3555/15 (2016-09-12)"
+read = 2026-10-17
+checked_by_accountant = false
+
 [lot_matching]                     # identical securities bought at different times
 value = "fifo"
 rule = "R4"
 source = "Income Tax Regulations (capital gain on listed securities) 2002, reg. 5 (Nevo, version 2025-07-15); open for ETFs held abroad: O2"
+read = 2026-10-17
+checked_by_accountant = false
+
+[lot_matching_abroad]              # does reg. 5 (FIFO) formally bind ETFs held directly at a foreign broker?
+open = "O2"
+source = "no first-hand source: the regulations of 2002 exclude 'נייר ערך זר' from their 'נייר ערך'"
 read = 2026-10-17
 checked_by_accountant = false
 
@@ -149,5 +162,17 @@ checked_by_accountant = false
 [us_fund_distribution_kinds]       # a RIC's capital-gain distribution or return of capital: also a dividend?
 open = "O1"
 source = "no first-hand source"
+read = 2026-10-17
+checked_by_accountant = false
+
+[repurchase_after_a_loss]          # a loss on a sale with the same fund bought again around it: offsettable in full?
+open = "O9"
+source = "no first-hand source of an Israeli rule; the case is named in the result"
+read = 2026-10-17
+checked_by_accountant = false
+
+[fractional_shares]                # a part of a share sold: any rule of its own?
+open = "O10"
+source = "no first-hand source; the case is named in the result"
 read = 2026-10-17
 checked_by_accountant = false
