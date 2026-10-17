@@ -4,7 +4,7 @@ Running memory of what exists, what verified it, and why it is the way it is. Re
 picking the project back up. Task-level detail — every card with its dated note — is in
 [docs/roadmap/](docs/roadmap/README.md); live numbers come from `python tools/roadmap.py status`.
 
-**Last updated:** 16 October 2026
+**Last updated:** 17 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: all 106 tasks;
 phase 3: 10 of 12 (one more was dropped by the owner).
@@ -234,12 +234,10 @@ Ordered roughly by how much they would hurt.
     it cannot be withdrawn yet.
 19. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
-20. **The Host runs on ASP.NET Core 10.0.10**, older than the fix of a SignalR advisory of 16 October
-    (GHSA-334f-vvp4-7g6p; the test package was raised to 10.0.13). The owner updates the .NET 10 SDK.
-21. **IBKR leaves the Cash Report's rows per currency out of some days**, differently from download to
+20. **IBKR leaves the Cash Report's rows per currency out of some days**, differently from download to
     download. A day without them is not checked alone; a first or last day without them, once the
     account holds two currencies, refuses the statement - download it again.
-22. **Two imports run at the same moment** are kept apart only by the ledger's unique keys; what one
+21. **Two imports run at the same moment** are kept apart only by the ledger's unique keys; what one
     records may differ from what it checked, and the check after recording then says so.
 
 ---
@@ -255,8 +253,7 @@ Small steps, one task at a time (`/next-task`):
 ## Waiting on the owner
 
 - **Create the Flex query and token on the real account** (the paper login's token downloads the
-  paper account, which is never recorded); **update the .NET 10 SDK** (runtime 10.0.10 predates a
-  SignalR fix).
+  paper account, which is never recorded).
 - **Renew the Flex token** before it expires — at most a year after 16 October 2026 (the date is in the portal).
 - **Push** local commits (VS Code "Sync Changes") — Claude has no credentials for it.
 - **Refresh the prices after the New York close** (after 23:30 in Israel), when a current value is

@@ -20,7 +20,7 @@ triggers, reviewer agents — not left to memory.
 
 | Concern | Choice | Version |
 |---|---|---|
-| Runtime | .NET (`global.json`, SDK 10.0.302) | 10 |
+| Runtime | .NET (`global.json`, SDK 10.0.402; runtime 10.0.13 or later) | 10 |
 | Web | ASP.NET Core minimal APIs, SignalR, OpenAPI | 10.0.12 |
 | ORM | EF Core + Npgsql, snake_case names | 10.0.12 / 10.0.3 |
 | Time | NodaTime (no `DateTime`, no `DateOnly`) | 3.3.5 |
