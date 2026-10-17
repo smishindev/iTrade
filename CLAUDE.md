@@ -48,7 +48,8 @@ ingest, statistics. **Python never trades.**
   daily job `fx-rates` does; needs the internet; `--accept-changes <code> "<why>"` is the owner's step when the bank
   changed a stored rate — never run it for the owner) · `-- import-prices` loads the closing prices the Python
   pipeline exported (`itrade ingest --universe etf_pullback_v1` — the catalogue's funds — or `itrade export-closes`;
-  `--accept-changes <code>` again is the owner's) · `-- fetch-statement` downloads the IBKR Flex statement into
+  `--accept-changes <code>` again is the owner's, and so is `--withdraw <code> "<why>"`, which withdraws a stored
+  session the corrected calendar does not list or a dividend/split the source no longer states) · `-- fetch-statement` downloads the IBKR Flex statement into
   `<data>/flex` (token and query id in user-secrets, typed in by the owner) · `-- import-statement "<file>"` records it
   in the ledger (repeatable; refuses a paper account, anything not seen on a real statement yet, and a day whose cash
   differs from IBKR's Cash Report — and then records nothing) · `-- reconcile ["<file>"]` holds the ledger against the

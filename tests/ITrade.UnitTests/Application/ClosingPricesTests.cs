@@ -600,6 +600,148 @@ public sealed class ClosingPricesTests
         Assert.Equal((false, 0), (PriceOnDate.Missing(Spy.Id, Day(5)).HasPrice, PriceOnDate.Missing(Spy.Id, Day(5)).DaysCarried));
     }
 
+    /// <summary>P3.4.05: SPY on Friday the 2nd and Tuesday the 6th, XLK too; nobody priced Monday the 5th.</summary>
+    private static readonly (string Ticker, int Day, decimal Close)[] NoMonday =
+        [("SPY", 2, 769.64m), ("SPY", 6, 779.09m), ("XLK", 2, 301.10m), ("XLK", 6, 304.20m)];
+
+    [Fact]
+    public async Task AStoredSessionTheExportNoLongerListsIsWithdrawnOnlyByTheOwnersCodeAndIsThenAClosedDay()
+    {
+        // The calendar library took Monday the 5th for a session; corrected, it says the exchange was closed.
+        await ImportAsync(Export(NoMonday));
+        Assert.Equal(PriceAvailability.MissingForTheSession, (await OnAsync(Spy, Day(5))).Availability);
+        var corrected = Export(NoMonday, sessions: [Day(1), Day(2), Day(6)]);
+
+        var refused = await Assert.ThrowsAsync<PricesDisagreeException>(() => ImportAsync(corrected));
+        Assert.True(refused.IsWithdrawal);
+        Assert.StartsWith("2026-10-05 is stored as session(s) of XNYS and the export does not list it. The two calendars disagree.", refused.Message, StringComparison.Ordinal);
+
+        // Not without the owner: no reason, another code - nothing is stored or withdrawn.
+        var notes = _store.Notes.Count;
+        await Assert.ThrowsAsync<ArgumentException>(() => _prices.ImportAsync(corrected, null, new OwnersWithdrawal(refused.Code, " "), CancellationToken.None));
+        var wrong = await Assert.ThrowsAsync<PricesDisagreeException>(() => _prices.ImportAsync(corrected, null, new OwnersWithdrawal("00000000", "closed"), CancellationToken.None));
+        Assert.Equal((refused.Code, true), (wrong.Code, wrong.IsWithdrawal));
+        Assert.Equal(notes, _store.Notes.Count);
+        Assert.Equal(PriceAvailability.MissingForTheSession, (await OnAsync(Spy, Day(5))).Availability);
+
+        var withdrawn = await _prices.ImportAsync(corrected, null, new OwnersWithdrawal(refused.Code.ToLowerInvariant(), "NYSE was closed: national day of mourning"), CancellationToken.None);
+
+        Assert.Equal([Day(5)], withdrawn.SessionsWithdrawn);
+        // A withdrawn session is no gap any more: Friday's close is carried over the closed day.
+        var monday = await OnAsync(Spy, Day(5));
+        Assert.Equal((PriceAvailability.CarriedOverAClosedDay, 769.64m), (monday.Availability, monday.Price!.Close.Value));
+        Assert.Equal([Day(1), Day(2), Day(6)], _store.Sessions.Order());
+        Assert.Equal((PricesNote.Withdrawn, "owner"), (_store.Notes[^1].Kind, _store.Notes[^1].Actor));
+        Assert.Contains("NYSE was closed: national day of mourning", _store.Notes[^1].Payload, StringComparison.Ordinal);
+
+        // Once withdrawn, the same export has nothing to withdraw; one that lists the day again is wrong.
+        Assert.Empty((await ImportAsync(corrected)).SessionsWithdrawn ?? []);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _prices.ImportAsync(corrected, null, new OwnersWithdrawal(refused.Code, "again"), CancellationToken.None));
+        var listedAgain = await Assert.ThrowsAsync<InvalidOperationException>(() => ImportAsync(Export(NoMonday)));
+        Assert.Contains("the owner withdrew that day (NYSE was closed: national day of mourning)", listedAgain.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASessionIsWithdrawnWithEveryEventOnItOfAnyFundAndItsOwnCode()
+    {
+        // XLC "paid" on the Monday that was no session; this export does not even carry XLC.
+        await ImportAsync(Export([.. NoMonday, ("XLC", 6, 110.05m)], events: [("XLC", 5, FundEventKind.Dividend, 0.2m), ("SPY", 6, FundEventKind.Dividend, 1.889m)]));
+        var corrected = Export(NoMonday, sessions: [Day(1), Day(2), Day(6)]);
+
+        var refused = await Assert.ThrowsAsync<PricesDisagreeException>(() => ImportAsync(corrected));
+        Assert.Contains("2026-10-05 is stored as session(s) of XNYS and the export does not list it. On it stored: XLC 2026-10-05 dividend 0.2. The two calendars disagree.", refused.Message, StringComparison.Ordinal);
+
+        // SPY's dividend of the 6th is a finding of its own, with its own code; it is no way past the calendar.
+        var events = await Assert.ThrowsAsync<PricesDisagreeException>(() => _prices.ImportAsync(corrected, null, new OwnersWithdrawal("00000000", "x"), CancellationToken.None));
+        Assert.Equal(refused.Code, events.Code);
+
+        var withdrawn = await _prices.ImportAsync(corrected, null, new OwnersWithdrawal(refused.Code, "NYSE was closed"), CancellationToken.None);
+
+        Assert.Equal([Day(5)], withdrawn.SessionsWithdrawn);
+        Assert.Equal([("XLC", Day(5))], withdrawn.EventsWithdrawn!.Select(e => (e.Ticker, e.Event.Day)));
+        Assert.Empty(await _prices.EventsAsync(Xlc.Id, Day(1), Day(6), CancellationToken.None));
+        // The SPY dividend the export no longer states is still offered - separately, under another code.
+        Assert.Equal([("SPY", Day(6))], withdrawn.EventsNotRepeated.Select(e => (e.Ticker, e.Event.Day)));
+        Assert.NotEqual(refused.Code, withdrawn.WithdrawCode);
+    }
+
+    [Fact]
+    public async Task ACodeIsOfExactlyOneFindingAndManyEventsAtOnceGetNone()
+    {
+        (string, int, FundEventKind, decimal)[] both = [("SPY", 5, FundEventKind.Dividend, 1.889m), ("XLK", 6, FundEventKind.Dividend, 0.168m)];
+        await ImportAsync(Export(WeekLines, events: both));
+        var oneDropped = (await ImportAsync(Export(WeekLines, events: [both[1]]))).WithdrawCode!;
+        var bothDropped = (await ImportAsync(Week())).WithdrawCode!;
+        Assert.NotEqual(oneDropped, bothDropped);
+
+        var stale = await Assert.ThrowsAsync<PricesDisagreeException>(() => _prices.ImportAsync(Week(), null, new OwnersWithdrawal(oneDropped, "checked one"), CancellationToken.None));
+        Assert.Equal((bothDropped, true), (stale.Code, stale.IsWithdrawal));
+        Assert.Contains("SPY 2026-10-05 dividend 1.889; XLK 2026-10-06 dividend 0.168", stale.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<ArgumentException>(() => _prices.ImportAsync(Week(), null, new OwnersWithdrawal(bothDropped, new string('x', ClosingPrices.LongestReason + 1)), CancellationToken.None));
+
+        // Twenty-two dividends of SPY gone at once: an incomplete export, not a correction - no code is offered.
+        var many = new ClosingPrices(new MemoryStore(), new Catalogue(Spy, Xlk, Xlc), _clock);
+        _clock.Reset(Instant.FromUtc(2026, 11, 2, 14, 0));
+        var days = Weekdays(30);
+        (string, int, decimal)[] closes = [.. days.Select(d => ("SPY", d.Day, 770m))];
+        await many.ImportAsync(Export(closes, through: 30, events: [.. days.Select(d => ("SPY", d.Day, FundEventKind.Dividend, 0.01m))]), null, CancellationToken.None);
+        var dropped = await many.ImportAsync(Export(closes, through: 30), null, CancellationToken.None);
+        Assert.Equal((22, (string?)null), (dropped.EventsNotRepeated.Count, dropped.WithdrawCode));
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => many.ImportAsync(Export(closes, through: 30), null, new OwnersWithdrawal("any", "all of them"), CancellationToken.None));
+        Assert.Contains("more than a correction (at most 20 are withdrawn at once)", refused.Message, StringComparison.Ordinal);
+
+        // A calendar that drops six sessions at once is broken: no code to withdraw them.
+        var calendar = new ClosingPrices(new MemoryStore(), new Catalogue(Spy, Xlk, Xlc), _clock);
+        await calendar.ImportAsync(Export([("SPY", 1, 760m), ("SPY", 30, 770m)], through: 30), null, CancellationToken.None);
+        var broken = await Assert.ThrowsAsync<InvalidOperationException>(() => calendar.ImportAsync(
+            Export([("SPY", 1, 760m), ("SPY", 30, 770m)], through: 30, sessions: [.. days.Where(d => d.Day is < 5 or > 12)]), null, CancellationToken.None));
+        Assert.Contains("more than an unscheduled closure (at most 5 sessions are withdrawn at once)", broken.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASessionSomethingClosedOnIsNeverWithdrawn()
+    {
+        await ImportAsync(Week()); // SPY closed on Monday the 5th
+
+        var traded = await Assert.ThrowsAsync<InvalidOperationException>(() => _prices.ImportAsync(
+            Export(WeekLines.Where(l => l.Day != 5).ToArray(), sessions: [Day(1), Day(2), Day(6)]), null, new OwnersWithdrawal("any", "closed"), CancellationToken.None));
+
+        Assert.Contains("closing prices are stored for it: something traded that day, so it was a session", traded.Message, StringComparison.Ordinal);
+        Assert.Contains(Day(5), _store.Sessions);
+    }
+
+    [Fact]
+    public async Task AWithdrawnDividendIsNoLongerFollowedByTheIndexAndComesBackWhenTheSourceStatesItAgain()
+    {
+        (string, int, FundEventKind, decimal)[] paid = [("SPY", 5, FundEventKind.Dividend, 1.889m)];
+        await ImportAsync(Export(WeekLines, events: paid));
+
+        // The vendor no longer states the dividend: it is kept, followed, and the owner is offered its withdrawal.
+        var dropped = await ImportAsync(Week());
+        var offered = dropped.WithdrawCode!;
+        Assert.Single(dropped.EventsNotRepeated);
+        Assert.Single(await _prices.EventsAsync(Spy.Id, Day(1), Day(6), CancellationToken.None));
+
+        var withdrawn = await _prices.ImportAsync(Week(), null, new OwnersWithdrawal(offered, "SPY paid nothing on 5 October (the fund's own distribution history)"), CancellationToken.None);
+
+        Assert.Equal((1, 0), (withdrawn.EventsWithdrawn!.Count, withdrawn.EventsNotRepeated.Count));
+        var events = await _prices.EventsAsync(Spy.Id, Day(1), Day(6), CancellationToken.None);
+        Assert.Empty(events);
+        // The index portfolio is followed with what the store gives: 1,000 in on Friday at 100, 110 on Tuesday.
+        ValuePoint[] owner = [new(Day(1), 0m, 0m, 0m), new(Day(2), 1000m, 1000m, 0m), new(Day(6), 1100m, 0m, 0m)];
+        var closes = new Dictionary<LocalDate, decimal> { [Day(1)] = 100m, [Day(2)] = 100m, [Day(5)] = 100m, [Day(6)] = 110m };
+        Assert.Equal(1100m, IndexPortfolio.Following(owner, events, closes, 0.75m)[^1].Value);
+        // With the dividend it bought 10 x 1.889 x 0.75 / 100 more shares.
+        Assert.Equal(10.141675m * 110m, IndexPortfolio.Following(owner, [new FundEvent(Spy.Id, Day(5), FundEventKind.Dividend, 1.889m, "yfinance")], closes, 0.75m)[^1].Value);
+        Assert.Null((await ImportAsync(Week())).WithdrawCode); // nothing more to withdraw
+
+        // The vendor states it again: it is in use again, as the next revision, and said so.
+        var back = await ImportAsync(Export(WeekLines, events: paid));
+        Assert.Single(back.EventsBack!);
+        Assert.Single(await _prices.EventsAsync(Spy.Id, Day(1), Day(6), CancellationToken.None));
+        Assert.Equal([0, 2], _store.Events.Where(e => e.Event.Instrument == Spy.Id).Select(e => e.Revision));
+    }
+
     /// <summary>The instruments the import matches tickers against.</summary>
     private sealed class Catalogue(params Instrument[] instruments) : IInstrumentStore
     {
@@ -664,25 +806,71 @@ public sealed class ClosingPricesTests
 
         public List<(FundEvent Event, int Revision)> Events { get; } = [];
 
+        /// <summary>The rows that withdraw an event: a further revision of it.</summary>
+        public List<(FundEvent Event, int Revision, string Reason)> EventWithdrawals { get; } = [];
+
+        /// <summary>Withdrawn days: no longer in <see cref="Sessions"/>.</summary>
+        public Dictionary<LocalDate, string> WithdrawnSessions { get; } = [];
+
+        private static bool Same(FundEvent a, FundEvent b) => a.Instrument == b.Instrument && a.Day == b.Day && a.Kind == b.Kind;
+
+        private int LastRevision(FundEvent e) =>
+            Events.Where(s => Same(s.Event, e)).Select(s => s.Revision).Concat(EventWithdrawals.Where(w => Same(w.Event, e)).Select(w => w.Revision)).DefaultIfEmpty(-1).Max();
+
+        private bool IsLive(FundEvent e, int revision) => !EventWithdrawals.Exists(w => Same(w.Event, e) && w.Revision > revision);
+
         public Task<IReadOnlyList<FundEvent>> ListEventsAsync(InstrumentId instrument, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<FundEvent>>(
                 Events.Where(e => e.Event.Instrument == instrument)
-                    .GroupBy(e => (e.Event.Day, e.Event.Kind)).Select(g => g.MaxBy(e => e.Revision).Event)
+                    .GroupBy(e => (e.Event.Day, e.Event.Kind)).Select(g => g.MaxBy(e => e.Revision))
+                    .Where(e => IsLive(e.Event, e.Revision)).Select(e => e.Event)
                     .OrderBy(e => e.Day).ThenBy(e => e.Kind).ToList());
+
+        public Task<IReadOnlyList<WithdrawnSession>> ListWithdrawnSessionsAsync(string calendar, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WithdrawnSession>>(
+                calendar == ClosingPrices.Calendar ? WithdrawnSessions.OrderBy(w => w.Key).Select(w => new WithdrawnSession(w.Key, w.Value)).ToList() : []);
+
+        public Task<IReadOnlyList<WithdrawnEvent>> ListWithdrawnEventsAsync(InstrumentId instrument, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WithdrawnEvent>>(
+                EventWithdrawals.Where(w => w.Event.Instrument == instrument && w.Revision == LastRevision(w.Event))
+                    .Select(w => new WithdrawnEvent(w.Event, w.Reason)).ToList());
+
+        public Task<IReadOnlyList<FundEvent>> ListEventsOnAsync(LocalDate day, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<FundEvent>>(
+                Events.Where(e => e.Event.Day == day && e.Revision == LastRevision(e.Event) && IsLive(e.Event, e.Revision)).Select(e => e.Event).ToList());
+
+        public Task<bool> AnyCloseOnAsync(LocalDate session, CancellationToken cancellationToken) =>
+            Task.FromResult(Rows.Exists(r => r.Price.Session == session));
+
+        public Task<(int Sessions, int Events)> CountWithdrawnAsync(CancellationToken cancellationToken) =>
+            Task.FromResult((WithdrawnSessions.Count, EventWithdrawals.Count(w => w.Revision == LastRevision(w.Event))));
 
         public Task AddAsync(
             PricesToStore what, Instant importedAt, PricesNote note, ImportedExport importedExport, CancellationToken cancellationToken)
         {
             var (added, revised, sessions) = (what.Added, what.Revised, what.Sessions);
-            bool Happened(FundEvent e) => Events.Exists(s => s.Event.Instrument == e.Instrument && s.Event.Day == e.Day && s.Event.Kind == e.Kind);
-            if (what.Events.Any(Happened) || !what.RevisedEvents.All(Happened)
+            var withdrawn = what.Withdrawn ?? new Withdrawal([], [], "");
+            bool Live(FundEvent e) => Events.Exists(s => Same(s.Event, e) && s.Revision == LastRevision(e));
+            if (what.Events.Any(Live) || !what.RevisedEvents.All(Live) || !withdrawn.Events.All(Live)
                 || what.Events.Concat(what.RevisedEvents).Any(e => !Sessions.Contains(e.Day) && !sessions.Contains(e.Day)))
             {
-                throw new InvalidOperationException("A fund event stored twice, a revision of none, or one on a day that is no session.");
+                throw new InvalidOperationException("A fund event stored twice, a revision or withdrawal of none, or one on a day that is no session.");
             }
 
-            Events.AddRange(what.Events.Select(e => (e, 0)));
-            Events.AddRange(what.RevisedEvents.Select(e => (e, Events.Where(s => s.Event.Instrument == e.Instrument && s.Event.Day == e.Day && s.Event.Kind == e.Kind).Max(s => s.Revision) + 1)));
+            if (withdrawn.Sessions.Any(s => !Sessions.Contains(s) || Rows.Exists(r => r.Price.Session == s)
+                || Events.Exists(e => e.Event.Day == s && e.Revision == LastRevision(e.Event) && !withdrawn.Events.Any(w => Same(w, e.Event)))))
+            {
+                throw new InvalidOperationException("A withdrawal of no session, or of one a close or a live event rests on.");
+            }
+
+            Events.AddRange(what.Events.Select(e => (e, LastRevision(e) + 1)));
+            Events.AddRange(what.RevisedEvents.Select(e => (e, LastRevision(e) + 1)));
+            EventWithdrawals.AddRange(withdrawn.Events.Select(e => (e, LastRevision(e) + 1, withdrawn.Reason)));
+            foreach (var day in withdrawn.Sessions)
+            {
+                Sessions.Remove(day);
+                WithdrawnSessions[day] = withdrawn.Reason;
+            }
             bool Stored(ClosingPrice p) => Rows.Exists(r => r.Price.Instrument == p.Instrument && r.Price.Session == p.Session);
             if (added.Any(Stored) || !revised.All(Stored))
             {

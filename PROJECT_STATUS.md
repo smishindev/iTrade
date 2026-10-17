@@ -7,7 +7,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 17 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: all 106 tasks;
-phase 3: 11 of 13 (one more was dropped by the owner).
+phase 3: 12 of 13 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993. The first statement of the real account was imported on 17 October: one entry,
@@ -29,8 +29,8 @@ backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, t
 ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded, the
 value of the portfolio on a date, its returns and their comparison with the index, and the import of
 the broker's statement, held against IBKR's own figures, and the reconciliation of the ledger with the
-broker and with the split days of the prices. Left of phase 3: the gate check (and P3.4.05, withdrawing a
-fund event or a session).
+broker and with the split days of the prices, and the owner's withdrawal of a wrong session or fund
+event. Left of phase 3: the gate check.
 
 ---
 
@@ -42,13 +42,13 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 392 unit, 6 architecture, 136 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
+| .NET tests | ✅ | 397 unit, 6 architecture, 138 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
 | Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
 | One Host per database | ✅ | a second instance refused by the instance lock (integration test; seen on the real database on 12 October) |
 | Sign-in, lockout, session end | ✅ | integration tests and browser tests; the owner's password is set on the working database |
-| Working database | ✅ | 11 migrations applied; backups before each schema change and before the first real import, the latest `itrade-20261017-050036Z.dump` (restore verified) |
+| Working database | ✅ | 12 migrations applied (Withdrawals on 17 October; an import of prices afterwards: 185,301 unchanged); backups before each schema change and before the first real import, the latest `itrade-20261017-101356Z.dump` (restore verified) |
 | Backup and restore | ✅ | `backup.ps1`, then `restore.ps1 -Verify` into a temporary database (phase 2 gate) |
 | Instrument catalogue | ✅ | 29 ETFs imported; importing again: 29 unchanged |
 | Ledger: repeated import, reversal, corrected line | ✅ tests only | unit and PostgreSQL tests, 7 deliberate breakages caught. In the working database: 1 entry from the real account's statement (17 October); importing it again added nothing |
@@ -62,6 +62,7 @@ read in the code.
 | Value of the portfolio on a date | ✅ tests only | by holding place and in all, in dollars and shekels: a hand-worked example to the last digit, and through the real Host on PostgreSQL. The ledger is empty, so no real value exists yet. 34 deliberate breakages caught |
 | A price for any date says what it is | ✅ tests only | the session's own, carried over a closed day, missing, unavailable; nothing values a position with it yet. 88 deliberate breakages of the prices code caught |
 | Changed or unusual prices wait for the owner | ✅ tests only | never happened for real: the full re-fetch of 12 October restated none of 185,189 stored closes |
+| A wrong session or fund event is withdrawn by the owner | ✅ tests only | never needed for real. Tests: a withdrawn session is a closed day (no "missing"), a withdrawn dividend is out of the index portfolio, nothing goes without the owner's code and reason, a stale code is refused, 22 events or 6 sessions at once get no code, other funds' events on the day go with it (PostgreSQL), `check` names it; 11 planted violations of the new database rules; 24 deliberate breakages, 23 caught (the 24th changes nothing). `accounting-reviewer` two rounds |
 | Market data | ✅ | 33 curated series; the 29 funds of the catalogue fetched on 12 October 2026, finished sessions up to 12 October (EWC up to 6 October: the vendor's bar of 12 October has its open below the day's low and fails the quality check, also after the close). The warnings of that fetch were **not** reviewed again; the earlier ones are in [docs/data-notes.md](docs/data-notes.md) |
 | IB Gateway connection (paper) | ✅ phase 1 | spike B: connect, reconnect through the 09:25 restart, account summary matches the web interface |
 | Statement (Flex) import | ✅ | **Real account, 17 October:** `fetch-statement` with the owner's token, `import-statement` into the working database — the first deposit (100 ILS, booked by IBKR the day after its date: recorded on the day of the booking, decision 18), agreeing with IBKR's cash at the start and end; the statement came as one 30-day period, so not checked day by day (gap 22). Before that: three paper-account statements imported one after another and again into a throw-away database, each agreeing at both ends; the paper statement refused by the working database. 17 integration and 84 unit tests; `accounting-reviewer` five rounds. Not yet seen: a dividend, a sale, a split, a cancellation — each is refused until seen |
@@ -161,6 +162,16 @@ more after withholding; the result is measured by the same two returns. The fund
 index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
 ex-date - and says so.
 
+### 20. A session or a fund event is withdrawn only by the owner, by the code of what is named (17 October)
+A day the calendar library wrongly took for a session made every fund read "missing" for it and, once the
+library was corrected, blocked every import of prices; a dividend the vendor dropped kept counting in the
+index. Both can now be withdrawn - as a further row with the owner's reason, nothing changed or removed,
+every read skipping it - but only by `import-prices --withdraw <code> "<why>"`. Two findings, a code
+each, every item named: the sessions the export does not list, with every event on them; and the events
+it no longer states. More than 5 sessions or 20 events at once is a broken export and gets no code - the
+first review found that one bulk code could withdraw events the owner had not been shown. A day something
+closed on is never withdrawn; a withdrawn event the vendor states again is back in use, and said so.
+
 ### 19. Reconciliation shows both numbers, looks both ways and repairs nothing (17 October)
 `reconcile` holds the ledger as it is now against the imported statement that reaches furthest: the
 figures the import checks, each with the ledger's number and IBKR's; the statement's lines the ledger
@@ -233,10 +244,9 @@ Ordered roughly by how much they would hurt.
 10. **Backups are manual.**
 11. **Prices are refreshed by hand**, with two commands, after the New York close; nothing runs the
     data pipeline by itself. `check` shows the age of the prices and who is behind.
-12. **A stored session cannot be withdrawn.** If the calendar library calls a day of an unscheduled
-    closure a session, every fund reads "missing" for that day, and once the library is corrected
-    the imports are refused until a migration deals with it. A fund event the vendor drops stays too.
-    Both: P3.4.05.
+12. **A session withdrawn by mistake has no step to bring it back** (decision 20): the import refuses
+    every export that lists it again. The database would take a further live row; a step for it is
+    not built.
 13. **An export made from an older data folder passes as new** (it gets a fresh date); it can put
     back up to 20 price corrections of at most 2% each.
 14. **The currency of a price comes from the catalogue, not from the vendor.** Every fund is in
@@ -252,8 +262,8 @@ Ordered roughly by how much they would hurt.
 18. **Returns are before tax on gains**; a transfer between two holding places would be counted as
     the owner's money going out and coming in. The index comparison takes no commission from the
     index, and its dividends come from the free vendor, unchecked against the fund's announcements.
-    A dividend or split the vendor later moves or withdraws stays stored - it is named at the import,
-    it cannot be withdrawn yet.
+    A dividend or split the vendor later moves or drops stays in use until the owner withdraws it by
+    the code the import offers (decision 20).
 19. **[docs/accountant-questions.md](docs/accountant-questions.md) still describes the active
     trading of plan v3.**
 20. **IBKR leaves the Cash Report's rows per currency out of some days**, differently from download to
@@ -271,8 +281,7 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.G.01** (gate check of phase 3); **P3.4.05** (withdrawing a fund event or a session) is not a
-   condition of the gate and can follow.
+1. **P3.G.01** (gate check of phase 3).
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner

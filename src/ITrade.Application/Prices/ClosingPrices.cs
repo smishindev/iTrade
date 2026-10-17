@@ -45,21 +45,41 @@ public sealed record ImportedExport(Instant ExportedAt, string Sha256);
 /// <paramref name="Events"/> are fund events not stored yet and <paramref name="RevisedEvents"/> each the next
 /// revision of a stored one.
 /// </summary>
+/// <paramref name="Withdrawn"/> is what the owner withdraws with this import.
 public sealed record PricesToStore(
     IReadOnlyList<ClosingPrice> Added,
     IReadOnlyList<ClosingPrice> Revised,
     string Calendar,
     IReadOnlyList<LocalDate> Sessions,
     IReadOnlyList<FundEvent> Events,
-    IReadOnlyList<FundEvent> RevisedEvents)
+    IReadOnlyList<FundEvent> RevisedEvents,
+    Withdrawal? Withdrawn = null)
 {
-    public bool IsEmpty => Added.Count + Revised.Count + Sessions.Count + Events.Count + RevisedEvents.Count == 0;
+    public bool IsEmpty =>
+        Added.Count + Revised.Count + Sessions.Count + Events.Count + RevisedEvents.Count
+        + (Withdrawn is null ? 0 : Withdrawn.Sessions.Count + Withdrawn.Events.Count) == 0;
 }
+
+/// <summary>
+/// What the owner withdraws: stored sessions of the calendar the exchange was closed on after all, and stored fund
+/// events the source no longer states - each kept, followed by a row that says it is withdrawn and why.
+/// </summary>
+public sealed record Withdrawal(IReadOnlyList<LocalDate> Sessions, IReadOnlyList<FundEvent> Events, string Reason);
+
+/// <summary>The owner's step: withdraw exactly what an import found, by its code, for a reason in the owner's words.</summary>
+public sealed record OwnersWithdrawal(string Code, string Reason);
+
+/// <summary>A stored session the owner withdrew, and why.</summary>
+public sealed record WithdrawnSession(LocalDate Session, string Reason);
+
+/// <summary>A stored fund event the owner withdrew, and why.</summary>
+public sealed record WithdrawnEvent(FundEvent Event, string Reason);
 
 /// <summary>
 /// Stored closing prices, the sessions they belong to and the funds' dividends and splits (tables
 /// `closing_prices`, `market_sessions`, `fund_events`). Rows are only ever added: a price or an event the
-/// source corrected is a new revision, and the reads give the latest revision.
+/// source corrected is a new revision, and the reads give the latest revision. A session or an event the owner
+/// withdrew is left out of every read but the ones that list withdrawals.
 /// </summary>
 public interface IClosingPriceStore
 {
@@ -75,19 +95,35 @@ public interface IClosingPriceStore
     /// <summary>The latest session of each instrument that has a close at all.</summary>
     Task<IReadOnlyDictionary<InstrumentId, LocalDate>> LatestPerInstrumentAsync(CancellationToken cancellationToken);
 
-    /// <summary>The sessions of the calendar that are stored, earliest first.</summary>
+    /// <summary>The sessions of the calendar that are stored, earliest first; a withdrawn day is none.</summary>
     Task<IReadOnlyList<LocalDate>> ListSessionsAsync(string calendar, CancellationToken cancellationToken);
 
-    /// <summary>The latest stored session of the calendar on or before the day; null when there is none.</summary>
+    /// <summary>The latest stored session of the calendar on or before the day (not a withdrawn one); null when there is none.</summary>
     Task<LocalDate?> LatestSessionOnOrBeforeAsync(string calendar, LocalDate day, CancellationToken cancellationToken);
 
     Task<ImportedExport?> LastImportAsync(CancellationToken cancellationToken);
 
-    /// <summary>Every stored dividend and split of the instrument, earliest first.</summary>
+    /// <summary>Every stored dividend and split of the instrument, earliest first, but the withdrawn ones.</summary>
     Task<IReadOnlyList<FundEvent>> ListEventsAsync(InstrumentId instrument, CancellationToken cancellationToken);
+
+    /// <summary>The sessions of the calendar the owner withdrew, earliest first.</summary>
+    Task<IReadOnlyList<WithdrawnSession>> ListWithdrawnSessionsAsync(string calendar, CancellationToken cancellationToken);
+
+    /// <summary>The dividends and splits of the instrument the owner withdrew, earliest first.</summary>
+    Task<IReadOnlyList<WithdrawnEvent>> ListWithdrawnEventsAsync(InstrumentId instrument, CancellationToken cancellationToken);
+
+    /// <summary>The dividends and splits in use on the day, of every instrument.</summary>
+    Task<IReadOnlyList<FundEvent>> ListEventsOnAsync(LocalDate day, CancellationToken cancellationToken);
+
+    /// <summary>Whether any instrument has a close stored for the session: then something traded that day.</summary>
+    Task<bool> AnyCloseOnAsync(LocalDate session, CancellationToken cancellationToken);
+
+    /// <summary>How many sessions (of any calendar) and fund events are withdrawn now.</summary>
+    Task<(int Sessions, int Events)> CountWithdrawnAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds all of it or nothing, with the note for the audit trail and the mark of the export in the same step.
+    /// An event stored before and withdrawn comes back as its next revision.
     /// </summary>
     Task AddAsync(
         PricesToStore what, Instant importedAt, PricesNote note, ImportedExport importedExport, CancellationToken cancellationToken);
@@ -101,6 +137,9 @@ public sealed record PricesNote(string Actor, string Kind, string Payload)
 
     /// <summary>Something to know: a stored price was revised, or an unusual one was accepted.</summary>
     public const string Noted = "prices.noted";
+
+    /// <summary>The owner withdrew stored sessions or fund events with this import.</summary>
+    public const string Withdrawn = "prices.withdrawn";
 }
 
 /// <summary>A stored close and what the source states for the same session now.</summary>
@@ -122,7 +161,10 @@ public sealed record UnusualClose(string Ticker, ClosingPrice Before, ClosingPri
 /// <paramref name="EventsRevised"/> are the ones the source now states differently — recorded next to the old.
 /// <paramref name="EventsNotRepeated"/> are stored dividends and splits, within the sessions the export covers
 /// for their fund, that the export no longer states: they stay, and an index is followed with them — if the
-/// source moved or withdrew one, the comparison is off by it until it is dealt with.
+/// source moved or withdrew one, the comparison is off by it until the owner withdraws it with
+/// <paramref name="WithdrawCode"/>. <paramref name="SessionsWithdrawn"/> and <paramref name="EventsWithdrawn"/> are
+/// what the owner withdrew with this import; <paramref name="EventsBack"/> are events the owner withdrew before
+/// and the source states again - in use again.
 /// </summary>
 public sealed record ClosingPricesImport(
     int Added,
@@ -137,7 +179,11 @@ public sealed record ClosingPricesImport(
     IReadOnlyList<string> WithoutPrices,
     int EventsAdded,
     IReadOnlyList<FundEventChange> EventsRevised,
-    IReadOnlyList<(string Ticker, FundEvent Event)> EventsNotRepeated);
+    IReadOnlyList<(string Ticker, FundEvent Event)> EventsNotRepeated,
+    string? WithdrawCode = null,
+    IReadOnlyList<LocalDate>? SessionsWithdrawn = null,
+    IReadOnlyList<(string Ticker, FundEvent Event)>? EventsWithdrawn = null,
+    IReadOnlyList<(string Ticker, FundEvent Event)>? EventsBack = null);
 
 /// <summary>
 /// The import found something only the owner can decide about; nothing was stored.
@@ -163,7 +209,13 @@ public sealed class PricesDisagreeException : Exception
     public PricesDisagreeException(string message, string code)
         : base(message) => Code = code;
 
+    /// <param name="isWithdrawal">The code is for withdrawing (`--withdraw`), not for accepting (`--accept-changes`).</param>
+    public PricesDisagreeException(string message, string code, bool isWithdrawal)
+        : base(message) => (Code, IsWithdrawal) = (code, isWithdrawal);
+
     public string Code { get; } = "";
+
+    public bool IsWithdrawal { get; }
 }
 
 /// <summary>
@@ -202,6 +254,21 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
     /// </summary>
     public const int MostDaysCarriedUnconfirmed = 4;
 
+    /// <summary>
+    /// The most sessions withdrawn with one code. The longest unscheduled closure of the New York exchanges in
+    /// the stored history is four sessions (11-14 September 2001); more not listed is a broken calendar.
+    /// </summary>
+    public const int MostSessionsWithdrawnAtOnce = 5;
+
+    /// <summary>
+    /// The most dividends and splits withdrawn with one code. A vendor that moves an ex-date or drops a doubled
+    /// dividend changes one or two; many at once is an incomplete export, not a correction.
+    /// </summary>
+    public const int MostEventsWithdrawnAtOnce = 20;
+
+    /// <summary>The longest reason a withdrawal keeps (the column holds 500 characters).</summary>
+    public const int LongestReason = 500;
+
     /// <summary>When a full session of the New York exchanges ends.</summary>
     private static readonly LocalTime SessionEnd = new(16, 0);
 
@@ -223,10 +290,28 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
     ///
     /// The export's dividends and splits of the same instruments are stored with the prices. One the source
     /// now states differently is the next revision of its day and is reported; nothing about them is asked.
+    ///
+    /// What only the owner can withdraw, and only with <paramref name="withdrawal"/> - its code is that of exactly
+    /// what this export finds: a stored session within the export's days that the export does not list (the
+    /// import is refused until then: the two calendars disagree), and a stored event the export no longer states
+    /// (the import goes on; the code is offered). Withdrawn rows stay, followed by rows that say so; a session on
+    /// which something closed is never withdrawn, and an export that lists a withdrawn session again is refused.
     /// </summary>
+    public Task<ClosingPricesImport> ImportAsync(
+        ClosingPricesExport export, string? acceptedCode, CancellationToken cancellationToken) =>
+        ImportAsync(export, acceptedCode, null, cancellationToken);
+
+    /// <inheritdoc cref="ImportAsync(ClosingPricesExport, string?, CancellationToken)"/>
     public async Task<ClosingPricesImport> ImportAsync(
-        ClosingPricesExport export, string? acceptedCode, CancellationToken cancellationToken)
+        ClosingPricesExport export, string? acceptedCode, OwnersWithdrawal? withdrawal, CancellationToken cancellationToken)
     {
+        if (withdrawal is not null && (string.IsNullOrWhiteSpace(withdrawal.Code) || string.IsNullOrWhiteSpace(withdrawal.Reason)
+            || withdrawal.Reason.Trim().Length > LongestReason))
+        {
+            throw new ArgumentException(
+                $"A withdrawal takes the code of the finding and the owner's reason, in words (at most {LongestReason} characters).", nameof(withdrawal));
+        }
+
         ArgumentNullException.ThrowIfNull(export);
         if (export.Calendar != Calendar)
         {
@@ -258,13 +343,26 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         // the two stretches overlap they must name the same days. A day only one of them takes for a session
         // would turn every instrument's price of that day into a gap, or hide one.
         var storedSessions = await store.ListSessionsAsync(Calendar, cancellationToken);
+        // A day the owner withdrew stays withdrawn: a calendar that lists it again is the one that is wrong.
+        foreach (var withdrawnDay in (await store.ListWithdrawnSessionsAsync(Calendar, cancellationToken)).Where(w => sessions.Contains(w.Session)).Take(1))
+        {
+            throw new InvalidOperationException(
+                $"The export lists {withdrawnDay.Session:R} as a session of {Calendar}; the owner withdrew that day ({withdrawnDay.Reason}). The calendar of the export is wrong - correct it and export again.");
+        }
+
+        var sessionsNotListed = new List<LocalDate>();
         if (export.Sessions.Count > 0 && storedSessions.Count > 0)
         {
             var storedDays = storedSessions.ToHashSet();
-            foreach (var day in storedSessions.Where(s => s >= export.Sessions[0] && s <= export.Sessions[^1] && !sessions.Contains(s)).Take(1))
+            // Only the owner can say the exchange was closed on a day stored as a session (decided below).
+            sessionsNotListed.AddRange(storedSessions.Where(s => s >= export.Sessions[0] && s <= export.Sessions[^1] && !sessions.Contains(s)));
+            foreach (var day in sessionsNotListed)
             {
-                throw new InvalidOperationException(
-                    $"{day:R} is stored as a session of {Calendar} and the export does not list it: the two calendars disagree.");
+                if (await store.AnyCloseOnAsync(day, cancellationToken))
+                {
+                    throw new InvalidOperationException(
+                        $"{day:R} is stored as a session of {Calendar} and the export does not list it, but closing prices are stored for it: something traded that day, so it was a session. The calendar of the export is wrong.");
+                }
             }
 
             foreach (var day in export.Sessions.Where(s => s > storedSessions[0] && s < storedSessions[^1] && !storedDays.Contains(s)).Take(1))
@@ -292,7 +390,8 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         var behind = new List<(string, LocalDate)>();
         var events = new List<FundEvent>();
         var eventsRevised = new List<FundEventChange>();
-        var eventsNotRepeated = new List<(string, FundEvent)>();
+        var eventsNotRepeated = new List<(string Ticker, FundEvent Event)>();
+        var eventsBack = new List<(string, FundEvent)>();
         var eventLines = export.Events.ToLookup(e => e.Ticker, StringComparer.OrdinalIgnoreCase);
         var (unchanged, notRepeated) = (0, 0);
         foreach (var lines in byTicker)
@@ -365,6 +464,8 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
 
             notRepeated += stored.Keys.Count(session => !stated.Contains(session));
             var storedEvents = (await store.ListEventsAsync(instrument.Id, cancellationToken)).ToDictionary(e => (e.Day, e.Kind));
+            var withdrawnEvents = (await store.ListWithdrawnEventsAsync(instrument.Id, cancellationToken))
+                .Select(w => (w.Event.Day, w.Event.Kind)).ToHashSet();
             var statedEvents = new HashSet<(LocalDate, FundEventKind)>();
             foreach (var line in eventLines[lines.Key])
             {
@@ -383,6 +484,12 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
                 var statedEvent = new FundEvent(instrument.Id, line.Day, line.Kind, line.Value, export.Source);
                 if (!storedEvents.TryGetValue((line.Day, line.Kind), out var was))
                 {
+                    // The owner withdrew it because the source no longer stated it; the source states it again.
+                    if (withdrawnEvents.Contains((line.Day, line.Kind)))
+                    {
+                        eventsBack.Add((instrument.Ticker.Value, statedEvent));
+                    }
+
                     events.Add(statedEvent);
                 }
                 else if (was.Value != statedEvent.Value)
@@ -400,6 +507,65 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
             if (before is not null && export.Sessions.Count > 0 && before.Session < export.Sessions[^1])
             {
                 behind.Add((instrument.Ticker.Value, before.Session));
+            }
+        }
+
+        // What only the owner can withdraw, as two findings with a code each, every item named. The sessions the
+        // export does not list go with every event that is on them, of any fund (a day that is none has none);
+        // the events it no longer states are the rest. More than a correction is a broken export: no code.
+        var nameOf = known.Values.ToDictionary(i => i.Id, i => i.Ticker.Value);
+        var onThoseDays = new List<(string Ticker, FundEvent Event)>();
+        foreach (var day in sessionsNotListed)
+        {
+            onThoseDays.AddRange((await store.ListEventsOnAsync(day, cancellationToken))
+                .Select(e => (nameOf.GetValueOrDefault(e.Instrument) ?? e.Instrument.ToString(), e)));
+        }
+
+        var toOffer = eventsNotRepeated.Where(e => !sessionsNotListed.Contains(e.Event.Day)).ToList();
+        var sessionCode = sessionsNotListed.Count is > 0 and <= MostSessionsWithdrawnAtOnce
+            ? WithdrawCodeOf("sessions", sessionsNotListed, onThoseDays) : null;
+        var eventCode = toOffer.Count is > 0 and <= MostEventsWithdrawnAtOnce
+            ? WithdrawCodeOf("events", [], toOffer) : null;
+        Withdrawal? withdrawn = null;
+        var withdrawnNow = new List<(string Ticker, FundEvent Event)>();
+        var given = withdrawal?.Code.Trim();
+        // No code (too many sessions) matches nothing - not even no code given.
+        if (sessionsNotListed.Count > 0 && (sessionCode is null || !string.Equals(given, sessionCode, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (sessionCode is null)
+            {
+                throw new InvalidOperationException(
+                    $"{DescribeWithdrawable(sessionsNotListed, [])} That is more than an unscheduled closure (at most {MostSessionsWithdrawnAtOnce} sessions are withdrawn at once): the calendar of the export is broken. Nothing was stored.");
+            }
+
+            throw new PricesDisagreeException(
+                $"{(given is null ? "" : $"The code {given} is not the one of these sessions. ")}{DescribeWithdrawable(sessionsNotListed, onThoseDays)} The two calendars disagree. If the exchange was closed on that day after all (see the exchange's own holiday list), the stored session is wrong and the owner withdraws it - with the dividends and splits named on it. Nothing was stored.",
+                sessionCode, isWithdrawal: true);
+        }
+
+        if (given is not null)
+        {
+            if (string.Equals(given, sessionCode, StringComparison.OrdinalIgnoreCase))
+            {
+                withdrawn = new Withdrawal(sessionsNotListed, onThoseDays.ConvertAll(e => e.Event), withdrawal!.Reason.Trim());
+                withdrawnNow = onThoseDays;
+            }
+            else if (string.Equals(given, eventCode, StringComparison.OrdinalIgnoreCase))
+            {
+                withdrawn = new Withdrawal([], toOffer.ConvertAll(e => e.Event), withdrawal!.Reason.Trim());
+                withdrawnNow = toOffer;
+            }
+            else if (eventCode is null)
+            {
+                throw new InvalidOperationException(toOffer.Count > MostEventsWithdrawnAtOnce
+                    ? $"The export no longer states {toOffer.Count} stored dividend(s) or split(s): more than a correction (at most {MostEventsWithdrawnAtOnce} are withdrawn at once) - the export is probably incomplete. Nothing was withdrawn; fetch and export again."
+                    : "There is nothing to withdraw: the export lists every stored session of its days and states every stored dividend and split. Run the plain import.");
+            }
+            else
+            {
+                throw new PricesDisagreeException(
+                    $"The code {given} is not the one of what this export finds now. {DescribeWithdrawable([], toOffer)} Nothing was stored or withdrawn.",
+                    eventCode, isWithdrawal: true);
             }
         }
 
@@ -424,14 +590,18 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         var newSessions = export.Sessions.Except(storedSessions).Order().ToList();
         var result = new ClosingPricesImport(
             added.Count, unchanged, revised, unusual, notRepeated, newSessions.Count,
-            export.Sessions.Count > 0 ? export.Sessions[^1] : null, behind, unknown, without, events.Count, eventsRevised,
-            eventsNotRepeated);
+            export.Sessions.Count > 0 ? export.Sessions[^1] : null, behind, unknown, without, events.Count - eventsBack.Count, eventsRevised,
+            withdrawn is not null && withdrawn.Sessions.Count == 0 ? [] : toOffer,
+            WithdrawCode: withdrawn is not null && withdrawn.Sessions.Count == 0 ? null : eventCode,
+            SessionsWithdrawn: withdrawn?.Sessions ?? [],
+            EventsWithdrawn: withdrawnNow,
+            EventsBack: eventsBack);
         var toStore = new PricesToStore(
-            added, revised.ConvertAll(c => c.Stated), Calendar, newSessions, events, eventsRevised.ConvertAll(c => c.Stated));
+            added, revised.ConvertAll(c => c.Stated), Calendar, newSessions, events, eventsRevised.ConvertAll(c => c.Stated), withdrawn);
         if (!toStore.IsEmpty)
         {
             await store.AddAsync(
-                toStore, clock.GetCurrentInstant(), NoteOf(export, result, code),
+                toStore, clock.GetCurrentInstant(), NoteOf(export, result, code, withdrawn?.Reason),
                 new ImportedExport(export.ExportedAt, export.Sha256), cancellationToken);
         }
 
@@ -518,6 +688,46 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
 
     private static string Name(FundEventKind kind) => kind == FundEventKind.Split ? "split" : "dividend";
 
+    private static string Describe(string ticker, FundEvent e) => Invariant($"{ticker} {e.Day:R} {Name(e.Kind)} {e.Value:0.######}");
+
+    /// <summary>Every item, none left out: the owner withdraws exactly what is named here.</summary>
+    private static string DescribeWithdrawable(List<LocalDate> sessions, List<(string Ticker, FundEvent Event)> events)
+    {
+        var findings = new List<string>();
+        if (sessions.Count > 0)
+        {
+            findings.Add(Invariant(
+                $"{string.Join(", ", sessions.Select(s => s.ToString("R", CultureInfo.InvariantCulture)))} {(sessions.Count == 1 ? "is" : "are")} stored as session(s) of {Calendar} and the export does not list {(sessions.Count == 1 ? "it" : "them")}."));
+        }
+
+        if (events.Count > 0)
+        {
+            var named = string.Join("; ", events.Select(e => Describe(e.Ticker, e.Event)));
+            findings.Add(sessions.Count > 0
+                ? $"On {(sessions.Count == 1 ? "it" : "them")} stored: {named}."
+                : Invariant($"The export no longer states {events.Count} stored dividend(s) or split(s): {named}."));
+        }
+
+        return string.Join(" ", findings);
+    }
+
+    /// <summary>A short code of exactly what can be withdrawn: every session and every event with its value.</summary>
+    private static string WithdrawCodeOf(string what, List<LocalDate> sessions, List<(string Ticker, FundEvent Event)> events)
+    {
+        var text = new StringBuilder(Invariant($"withdraw {what};"));
+        foreach (var day in sessions.Order())
+        {
+            text.Append(Invariant($"session {day:R};"));
+        }
+
+        foreach (var (ticker, e) in events.OrderBy(e => e.Ticker, StringComparer.Ordinal).ThenBy(e => e.Event.Day).ThenBy(e => e.Event.Kind))
+        {
+            text.Append(Invariant($"event {ticker} {e.Day:R} {e.Kind} {e.Value:0.######};"));
+        }
+
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())))[..8];
+    }
+
     private static string Describe(FundEventChange change) => Invariant(
         $"{change.Ticker} {change.Stored.Day:R} {Name(change.Stored.Kind)}: {change.Stored.Value:0.######} stored, {change.Stated.Value:0.######} stated");
 
@@ -546,7 +756,7 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())))[..8];
     }
 
-    private static PricesNote NoteOf(ClosingPricesExport export, ClosingPricesImport result, string? acceptedCode)
+    private static PricesNote NoteOf(ClosingPricesExport export, ClosingPricesImport result, string? acceptedCode, string? withdrawalReason)
     {
         static string Iso(LocalDate date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var remarks = new List<string>();
@@ -566,6 +776,21 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
         {
             remarks.Add(Invariant(
                 $"{result.EventsRevised.Count} stored dividend(s) or split(s) revised, e.g. {string.Join("; ", result.EventsRevised.Take(3).Select(Describe))}"));
+        }
+
+        var sessionsWithdrawn = result.SessionsWithdrawn ?? [];
+        var eventsWithdrawn = result.EventsWithdrawn ?? [];
+        var eventsBack = result.EventsBack ?? [];
+        if (sessionsWithdrawn.Count + eventsWithdrawn.Count > 0)
+        {
+            remarks.Add(Invariant(
+                $"withdrawn by the owner ({withdrawalReason}): {sessionsWithdrawn.Count} session(s), {eventsWithdrawn.Count} dividend(s) or split(s)"));
+        }
+
+        if (eventsBack.Count > 0)
+        {
+            remarks.Add(Invariant(
+                $"{eventsBack.Count} withdrawn dividend(s) or split(s) stated again and in use again, e.g. {string.Join("; ", eventsBack.Take(3).Select(e => Describe(e.Ticker, e.Event)))}"));
         }
 
         var payload = JsonSerializer.Serialize(new
@@ -609,10 +834,17 @@ public sealed class ClosingPrices(IClosingPriceStore store, IInstrumentStore ins
                 was = c.Stored.Value,
                 now = c.Stated.Value,
             }),
+            withdrawCode = result.WithdrawCode,
+            withdrawalReason,
+            sessionsWithdrawn = sessionsWithdrawn.Select(Iso),
+            eventsWithdrawn = eventsWithdrawn.Select(e => new { ticker = e.Ticker, day = Iso(e.Event.Day), kind = Name(e.Event.Kind), value = e.Event.Value }),
+            eventsBack = eventsBack.Select(e => new { ticker = e.Ticker, day = Iso(e.Event.Day), kind = Name(e.Event.Kind), value = e.Event.Value }),
             remarks,
         });
-        return new PricesNote(
-            acceptedCode is null ? "prices" : "owner", remarks.Count > 0 ? PricesNote.Noted : PricesNote.Imported, payload);
+        var kind = withdrawalReason is not null ? PricesNote.Withdrawn
+            : remarks.Count > 0 ? PricesNote.Noted
+            : PricesNote.Imported;
+        return new PricesNote(acceptedCode is null && withdrawalReason is null ? "prices" : "owner", kind, payload);
     }
 
     private static string Invariant(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);

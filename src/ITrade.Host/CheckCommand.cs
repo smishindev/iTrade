@@ -233,5 +233,15 @@ internal static class CheckCommand
         {
             line("closing prices", $"behind, last close in brackets: {string.Join(", ", behind)} - no price to value them with after that");
         }
+
+        // What the owner withdrew is out of every valuation and index: said, so it is not forgotten.
+        var (sessionsWithdrawn, eventsWithdrawn) = await prices.CountWithdrawnAsync(CancellationToken.None);
+        if (sessionsWithdrawn + eventsWithdrawn > 0)
+        {
+            var days = (await prices.ListWithdrawnSessionsAsync(ClosingPrices.Calendar, CancellationToken.None))
+                .Select(s => s.Session.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            var named = days.Count == 0 ? "" : $" ({string.Join(", ", days)})";
+            line("closing prices", $"withdrawn by the owner: {sessionsWithdrawn} session(s){named}, {eventsWithdrawn} dividend(s) or split(s) - closed days and events that did not happen, from then on");
+        }
     }
 }

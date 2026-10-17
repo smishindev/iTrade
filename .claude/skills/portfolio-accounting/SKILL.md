@@ -254,10 +254,25 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   the latest session — from then on they have no price.
 - **A value needs a price that exists.** A position whose price is missing or unavailable is shown as
   not valued; it is not valued at an old price and not left out of a total without saying so.
-- **Known limits:** a session cannot be withdrawn - if the calendar library calls a day of an
-  unscheduled closure a session, every fund reads "missing" for it, and after the library is corrected the
-  imports are refused until a migration deals with it; an export made from an older data folder carries a
-  fresh date and passes the "not older" check (it can put back up to 20 corrections of at most 2%).
+- **What only the owner can withdraw** (P3.4.05; by the code printed with the finding and a reason,
+  `import-prices --withdraw <code> "<why>"`; never withdraw for the owner): a stored session within the
+  export's days that the export does not list — the calendar library took an unscheduled closure for a session
+  and was corrected; the import is refused until then ("the two calendars disagree") — and a stored dividend or
+  split the export no longer states (the import goes on and offers the code). **Two findings, a code each, every
+  item named**: the sessions with every event in use on them, of any fund (a day that is none has none); and the
+  other events no longer stated. A code covers exactly its items, values included (another export, another code);
+  an event code does not get past unlisted sessions. More than 5 sessions or 20 events at once is a broken
+  export, not a correction: no code. The reason is required, at most 500 characters. A withdrawal is a further row
+  (`withdrawn`, the reason) after the one it withdraws: nothing is changed or removed, and every read skips it — a
+  withdrawn session is a closed day (a close is carried over it, no "missing"), a withdrawn event is out of the
+  index and of the split check. A session something closed on is never withdrawn (refused with no code); an
+  export that lists a withdrawn session again is refused (its calendar is the wrong one); a withdrawn event the
+  source states again is in use again as its next revision, and the import says so. The audit event is
+  `prices.withdrawn` (actor owner), the rows' source `owner`; `check` counts what is withdrawn and names the days.
+  Known limit: a session withdrawn by mistake has no step to restore it yet (the database would take a further
+  live row; the import refuses an export that lists it).
+- **Known limit:** an export made from an older data folder carries a fresh date and passes the "not older"
+  check (it can put back up to 20 corrections of at most 2%).
 - A dividend's ex-date dip is a real price move, not an error: the dividend arrives as its own ledger entry.
 
 ## The value on a date (`PortfolioValue`, P3.4.01)
@@ -339,8 +354,8 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   (`closing-prices-events.csv`, its SHA-256 in the manifest). Append-only with revisions; an event belongs
   to a session. A restated event is recorded as the next revision and named by the import; nothing about
   it is asked. A stored event the export no longer states (the vendor moved an ex-date, dropped a doubled
-  dividend) **stays and is named** (`EventsNotRepeated`): it cannot be withdrawn yet, and the index is
-  followed with it. Dividends the vendor is known to lack come from `config/corporate_actions.toml` (each
+  dividend) **stays and is named** (`EventsNotRepeated`), and the index is followed with it until the owner
+  withdraws it by the code the import offers (see Closing prices). Dividends the vendor is known to lack come from `config/corporate_actions.toml` (each
   with a second source) and are in the export; the manifest names them (`dividends_corrected`). **These are
   the market's facts about a fund, not the owner's**: what the owner received and what was withheld is in
   the ledger, from the broker's statement.
@@ -356,8 +371,8 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 - **Known limits:** dividends come from the free data vendor and, but for the recorded corrections, were
   not checked against the fund's own announcements (`docs/data-notes.md` lists gaps without a second
   source: TLT, EWG, EWY, INDA); a special distribution (capital gains, return of capital) is counted as a
-  dividend; a spin-off the vendor encodes as a split (XLF 2016-09-19, 1.231) is stored as a split; an
-  event cannot be withdrawn; once the real portfolio was emptied at more than the index portfolio held,
+  dividend; a spin-off the vendor encodes as a split (XLF 2016-09-19, 1.231) is stored as a split (the owner
+  can withdraw it only once the export no longer states it); once the real portfolio was emptied at more than the index portfolio held,
   no comparison is given for any period with that day in it; the split days stored here are compared with the
   ledger by `reconcile` (P3.4.03).
 
@@ -395,8 +410,6 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
 - **Broker statements carry the real account number**: the original file stays in the data folder,
   fixtures in the repository are anonymised (`U0000000`), and logs never print it.
-- **Withdrawing a fund event or a session** (a version marked withdrawn, by the owner's code) is P3.4.05.
-
 ## Tests
 - Hand-worked examples from the task card, to the last digit, in each currency.
 - Properties (CsCheck): the lots of an instrument add up to its position; importing twice equals

@@ -78,9 +78,9 @@ if (args is [UpdateFxRatesCommand.Name, .. var fxArgs])
 
 if (args is [ImportPricesCommand.Name, .. var priceArgs])
 {
-    var (file, acceptedCode, hostArgs) = ImportPricesCommand.Parse(priceArgs);
+    var (file, acceptedCode, withdrawal, hostArgs) = ImportPricesCommand.Parse(priceArgs);
     await using var cli = ITradeHost.Build(hostArgs);
-    return await ImportPricesCommand.RunAsync(cli, file, acceptedCode, Console.Out);
+    return await ImportPricesCommand.RunAsync(cli, file, acceptedCode, Console.Out, withdrawal);
 }
 
 if (args is [RetryJobCommand.Name, ..])

@@ -31,6 +31,7 @@ dotnet run --project src/ITrade.Host -- set-password
 dotnet run --project src/ITrade.Host -- import-instruments config/instruments.csv
 dotnet run --project src/ITrade.Host -- update-fx-rates
 dotnet run --project src/ITrade.Host -- import-prices        # after: uv run --directory python itrade ingest --universe etf_pullback_v1
+dotnet run --project src/ITrade.Host -- import-prices --withdraw <code> "<what was checked>"   # the owner's step: withdraw what the import names
 dotnet run --project src/ITrade.Host -- fetch-statement      # IBKR's Flex statement into <data>/flex (token in user-secrets)
 dotnet run --project src/ITrade.Host -- import-statement "D:\ITradeData\flex\flex-20261016-101638.xml"   # record it; again adds nothing
 dotnet run --project src/ITrade.Host -- reverse-entry <entry id> "<why>"   # the owner's step: cancel an entry IBKR restated, then import again
@@ -174,6 +175,9 @@ reported and left alone; a ticker change is a rename with its date.
 | `ON DELETE RESTRICT` gives 23001, not 23503 | PostgreSQL's own code for a restrict violation |
 | A fund's price before a split looks halved in the vendor's data | The vendor adjusts `close` back in time. The platform uses the price as traded (`itrade export-closes`); never value past holdings with the curated `close` |
 | `import-prices` asks for an acceptance code | More than 20 stored prices changed, one changed by more than 2%, or a new close is more than 30% from the one before. An export gone wrong more often than a real price. Find out why before the owner accepts the code it prints |
+| `import-prices` refuses: "... is stored as session(s) of XNYS and the export does not list it. The two calendars disagree." | The calendar library once took a closed day for a session and has been corrected (or the export's calendar is wrong). Check the exchange's own holiday list; if it was closed, the owner withdraws it with the line printed: `import-prices --withdraw <code> "<what was checked>"` (with it go the dividends and splits named on that day). A day something closed on is never withdrawn; more than 5 sessions at once is a broken calendar and gets no code |
+| `import-prices`: "the export no longer states N stored dividend(s) or split(s)" | The vendor moved an ex-date or dropped a doubled dividend. The import goes on; the index is still followed with them. If the fund's own announcements show they did not happen, the owner withdraws exactly the ones listed with the `--withdraw` line printed (more than 20 at once: an incomplete export, no code - fetch again); if the vendor states one again later, it is back in use and said so. The reason goes in quotes |
+| `import-prices` refuses: "the owner withdrew that day" | The export lists a session the owner withdrew: its calendar is the wrong one. Correct the library, export again |
 | `import-prices` refuses: the export was written before the one imported last | An older export would put corrected prices back. `itrade export-closes` again, then import |
 | `import-prices` refuses: fetched before that session ended | The data was fetched during New York trading hours (the evening in Israel) by something other than the current exporter, or on a half day before 16:00 New York. `itrade ingest` again after the close |
 | A fund's last bar is not in the export | It was fetched while the session was open; that bar is not a close. The next ingest after the close (23:30 in Israel) brings it |

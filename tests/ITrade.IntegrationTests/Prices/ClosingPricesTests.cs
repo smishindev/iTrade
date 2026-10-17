@@ -362,11 +362,11 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         async Task<(int Code, string[] Output)> RunAsync(params string[] args)
         {
             // As Program does it: the command's own arguments first, the settings of the Host after them.
-            var (file, acceptedCode, hostArgs) = ImportPricesCommand.Parse(args);
+            var (file, acceptedCode, withdrawal, hostArgs) = ImportPricesCommand.Parse(args);
             await using var app = ITradeHost.Build(
                 [.. RunningHost.Args(w.Database, dataDir), .. hostArgs], services => services.AddSingleton<IClock>(clock));
             using var output = new StringWriter();
-            var code = await ImportPricesCommand.RunAsync(app, file, acceptedCode, output);
+            var code = await ImportPricesCommand.RunAsync(app, file, acceptedCode, output, withdrawal);
             return (code, output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
         }
 
@@ -513,10 +513,33 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         var withdrawn = await RunAsync(other);
         Assert.Equal(0, withdrawn.Code);
         Assert.Contains(
-            "Note: the export no longer states 1 stored dividend(s) or split(s), for example SPY 2026-10-09 split 2. They are kept and an index is still followed with them: if the source moved or withdrew them, the comparison is off by that much.",
+            "Note: the export no longer states 1 stored dividend(s) or split(s): SPY 2026-10-09 split 2. They are kept and an index is still followed with them: if the source moved or withdrew them, the comparison is off by that much.",
             withdrawn.Output);
         Assert.Equal(3, await db.FundEvents.CountAsync());
         Assert.Equal(57, await db.ClosingPrices.CountAsync());
+        // Only the owner withdraws it - by the code offered, in the file named, with a reason.
+        var offer = $"If the fund's own announcements show they did not happen, withdraw exactly these (the owner's step): dotnet run --project src/ITrade.Host -- import-prices \"{other}\" --withdraw ";
+        var offered = withdrawn.Output.Single(l => l.StartsWith(offer, StringComparison.Ordinal))[offer.Length..].Split(' ')[0];
+        Assert.Equal(2, (await RunAsync(other, "--withdraw", offered)).Code); // no reason
+        var gone = await RunAsync(other, "--withdraw", offered, "SPY did not split on 9 October (the fund's notices)");
+        Assert.Equal(0, gone.Code);
+        Assert.Contains("Withdrawn by the owner: SPY 2026-10-09 split 2 - no longer in the index (the stored row stays, followed by its withdrawal).", gone.Output);
+        Assert.Equal(4, await db.FundEvents.CountAsync());
+        Assert.Equal([FundEventKind.Dividend], (await new ClosingPriceStore(db).ListEventsAsync(w.Spy.Id, CancellationToken.None)).Select(e => e.Kind));
+        var note = await db.AuditEvents.OrderBy(a => a.OccurredAt).ThenBy(a => a.Id).LastAsync();
+        Assert.Equal((PricesNote.Withdrawn, "owner"), (note.Kind, note.Actor));
+        Assert.Contains("SPY did not split on 9 October (the fund's notices)", note.Payload, StringComparison.Ordinal);
+        // The vendor states the split again: in use again, as the revision after its withdrawal.
+        WriteExport(
+            elsewhere, "2026-10-11T09:00:00+00:00", [.. sessions, Day(8), Day(9)], [.. spy, "SPY,2026-10-09,600.00"], splitOf: "SPY,2026-10-09",
+            events: ["SPY,2026-10-06,dividend,1.9", "SPY,2026-10-09,split,2"]);
+        var back = await RunAsync(other);
+        Assert.Equal(0, back.Code);
+        Assert.Contains("Stated again after the owner withdrew it, in use again: SPY 2026-10-09 split 2.", back.Output);
+        Assert.Equal([0, 1, 2], await db.FundEvents.Where(e => e.Kind == FundEventKind.Split).OrderBy(e => e.Revision).Select(e => e.Revision).ToListAsync());
+        Assert.Equal(2, (await new ClosingPriceStore(db).ListEventsAsync(w.Spy.Id, CancellationToken.None)).Count);
+        Assert.Equal((0, 0), await new ClosingPriceStore(db).CountWithdrawnAsync(CancellationToken.None)); // the withdrawal is history now
+        Assert.Equal("owner", (await db.FundEvents.SingleAsync(e => e.Withdrawn)).Source);
         clock.Reset(Instant.FromUtc(2026, 10, 10, 14, 0));
 
         // The price for a date, through the Host's own services.
@@ -530,6 +553,67 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         var saturday = await prices.OnAsync(w.Spy.Id, Day(10), CancellationToken.None);
         Assert.Equal((PriceAvailability.CarriedOverAClosedDay, 600m, true), (saturday.Availability, saturday.Price!.Close.Value, saturday.IsProvisional));
         Assert.Equal(PriceAvailability.MissingForTheSession, (await prices.OnAsync(w.Xlk.Id, Day(7), CancellationToken.None)).Availability);
+        Directory.Delete(dataDir, recursive: true);
+    }
+
+    [Fact]
+    public async Task ASessionTheCorrectedCalendarDoesNotListIsWithdrawnByTheOwnersCodeAndIsThenAClosedDay()
+    {
+        // The library took Tuesday the 6th for a session; nobody has a price for it. Corrected, it does not list it.
+        var w = await NewAsync();
+        var dataDir = RunningHost.NewDataDir();
+        var folder = Path.Combine(dataDir, "derived", "closing-prices");
+        var clock = new FakeClock(Instant.FromUtc(2026, 10, 8, 14, 0));
+
+        async Task<(int Code, string[] Output)> RunAsync(params string[] args)
+        {
+            var (file, acceptedCode, withdrawal, hostArgs) = ImportPricesCommand.Parse(args);
+            await using var app = ITradeHost.Build(
+                [.. RunningHost.Args(w.Database, dataDir), .. hostArgs], services => services.AddSingleton<IClock>(clock));
+            using var output = new StringWriter();
+            var code = await ImportPricesCommand.RunAsync(app, file, acceptedCode, output, withdrawal);
+            return (code, output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        string[] lines = ["SPY,2026-10-05,774.83", "SPY,2026-10-07,781.00"];
+        WriteExport(folder, "2026-10-08T06:00:00+00:00", [Day(5), Day(6), Day(7)], lines);
+        Assert.Equal(0, (await RunAsync()).Code);
+        // XLK, not in these exports, has a dividend stored on that day: it goes with the day.
+        await using (var setup = DbSetup.Create(w.Database))
+        {
+            await AddEventsAsync(new ClosingPriceStore(setup), [Dividend(w.Xlk, 6, 0.168m)], []);
+        }
+
+        WriteExport(folder, "2026-10-08T07:00:00+00:00", [Day(5), Day(7)], lines);
+
+        var refused = await RunAsync();
+
+        Assert.Equal(1, refused.Code);
+        Assert.StartsWith("The closing prices were not imported: 2026-10-06 is stored as session(s) of XNYS and the export does not list it. On it stored: XLK 2026-10-06 dividend 0.168. The two calendars disagree.", refused.Output[0], StringComparison.Ordinal);
+        const string toWithdraw = "To withdraw exactly this (the owner's step, after checking): dotnet run --project src/ITrade.Host -- import-prices --withdraw ";
+        Assert.StartsWith(toWithdraw, refused.Output[1], StringComparison.Ordinal);
+        var code = refused.Output[1][toWithdraw.Length..].Split(' ')[0];
+        Assert.Equal(2, (await RunAsync("--withdraw")).Code);
+        Assert.Equal(2, (await RunAsync("--withdraw", code, "NYSE", "was", "closed")).Code); // a reason without quotes
+        Assert.Equal(2, (await RunAsync("--withdraw", code, new string('x', ClosingPrices.LongestReason + 1))).Code);
+        Assert.Equal(1, (await RunAsync("--withdraw", "00000000", "closed")).Code);
+
+        var withdrawn = await RunAsync("--withdraw", code, "NYSE was closed (its holiday list)");
+
+        Assert.Equal(0, withdrawn.Code);
+        Assert.Contains("Withdrawn by the owner: the session 2026-10-06 of XNYS - a closed day from now on.", withdrawn.Output);
+        Assert.Contains("Withdrawn by the owner: XLK 2026-10-06 dividend 0.168 - no longer in the index (the stored row stays, followed by its withdrawal).", withdrawn.Output);
+        await using var db = DbSetup.Create(w.Database);
+        var store = new ClosingPriceStore(db);
+        Assert.Equal([Day(5), Day(7)], await store.ListSessionsAsync(ClosingPrices.Calendar, CancellationToken.None));
+        Assert.Equal([new WithdrawnSession(Day(6), "NYSE was closed (its holiday list)")], await store.ListWithdrawnSessionsAsync(ClosingPrices.Calendar, CancellationToken.None));
+        Assert.Equal((1, 1), await store.CountWithdrawnAsync(CancellationToken.None));
+        Assert.Empty(await store.ListEventsAsync(w.Xlk.Id, CancellationToken.None));
+        // No gap any more: Monday's close is carried over the closed Tuesday.
+        await using var host = ITradeHost.Build(RunningHost.Args(w.Database, dataDir), services => services.AddSingleton<IClock>(clock));
+        await using var scope = host.Services.CreateAsyncScope();
+        var tuesday = await scope.ServiceProvider.GetRequiredService<ClosingPrices>().OnAsync(w.Spy.Id, Day(6), CancellationToken.None);
+        Assert.Equal((PriceAvailability.CarriedOverAClosedDay, 774.83m), (tuesday.Availability, tuesday.Price!.Close.Value));
         Directory.Delete(dataDir, recursive: true);
     }
 
@@ -633,6 +717,20 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
         Assert.Contains(
             $"behind, last close in brackets: SPY ({today.PlusDays(-2):R}), XLK ({today.PlusDays(-30):R})",
             await CheckAsync(), StringComparison.Ordinal);
+
+        // The owner withdraws that session: it is no session any more, and `check` says what was withdrawn.
+        await using (var db = DbSetup.Create(w.Database))
+        {
+            await new ClosingPriceStore(db).AddAsync(
+                new PricesToStore([], [], ClosingPrices.Calendar, [], [], [], new Withdrawal([today.PlusDays(-1)], [], "the exchange was closed")),
+                Imported, Note, Stamp, CancellationToken.None);
+        }
+
+        var withdrawn = await CheckAsync();
+        Assert.Contains($"  closing prices   up to session {today.PlusDays(-2):R}, 2 day(s) old{Environment.NewLine}", withdrawn, StringComparison.Ordinal);
+        Assert.Contains(
+            $"  closing prices   withdrawn by the owner: 1 session(s) ({today.PlusDays(-1):R}), 0 dividend(s) or split(s) - closed days and events that did not happen, from then on",
+            withdrawn, StringComparison.Ordinal);
 
         Directory.Delete(webRoot, recursive: true);
         Directory.Delete(dataDir, recursive: true);

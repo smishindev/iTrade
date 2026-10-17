@@ -126,7 +126,7 @@ Every changing request needs the antiforgery header `X-XSRF-TOKEN`. Five failure
 
 **Commands** of the same executable (`dotnet run --project src/ITrade.Host -- <command>`):
 `check [--offline]`, `set-password`, `import-instruments <file>`, `update-fx-rates`,
-`import-prices [file]`, `fetch-statement`, `import-statement <file>`, `reconcile [file]`,
+`import-prices [file] [--accept-changes <code>] [--withdraw <code> "<why>"]`, `fetch-statement`, `import-statement <file>`, `reconcile [file]`,
 `reverse-entry <id> "<why>"`, `retry-job <job> <date>`. A command
 builds the Host but does not start it.
 
@@ -148,9 +148,9 @@ called done.
 | `transactions` | the accounting ledger | **append-only**; CHECKs and a trigger repeat the domain rules |
 | `fx_rates` | official exchange rates, with revisions | **append-only**; 5332 rates since 2005 |
 | `closing_prices` | closes as traded, with revisions | **append-only**; 185,273 prices of 29 funds since 1993; only for a day that is a session |
-| `market_sessions` | the days an exchange calendar was open | **append-only**; 8,482 sessions of XNYS since 1993, from the exports of prices |
+| `market_sessions` | the days an exchange calendar was open, with revisions | **append-only**; 8,482 sessions of XNYS since 1993, from the exports of prices; a day the owner withdraws gets a further row (`withdrawn`, the reason) and is no session from then on |
 | `price_imports` | which export of prices was imported, and when | **append-only**; an export older than the latest is refused |
-| `fund_events` | a fund's dividends (per share, as paid) and splits, with revisions | **append-only**; 2,538 events of 28 funds since 1993; only for a day that is a session; from the same export as the prices |
+| `fund_events` | a fund's dividends (per share, as paid) and splits, with revisions | **append-only**; 2,538 events of 28 funds since 1993; only for a day that is a session; from the same export as the prices; one the owner withdraws gets a further row (`withdrawn`, the reason) |
 
 Conventions: snake_case; money, quantities and prices `numeric(18,6)`, rates `numeric(12,6)`, never
 float; instants `timestamptz` (UTC), dates `date`; typed ids `uuid` (v7). One configuration point
@@ -161,7 +161,7 @@ the owner role. A ledger mistake is reversed by a new entry; a rate the bank cor
 revision; nothing is edited. Because a wrong row is permanent, the rules of the domain types are
 repeated as CHECK constraints and triggers, each tested with a planted violation.
 
-**Migrations** (`src/ITrade.Infrastructure/Persistence/Migrations`, eleven so far) are applied by the
+**Migrations** (`src/ITrade.Infrastructure/Persistence/Migrations`, twelve so far) are applied by the
 Host at start. One that is on `origin/main` is frozen — a schema change is a new migration, in its own
 commit. `dotnet ef database update|drop` is not used.
 

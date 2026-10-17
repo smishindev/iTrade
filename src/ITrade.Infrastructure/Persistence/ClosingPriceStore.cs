@@ -152,16 +152,52 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
     }
 
     public async Task<IReadOnlyList<LocalDate>> ListSessionsAsync(string calendar, CancellationToken cancellationToken) =>
-        await db.MarketSessions.AsNoTracking()
-            .Where(s => s.Calendar == calendar)
+        await Latest(calendar).Where(s => !s.Withdrawn)
             .OrderBy(s => s.Session)
             .Select(s => s.Session)
             .ToListAsync(cancellationToken);
 
+    // Asked for every price of a valuation: walked backwards along the key and stopped at the first live day,
+    // not aggregated over every session (MAX cannot take the key's order through the test for a later row).
     public async Task<LocalDate?> LatestSessionOnOrBeforeAsync(string calendar, LocalDate day, CancellationToken cancellationToken) =>
-        await db.MarketSessions.AsNoTracking()
-            .Where(s => s.Calendar == calendar && s.Session <= day)
-            .MaxAsync(s => (LocalDate?)s.Session, cancellationToken);
+        await Latest(calendar).Where(s => !s.Withdrawn && s.Session <= day)
+            .OrderByDescending(s => s.Session)
+            .Select(s => (LocalDate?)s.Session)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<FundEvent>> ListEventsOnAsync(LocalDate day, CancellationToken cancellationToken) =>
+        (await LatestEvents().Where(e => e.Day == day && !e.Withdrawn).ToListAsync(cancellationToken)).ConvertAll(e => e.ToDomain());
+
+    public async Task<IReadOnlyList<WithdrawnSession>> ListWithdrawnSessionsAsync(string calendar, CancellationToken cancellationToken) =>
+        (await Latest(calendar).Where(s => s.Withdrawn).OrderBy(s => s.Session).ToListAsync(cancellationToken))
+            .ConvertAll(s => new WithdrawnSession(s.Session, s.Reason!));
+
+    public async Task<IReadOnlyList<WithdrawnEvent>> ListWithdrawnEventsAsync(InstrumentId instrument, CancellationToken cancellationToken) =>
+        (await LatestEvents().Where(e => e.InstrumentId == instrument && e.Withdrawn)
+            .OrderBy(e => e.Day).ThenBy(e => e.Kind)
+            .ToListAsync(cancellationToken))
+            .ConvertAll(e => new WithdrawnEvent(e.ToDomain(), e.Reason!));
+
+    public Task<bool> AnyCloseOnAsync(LocalDate session, CancellationToken cancellationToken) =>
+        db.ClosingPrices.AsNoTracking().AnyAsync(p => p.Session == session, cancellationToken);
+
+    public async Task<(int Sessions, int Events)> CountWithdrawnAsync(CancellationToken cancellationToken)
+    {
+        var sessions = await db.MarketSessions.AsNoTracking()
+            .CountAsync(s => s.Withdrawn && !db.MarketSessions.Any(m => m.Calendar == s.Calendar && m.Session == s.Session && m.Revision > s.Revision), cancellationToken);
+        var events = await LatestEvents().CountAsync(e => e.Withdrawn, cancellationToken);
+        return (sessions, events);
+    }
+
+    /// <summary>The latest row of every day of the calendar: whether it is a session, or was withdrawn.</summary>
+    private IQueryable<MarketSessionRow> Latest(string calendar) =>
+        db.MarketSessions.AsNoTracking().Where(s => s.Calendar == calendar
+            && !db.MarketSessions.Any(m => m.Calendar == s.Calendar && m.Session == s.Session && m.Revision > s.Revision));
+
+    /// <summary>The latest row of every fund event: the one in use, or its withdrawal.</summary>
+    private IQueryable<FundEventRow> LatestEvents() =>
+        db.FundEvents.AsNoTracking().Where(e =>
+            !db.FundEvents.Any(f => f.InstrumentId == e.InstrumentId && f.Day == e.Day && f.Kind == e.Kind && f.Revision > e.Revision));
 
     public async Task<ImportedExport?> LastImportAsync(CancellationToken cancellationToken)
     {
@@ -177,7 +213,8 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
             .Where(e => e.InstrumentId == instrument)
             .OrderBy(e => e.Day).ThenBy(e => e.Kind).ThenBy(e => e.Revision)
             .ToListAsync(cancellationToken);
-        return rows.GroupBy(e => (e.Day, e.Kind)).Select(revisions => revisions.Last().ToDomain()).ToList();
+        return rows.GroupBy(e => (e.Day, e.Kind)).Select(revisions => revisions.Last())
+            .Where(latest => !latest.Withdrawn).Select(latest => latest.ToDomain()).ToList();
     }
 
     public async Task AddAsync(
@@ -205,7 +242,19 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
             rows.Add(Row(price, latest + 1, importedAt));
         }
 
-        var events = what.Events.Select(e => Row(e, revision: 0, importedAt)).ToList();
+        // A new event is revision 0 - or, when the owner withdrew it before and the source states it again, the
+        // next revision after the withdrawal. One that is stored and in use is not new: revision 0 again, which the
+        // database refuses.
+        var withdrawn = what.Withdrawn ?? new Withdrawal([], [], "");
+        var instrumentsWithEvents = what.Events.Concat(withdrawn.Events).Select(e => e.Instrument).Distinct().ToList();
+        var lastRevision = (await LatestEvents()
+                .Where(e => instrumentsWithEvents.Contains(e.InstrumentId))
+                .Select(e => new { e.InstrumentId, e.Day, e.Kind, e.Revision, e.Withdrawn })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(e => (e.InstrumentId, e.Day, e.Kind), e => (e.Revision, e.Withdrawn));
+        var events = what.Events
+            .Select(e => Row(e, lastRevision.TryGetValue((e.Instrument, e.Day, e.Kind), out var was) && was.Withdrawn ? was.Revision + 1 : 0, importedAt))
+            .ToList();
         foreach (var fundEvent in what.RevisedEvents)
         {
             var latest = await db.FundEvents.AsNoTracking()
@@ -216,20 +265,48 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
             events.Add(Row(fundEvent, latest + 1, importedAt));
         }
 
+        foreach (var fundEvent in withdrawn.Events)
+        {
+            var latest = lastRevision.TryGetValue((fundEvent.Instrument, fundEvent.Day, fundEvent.Kind), out var was) && !was.Withdrawn
+                ? was.Revision
+                : throw new InvalidOperationException($"There is no {fundEvent.Kind} of {fundEvent.Day:R} in use to withdraw for instrument {fundEvent.Instrument}.");
+            events.Add(Row(fundEvent, latest + 1, importedAt, withdrawnFor: withdrawn.Reason));
+        }
+
+        var sessionWithdrawals = new List<MarketSessionRow>();
+        foreach (var day in withdrawn.Sessions)
+        {
+            var latest = await db.MarketSessions.AsNoTracking()
+                .Where(s => s.Calendar == calendar && s.Session == day)
+                .MaxAsync(s => (int?)s.Revision, cancellationToken)
+                ?? throw new InvalidOperationException($"{day:R} is no stored session of {calendar} to withdraw.");
+            sessionWithdrawals.Add(new MarketSessionRow
+            {
+                Calendar = calendar,
+                Session = day,
+                Revision = latest + 1,
+                Withdrawn = true,
+                Reason = withdrawn.Reason,
+                ImportedAt = importedAt,
+            });
+        }
+
         // A first import is a couple of hundred thousand rows: no change detection over them.
         var detect = db.ChangeTracker.AutoDetectChangesEnabled;
         db.ChangeTracker.AutoDetectChangesEnabled = false;
         try
         {
-            // One transaction: the sessions, the prices, the fund events, the mark of the export and the note
-            // about it all - or nothing. The sessions go first: the database takes a close or an event only
-            // for a day that is a session.
+            // One transaction: the sessions, the prices, the fund events, the withdrawals, the mark of the export
+            // and the note about it all - or nothing. The sessions go first: the database takes a close or an
+            // event only for a day that is a session; a day is withdrawn last, after the events that were on it.
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
             db.MarketSessions.AddRange(
                 sessions.Select(s => new MarketSessionRow { Calendar = calendar, Session = s, ImportedAt = importedAt }));
             await db.SaveChangesAsync(cancellationToken);
             db.ClosingPrices.AddRange(rows);
             db.FundEvents.AddRange(events);
+            await db.SaveChangesAsync(cancellationToken);
+            db.MarketSessions.AddRange(sessionWithdrawals);
             db.PriceImports.Add(
                 new PriceImportRow { ExportedAt = importedExport.ExportedAt, Sha256 = importedExport.Sha256, ImportedAt = importedAt });
             db.AuditEvents.Add(
@@ -245,14 +322,18 @@ public sealed class ClosingPriceStore(ITradeDbContext db) : IClosingPriceStore
         }
     }
 
-    private static FundEventRow Row(FundEvent fundEvent, int revision, Instant importedAt) => new()
+    /// <param name="withdrawnFor">The owner's reason when the row withdraws the event; null for the event itself.</param>
+    private static FundEventRow Row(FundEvent fundEvent, int revision, Instant importedAt, string? withdrawnFor = null) => new()
     {
         InstrumentId = fundEvent.Instrument,
         Day = fundEvent.Day,
         Kind = fundEvent.Kind,
         Revision = revision,
         Value = fundEvent.Value,
-        Source = fundEvent.Source,
+        // A withdrawal is the owner's word, not the vendor's.
+        Source = withdrawnFor is null ? fundEvent.Source : "owner",
+        Withdrawn = withdrawnFor is not null,
+        Reason = withdrawnFor,
         ImportedAt = importedAt,
     };
 
