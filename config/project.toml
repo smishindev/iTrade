@@ -2,4 +2,4 @@
 # Claude Code hooks block edits here; live IBKR ports stay blocked while phase < 6.
 # Phases (plan v4): 0 decisions, 1 validation spikes, 2 foundation, 3 accounting, 4 taxes,
 # 5 broker and plan (paper), 6 interface and pilot, 7 regular operation.
-phase = 3
+phase = 4
