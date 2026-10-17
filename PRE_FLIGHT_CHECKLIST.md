@@ -26,7 +26,7 @@ State what will be **observable** when it is done ("`check` shows the rates as f
 ### 1.3 Load what applies
 - [ ] `dotnet-conventions` — any C# in `src/` or `tests/`.
 - [ ] `portfolio-accounting` — ledger, imports, lots, positions, rates, valuation, any balance.
-- [ ] `israeli-tax` — the tax module, `[tax]` in `config/costs.toml`, any tax figure.
+- [ ] `israeli-tax` — the tax module, `config/tax.toml` and `docs/tax-sources.md`, any tax figure.
 - [ ] `ibkr-api` — anything touching IBKR, Flex included.
 - [ ] `data-pipeline`, `cost-model` — market data, fees.
 

@@ -24,7 +24,8 @@ ingest, statistics. **Python never trades.**
   `src/ITrade.Host` API, sign-in, events hub, background jobs, serves the web interface · `tests/ITrade.*`
 - `web/` React interface (MUI, React Router, TanStack Query, generated API client) · `web/e2e` browser tests
 - `deploy/` PostgreSQL in Docker, backup and restore scripts · `tools/ci.py` everything at once · `tools/roadmap.py`
-- `config/universe.toml` instruments · `config/costs.toml` fee/tax assumptions · `config/project.toml` phase (owner-only)
+- `config/universe.toml` instruments · `config/costs.toml` fee assumptions · `config/tax.toml` tax parameters, each with
+  its first-hand source (`docs/tax-sources.md`) · `config/project.toml` phase (owner-only)
 - `python/src/itrade/data/` ingest → raw snapshot → quality → curated · `python/src/itrade/costs/` cost model · `python/src/itrade/cli.py`
 - Research archive: `python/src/itrade/strategies`, `python/src/itrade/backtest`, `docs/research-log*.md` (H1–H3, all **closed**),
   `docs/spikes/` · `docs/data-notes.md` reviewed data warnings · `docs/accountant-questions.md`
@@ -138,5 +139,5 @@ Agent `accounting-reviewer`: after any change to code that records or computes t
 imports, lots, positions, valuation, returns, reconciliation, tax amounts), before it is committed.
 Skills: `research-integrity` (strategy/backtest), `data-pipeline`, `cost-model`, `ibkr-api` (anything touching IBKR),
 `dotnet-conventions` (any C# in `src/` or `tests/`), `portfolio-accounting` (ledger, imports, lots, positions, valuation,
-reconciliation, any balance told to the owner), `israeli-tax` (the Tax module, `[tax]` in `config/costs.toml`,
-any tax figure told to the owner).
+reconciliation, any balance told to the owner), `israeli-tax` (the Tax module, `config/tax.toml`,
+`docs/tax-sources.md`, any tax figure told to the owner).

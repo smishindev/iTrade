@@ -40,10 +40,11 @@ public sealed class ITradeOptions
 
     /// <summary>
     /// The share of a US fund's dividend that does not reach an Israeli resident: 25% withheld in the US under
-    /// the treaty and credited against the 25% due in Israel, so a quarter is gone either way. An assumption,
-    /// not tax advice - the same figure as `[tax] dividend_rate` in config/costs.toml (set 2026-10-06, to be
-    /// verified with a specialist). Used only to follow the index fund; the owner's own dividends and what
-    /// was withheld from them come from the broker's statement.
+    /// the treaty and credited against the 25% due in Israel, so a quarter is gone either way. An estimate,
+    /// not tax advice - the same figure as `[us_dividend_withholding]` in config/tax.toml (rule R7 of
+    /// docs/tax-sources.md, read 2026-10-17, not checked by an accountant); a test holds the two together.
+    /// Used only to follow the index fund; the owner's own dividends and what was withheld from them come
+    /// from the broker's statement.
     /// </summary>
     public decimal DividendWithheld { get; init; } = 0.25m;
 

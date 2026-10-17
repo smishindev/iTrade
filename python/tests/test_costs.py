@@ -23,16 +23,18 @@ def test_costs_command_uses_the_half_spread_of_a_listed_ticker(capsys):
     assert "is not in config/universe.toml" not in capsys.readouterr().out
 
 
-def test_the_platform_follows_the_index_with_the_dividend_tax_of_this_file():
-    # The Host keeps its own copy of the share withheld from a US fund's dividend (it has no reader
-    # of this file). The two are one assumption: change it here and there together.
+def test_the_platform_follows_the_index_with_the_us_withholding_of_the_tax_file():
+    # The Host keeps its own copy of the share withheld from a US fund's dividend
+    # (ITrade:DividendWithheld, a setting). The two are one assumption: change them together.
     import re
     import tomllib
 
     from itrade.config import project_root
 
-    with (project_root() / "config" / "costs.toml").open("rb") as f:
-        assumed = tomllib.load(f)["tax"]["dividend_rate"]
+    with (project_root() / "config" / "tax.toml").open("rb") as f:
+        tax = tomllib.load(f)
+    assumed = tax["us_dividend_withholding"]["value"]
+    assert tax["us_dividend_withholding"]["rule"] == "R7"
     options = (project_root() / "src" / "ITrade.Host" / "ITradeOptions.cs").read_text(
         encoding="utf-8"
     )

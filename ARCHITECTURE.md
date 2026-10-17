@@ -67,11 +67,13 @@ The project phase is `config/project.toml`. Only the owner edits it; hooks key o
 
 ```
 src/ITrade.Domain          pure types and rules: Money, Price, Quantity, FxRate, TradeDate, Instrument,
-                           HoldingPlace, Transaction, PortfolioBooks (lots, positions, cash)
+                           HoldingPlace, Transaction, PortfolioBooks (lots, positions, cash), TaxParameters
+                           (each tax figure with its first-hand source; an open question refuses)
 src/ITrade.Application     use cases and the interfaces of what they need: daily jobs and their scheduler,
                            InstrumentCatalogue, TransactionLedger, PortfolioBooksReader, FxRates
 src/ITrade.Infrastructure  EF Core / PostgreSQL (context, rows, stores, migrations), instance lock,
-                           Bank of Israel rates client, instrument catalogue file, weekday calendar
+                           Bank of Israel rates client, instrument catalogue file, weekday calendar,
+                           config/tax.toml reader (Tax/TaxParametersFile, Tomlyn)
 src/ITrade.Broker.IBKR     everything about IBKR: the Flex statement (reader, ledger entries, import, Web
                            Service client - Flex/); the API adapter arrives in phase 5, the only place for IBApi
 src/ITrade.Host            the executable: HTTP API, sign-in, events hub, background services, commands,

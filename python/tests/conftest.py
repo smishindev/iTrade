@@ -47,4 +47,4 @@ def bars(nyse_sessions: pd.DatetimeIndex) -> pd.DataFrame:
 
 @pytest.fixture
 def cost_cfg() -> CostConfig:
-    return CostConfig.from_dict(load_toml("costs.toml"))
+    return CostConfig.from_dict(load_toml("costs.toml"), load_toml("tax.toml"))

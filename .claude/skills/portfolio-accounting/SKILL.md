@@ -344,8 +344,8 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   returns has its counterpart: time-weighted beside time-weighted, money-weighted beside money-weighted.
 - **Dividends are in it.** The portfolio's value includes the dividends it received; a fund's price does
   not. The index portfolio buys more of the fund with each dividend at the close of its ex-date, after what
-  is withheld (`ITrade:DividendWithheld`, 0.25 — the assumption of `[tax] dividend_rate` in
-  `config/costs.toml`, 2026-10-06, unverified). A comparison on prices alone would show the portfolio ahead
+  is withheld (`ITrade:DividendWithheld`, 0.25 — `us_dividend_withholding` in `config/tax.toml`, rule R7,
+  not checked by an accountant; a test holds the two together). A comparison on prices alone would show the portfolio ahead
   by the dividend yield, about 2% a year.
 - **A split changes the shares, as it changed the price.** Prices are as traded, so without the split a
   2:1 split would read as a fall by half.

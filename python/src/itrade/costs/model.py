@@ -33,14 +33,15 @@ class CostConfig:
     loss_carryforward: bool
 
     @classmethod
-    def from_dict(cls, raw: dict) -> CostConfig:
-        c, r, fx, ex, tax = (
-            raw["commission"],
-            raw["regulatory"],
-            raw["fx"],
-            raw["execution"],
-            raw["tax"],
-        )
+    def from_dict(cls, raw: dict, tax_raw: dict) -> CostConfig:
+        """`raw` is config/costs.toml; `tax_raw` is config/tax.toml, each parameter a table with its
+        `value` and its first-hand source (P4.1.01, docs/tax-sources.md)."""
+        c, r, fx, ex = (raw["commission"], raw["regulatory"], raw["fx"], raw["execution"])
+        tax = {
+            "capital_gains_rate": tax_raw["capital_gains_rate"]["value"],
+            "dividend_rate": tax_raw["dividend_rate"]["value"],
+            "loss_carryforward": tax_raw["loss_carryforward"]["value"] == "capital-gains-only",
+        }
         return cls(
             per_share_usd=c["per_share_usd"],
             min_per_order_usd=c["min_per_order_usd"],
@@ -60,7 +61,7 @@ class CostConfig:
 
     @classmethod
     def load(cls) -> CostConfig:
-        return cls.from_dict(load_toml("costs.toml"))
+        return cls.from_dict(load_toml("costs.toml"), load_toml("tax.toml"))
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,153 @@
+# Israeli tax of an individual: an Israeli resident living in Israel, not a new immigrant or returning resident,
+# an employee, investing through a foreign broker (IBKR) that withholds no Israeli tax (docs/SCOPE.md).
+#
+# ESTIMATES, NOT CHECKED BY AN ACCOUNTANT (owner, 2026-10-12; the check is P4.3.01). Every parameter names the rule
+# of docs/tax-sources.md it comes from (R1-R12), the first-hand source and the day it was read; a parameter without
+# them is refused (TaxParametersFile). One that has no first-hand source yet is `open` (O1-O8) and has no value:
+# the code refuses its case instead of using a zero. A value changes only with a newer source or an accountant's
+# answer - then its source and date change with it, and `checked_by_accountant` becomes true.
+
+[capital_gains_rate]               # on the real gain of a sale; a ceiling - the marginal rate when lower
+value = 0.25
+rule = "R1"
+source = "Income Tax Ordinance s.91(b)(1) (Nevo, version 2026-09-27); form 1325 of 2025"
+read = 2026-10-17
+checked_by_accountant = false
+
+[dividend_rate]                    # on a dividend of a foreign company
+value = 0.25
+rule = "R7"
+source = "Income Tax Ordinance s.125B(1) (Nevo, version 2026-09-27); form 1324 of 2025"
+read = 2026-10-17
+checked_by_accountant = false
+
+[us_dividend_withholding]          # what the US withholds from the owner's dividend, W-8BEN on file; the Host's ITrade:DividendWithheld
+value = 0.25
+rule = "R7"
+source = "Israel-US income tax convention art. 12(2)(a) and 12(3)(a) (1993 protocol art. VII); IRS Tax Treaty Table 1 (rev. 05/2023)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[foreign_tax_credit_carryforward_years]   # excess foreign tax, against the same source, indexed
+value = 5
+rule = "R7"
+source = "Income Tax Ordinance s.205A(a) (Nevo, version 2026-09-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[interest_rate]                    # on interest of a foreign-currency balance: linked by the exchange rate
+value = 0.25
+rule = "R8"
+source = "Income Tax Ordinance s.125C(b), (c)(1) and its definition of 'index' (Nevo, version 2026-09-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[surtax_rate]                      # on taxable income above the threshold
+value = 0.03
+rule = "R6"
+source = "Income Tax Ordinance s.121B(a) (Nevo, version 2026-09-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[surtax_capital_rate]              # on income from capital sources above the threshold, since 2025-01-01
+value = 0.02
+rule = "R6"
+source = "Income Tax Ordinance s.121B(a1); Tax Authority instruction 5/2025 (2025-02-25)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[surtax_threshold_ils]             # tax year 2026; indexation frozen 2025-2027
+value = 721560
+rule = "R6"
+source = "Tax Authority monthly withholding booklet 2026 (after the budget law of 2026-03-31)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[lot_matching]                     # identical securities bought at different times
+value = "fifo"
+rule = "R4"
+source = "Income Tax Regulations (capital gain on listed securities) 2002, reg. 5 (Nevo, version 2025-07-15); open for ETFs held abroad: O2"
+read = 2026-10-17
+checked_by_accountant = false
+
+[exchange_rate]                    # the rate a dollar amount becomes shekels with
+value = "bank-of-israel-representative"
+rule = "R3"
+source = "Income Tax Rules (conversion of amounts from abroad into new shekels) 2003, r.1 (Nevo)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[exchange_rate_day_of_a_trade]     # cost and proceeds
+value = "earlier-of-trade-and-payment"
+rule = "R3"
+source = "Income Tax Rules (conversion of amounts from abroad into new shekels) 2003, r.7(1)-(2) (Nevo)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[exchange_rate_day_of_income]      # dividends, interest
+value = "day-paid"
+rule = "R3"
+source = "Income Tax Rules (conversion of amounts from abroad into new shekels) 2003, r.3(a) (Nevo)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[loss_offset_against_dividends_and_interest]   # same year only, securities taxed at no more than 25%
+value = true
+rule = "R5"
+source = "Income Tax Ordinance s.92(a)(4); Tax Authority circular 10/2025 s.3.3.2, s.3.7 (2025-11-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[loss_abroad_first]                # a loss on an asset abroad goes first against gains (and interest, dividends) abroad
+value = true
+rule = "R5"
+source = "Income Tax Ordinance s.92(a)(3); Tax Authority circular 10/2025 s.3.8 (2025-11-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[loss_carryforward]                # to the following years, against capital gains only, nominal, no time limit
+value = "capital-gains-only"
+rule = "R5"
+source = "Income Tax Ordinance s.92(b); Tax Authority circular 10/2025 s.2.1-2.2 (2025-11-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[loss_carryforward_needs_a_return] # only if a return was filed for the year of the loss
+value = true
+rule = "R5"
+source = "Income Tax Ordinance s.92(b); Tax Authority circular 10/2025 s.4.3 (2025-11-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[half_year_report_due]             # month-day; for the sales of the six months before, without withholding
+value = ["07-31", "01-31"]
+rule = "R9"
+source = "Income Tax Ordinance s.91(d)(2c)(b) (Nevo, version 2026-09-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[foreign_income_advance_due]       # month-day of the year after the tax year
+value = "04-30"
+rule = "R10"
+source = "Income Tax Regulations (advance on foreign income) 2004, regs 1-2 (Nevo)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[annual_return_due]                # month-day of the year after the tax year
+value = "04-30"
+rule = "R11"
+source = "Income Tax Ordinance s.132(a) (Nevo, version 2026-09-27)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[exchange_differences_on_cash]     # a dollar balance held, or shekels changed to dollars and back
+open = "O3"
+source = "no first-hand source: s.9(13) (linkage differences on a deposit) or s.88 (a currency as an asset)"
+read = 2026-10-17
+checked_by_accountant = false
+
+[us_fund_distribution_kinds]       # a RIC's capital-gain distribution or return of capital: also a dividend?
+open = "O1"
+source = "no first-hand source"
+read = 2026-10-17
+checked_by_accountant = false
