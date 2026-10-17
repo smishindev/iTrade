@@ -202,9 +202,17 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
         });
         modelBuilder.Entity<MarketSessionRow>(e =>
         {
-            e.ToTable("market_sessions");
-            e.HasKey(s => new { s.Calendar, s.Session });
+            e.ToTable("market_sessions", table =>
+            {
+                table.HasCheckConstraint("ck_market_sessions_revision_is_not_negative", "revision >= 0");
+                table.HasCheckConstraint("ck_market_sessions_first_is_not_withdrawn", "revision > 0 OR NOT withdrawn");
+                table.HasCheckConstraint(
+                    "ck_market_sessions_withdrawal_has_a_reason",
+                    "(withdrawn AND reason IS NOT NULL AND btrim(reason) <> '') OR (NOT withdrawn AND reason IS NULL)");
+            });
+            e.HasKey(s => new { s.Calendar, s.Session, s.Revision });
             e.Property(s => s.Calendar).HasMaxLength(10);
+            e.Property(s => s.Reason).HasMaxLength(500);
             // "Was any exchange open that day?" - asked for every close that is stored (migration MarketSessions).
             e.HasIndex(s => s.Session);
         });
@@ -215,10 +223,15 @@ public sealed class ITradeDbContext(DbContextOptions<ITradeDbContext> options) :
                 table.HasCheckConstraint("ck_fund_events_value_is_positive", "value > 0");
                 table.HasCheckConstraint("ck_fund_events_revision_is_not_negative", "revision >= 0");
                 table.HasCheckConstraint("ck_fund_events_kind_is_known", "kind IN ('Dividend', 'Split')");
+                table.HasCheckConstraint("ck_fund_events_first_is_not_withdrawn", "revision > 0 OR NOT withdrawn");
+                table.HasCheckConstraint(
+                    "ck_fund_events_withdrawal_has_a_reason",
+                    "(withdrawn AND reason IS NOT NULL AND btrim(reason) <> '') OR (NOT withdrawn AND reason IS NULL)");
             });
             e.HasKey(f => new { f.InstrumentId, f.Day, f.Kind, f.Revision });
             e.Property(f => f.Kind).HasConversion<string>().HasMaxLength(10);
             e.Property(f => f.Source).HasMaxLength(50);
+            e.Property(f => f.Reason).HasMaxLength(500);
             e.HasOne<InstrumentRow>().WithMany().HasForeignKey(f => f.InstrumentId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<PriceImportRow>(e =>

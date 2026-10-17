@@ -291,6 +291,67 @@ public sealed class ClosingPricesTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task DatabaseWithdrawsADayOrAnEventOnlyAsAFurtherRowWithAReasonAndOnlyWhenNothingRestsOnIt()
+    {
+        // Sessions 5, 6 and 7; SPY closed on the 5th; XLK paid a dividend on the 7th.
+        var w = await NewAsync();
+        await using (var db = DbSetup.Create(w.Database))
+        {
+            await AddAsync(new ClosingPriceStore(db), [Close(w.Spy, 5, 774.83m)], [], 5, 6, 7);
+            await AddEventsAsync(new ClosingPriceStore(db), [Dividend(w.Xlk, 7, 0.168m)], []);
+        }
+
+        await using var conn = new NpgsqlConnection(w.Database);
+        await conn.OpenAsync();
+        const string session = "INSERT INTO market_sessions (calendar, session, revision, withdrawn, reason, imported_at) VALUES ";
+        const string fundEvent = "INSERT INTO fund_events (instrument_id, day, kind, revision, value, source, withdrawn, reason, imported_at) VALUES ";
+        async Task<int> RunAsync(string sql)
+        {
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            return await cmd.ExecuteNonQueryAsync();
+        }
+
+        (string Sql, string SqlState)[] planted =
+        [
+            (session + "('XNYS', '2026-10-08', 0, true, 'x', now())", PostgresErrorCodes.CheckViolation), // withdrawn before it was a session
+            (session + "('XNYS', '2026-10-06', 1, true, NULL, now())", PostgresErrorCodes.CheckViolation), // without a reason
+            (session + "('XNYS', '2026-10-06', 1, true, '  ', now())", PostgresErrorCodes.CheckViolation),
+            (session + "('XNYS', '2026-10-06', 1, false, 'x', now())", PostgresErrorCodes.CheckViolation), // a reason for nothing
+            (session + "('XNYS', '2026-10-06', 2, true, 'x', now())", PostgresErrorCodes.CheckViolation), // skips revision 1
+            (session + "('XNYS', '2026-10-05', 1, true, 'closed', now())", PostgresErrorCodes.CheckViolation), // SPY traded that day
+            (session + "('XNYS', '2026-10-07', 1, true, 'closed', now())", PostgresErrorCodes.CheckViolation), // XLK's dividend is not withdrawn
+            (fundEvent + $"('{w.Xlk.Id}', '2026-10-07', 'Dividend', 1, 0.168, 'x', true, NULL, now())", PostgresErrorCodes.CheckViolation),
+            (fundEvent + $"('{w.Xlk.Id}', '2026-10-07', 'Dividend', 0, 0.168, 'x', true, 'x', now())", PostgresErrorCodes.CheckViolation),
+            ("UPDATE market_sessions SET withdrawn = true, reason = 'x' WHERE session = '2026-10-06'", PostgresErrorCodes.InsufficientPrivilege),
+        ];
+        foreach (var (sql, sqlState) in planted)
+        {
+            var error = await Assert.ThrowsAsync<PostgresException>(() => RunAsync(sql));
+            Assert.Equal((sql, sqlState), (sql, error.SqlState));
+        }
+
+        // The event first, then its day: both as further rows, with the owner's reason.
+        Assert.Equal(1, await RunAsync(fundEvent + $"('{w.Xlk.Id}', '2026-10-07', 'Dividend', 1, 0.168, 'x', true, 'not paid', now())"));
+        Assert.Equal(1, await RunAsync(session + "('XNYS', '2026-10-07', 1, true, 'the exchange was closed', now())"));
+        Assert.Equal(1, await RunAsync(session + "('XNYS', '2026-10-06', 1, true, 'the exchange was closed', now())"));
+
+        // Nothing rests on a withdrawn day any more.
+        var close = await Assert.ThrowsAsync<PostgresException>(() => RunAsync(
+            $"INSERT INTO closing_prices (instrument_id, session, revision, close, currency, source, imported_at) VALUES ('{w.Spy.Id}', '2026-10-06', 0, 779.09, 'USD', 'x', now())"));
+        var dividend = await Assert.ThrowsAsync<PostgresException>(() => RunAsync(
+            fundEvent + $"('{w.Spy.Id}', '2026-10-06', 'Dividend', 0, 1.889, 'x', false, NULL, now())"));
+        Assert.Equal((PostgresErrorCodes.CheckViolation, PostgresErrorCodes.CheckViolation), (close.SqlState, dividend.SqlState));
+        Assert.Contains("2026-10-06 is not a session", close.MessageText, StringComparison.Ordinal);
+
+        // A day the owner withdrew may be a session again only as the next row - the import never does that unasked.
+        Assert.Equal(1, await RunAsync(session + "('XNYS', '2026-10-06', 2, false, NULL, now())"));
+        Assert.Equal(1, await RunAsync($"INSERT INTO closing_prices (instrument_id, session, revision, close, currency, source, imported_at) VALUES ('{w.Spy.Id}', '2026-10-06', 0, 779.09, 'USD', 'x', now())"));
+        await using var check = DbSetup.Create(w.Database);
+        Assert.Equal(6, await check.MarketSessions.CountAsync());
+        Assert.Equal(2, await check.FundEvents.CountAsync());
+    }
+
+    [Fact]
     public async Task CommandLoadsTheExportOnceRecordsACorrectionAndAsksAboutWhatIsUnusual()
     {
         var w = await NewAsync();

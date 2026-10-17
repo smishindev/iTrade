@@ -35,7 +35,9 @@ public sealed class ClosingPriceRow
 /// <summary>
 /// Table `market_sessions`: the days an exchange calendar was open, as far as the exports of closing prices
 /// have told. It is what tells a day the exchange was closed from a day whose price is missing. Rows are
-/// only ever inserted (migration MarketSessions).
+/// only ever inserted (migration MarketSessions). A day the owner found the exchange closed on after all is
+/// withdrawn by a further row of the next <see cref="Revision"/> with <see cref="Withdrawn"/> and the reason
+/// (migration Withdrawals); the latest revision says whether the day is a session.
 /// </summary>
 public sealed class MarketSessionRow
 {
@@ -43,6 +45,15 @@ public sealed class MarketSessionRow
     public required string Calendar { get; init; }
 
     public LocalDate Session { get; init; }
+
+    /// <summary>0 for the session as first imported; one more for each later row of the same day.</summary>
+    public int Revision { get; init; }
+
+    /// <summary>The owner withdrew the day: it is no session.</summary>
+    public bool Withdrawn { get; init; }
+
+    /// <summary>Why the owner withdrew it, in the owner's words; only on a withdrawal.</summary>
+    public string? Reason { get; init; }
 
     public Instant ImportedAt { get; init; }
 }
@@ -67,7 +78,8 @@ public sealed class PriceImportRow
 /// <summary>
 /// Table `fund_events`: a dividend or a split of a fund on a day, as the data pipeline reports it. The domain
 /// type is <see cref="FundEvent"/>. Rows are only ever inserted (migration FundEvents); an event the source
-/// corrected is a further row of the same day and kind with the next <see cref="Revision"/>.
+/// corrected is a further row of the same day and kind with the next <see cref="Revision"/>, and one the owner
+/// withdrew a further row with <see cref="Withdrawn"/> and the reason (migration Withdrawals).
 /// </summary>
 public sealed class FundEventRow
 {
@@ -80,8 +92,14 @@ public sealed class FundEventRow
 
     public int Revision { get; init; }
 
-    /// <summary>The dividend per share as paid, or the split as new shares per old one.</summary>
+    /// <summary>The dividend per share as paid, or the split as new shares per old one; a withdrawal keeps the value it withdraws.</summary>
     public decimal Value { get; init; }
+
+    /// <summary>The owner withdrew the event: the fund did not do it.</summary>
+    public bool Withdrawn { get; init; }
+
+    /// <summary>Why the owner withdrew it, in the owner's words; only on a withdrawal.</summary>
+    public string? Reason { get; init; }
 
     public required string Source { get; init; }
 

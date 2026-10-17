@@ -157,6 +157,11 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("imported_at");
 
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -168,16 +173,24 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("value");
 
+                    b.Property<bool>("Withdrawn")
+                        .HasColumnType("boolean")
+                        .HasColumnName("withdrawn");
+
                     b.HasKey("InstrumentId", "Day", "Kind", "Revision")
                         .HasName("pk_fund_events");
 
                     b.ToTable("fund_events", null, t =>
                         {
+                            t.HasCheckConstraint("ck_fund_events_first_is_not_withdrawn", "revision > 0 OR NOT withdrawn");
+
                             t.HasCheckConstraint("ck_fund_events_kind_is_known", "kind IN ('Dividend', 'Split')");
 
                             t.HasCheckConstraint("ck_fund_events_revision_is_not_negative", "revision >= 0");
 
                             t.HasCheckConstraint("ck_fund_events_value_is_positive", "value > 0");
+
+                            t.HasCheckConstraint("ck_fund_events_withdrawal_has_a_reason", "(withdrawn AND reason IS NOT NULL AND btrim(reason) <> '') OR (NOT withdrawn AND reason IS NULL)");
                         });
                 });
 
@@ -376,17 +389,37 @@ namespace ITrade.Infrastructure.Persistence.Migrations
                         .HasColumnType("date")
                         .HasColumnName("session");
 
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
                     b.Property<Instant>("ImportedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("imported_at");
 
-                    b.HasKey("Calendar", "Session")
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<bool>("Withdrawn")
+                        .HasColumnType("boolean")
+                        .HasColumnName("withdrawn");
+
+                    b.HasKey("Calendar", "Session", "Revision")
                         .HasName("pk_market_sessions");
 
                     b.HasIndex("Session")
                         .HasDatabaseName("ix_market_sessions_session");
 
-                    b.ToTable("market_sessions", (string)null);
+                    b.ToTable("market_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_market_sessions_first_is_not_withdrawn", "revision > 0 OR NOT withdrawn");
+
+                            t.HasCheckConstraint("ck_market_sessions_revision_is_not_negative", "revision >= 0");
+
+                            t.HasCheckConstraint("ck_market_sessions_withdrawal_has_a_reason", "(withdrawn AND reason IS NOT NULL AND btrim(reason) <> '') OR (NOT withdrawn AND reason IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("ITrade.Infrastructure.Persistence.PriceImportRow", b =>
