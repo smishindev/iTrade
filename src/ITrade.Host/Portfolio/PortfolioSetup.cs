@@ -17,6 +17,7 @@ internal static class PortfolioSetup
         services.AddScoped<ITransactionStore, TransactionStore>();
         services.AddScoped<TransactionLedger>();
         services.AddScoped<FlexImport>();
+        services.AddScoped<SplitReconciliation>();
         services.AddScoped<PortfolioBooksReader>();
         services.AddScoped<PortfolioValuation>();
         services.AddScoped<PortfolioPerformance>();

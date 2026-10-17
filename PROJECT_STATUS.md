@@ -7,7 +7,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Last updated:** 17 October 2026
 **Phase:** 3 of 7 — accounting (`config/project.toml`; the owner moves it after a gate check).
 **Roadmap:** phases 0–2: all 106 tasks;
-phase 3: 10 of 12 (one more was dropped by the owner).
+phase 3: 11 of 13 (one more was dropped by the owner).
 **State:** the foundation is finished and gate G2 passed. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
 funds since 1993. The first statement of the real account was imported on 17 October: one entry,
@@ -28,8 +28,9 @@ platform becomes an accounting and execution-with-approval tool. Phase 2 built t
 backup and restore, hooks and gates. Phase 3 so far: the instrument catalogue, the transaction
 ledger, FIFO lots and positions, the Bank of Israel exchange rates, closing prices as traded, the
 value of the portfolio on a date, its returns and their comparison with the index, and the import of
-the broker's statement, held against IBKR's own figures. Left of phase 3: the reconciliation and the
-gate check.
+the broker's statement, held against IBKR's own figures, and the reconciliation of the ledger with the
+broker and with the split days of the prices. Left of phase 3: the gate check (and P3.4.05, withdrawing a
+fund event or a session).
 
 ---
 
@@ -41,7 +42,7 @@ read in the code.
 | Capability | State | Verified by |
 |---|---|---|
 | Everything builds and passes | ✅ | `python tools/ci.py` — 16 of 16 steps |
-| .NET tests | ✅ | 384 unit, 6 architecture, 126 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402 |
+| .NET tests | ✅ | 392 unit, 6 architecture, 136 integration on a real PostgreSQL 18 (Testcontainers) — 17 October, on SDK 10.0.402; `python tools/ci.py` 16 of 16 |
 | Python tests | ✅ | 337 collected, 1 skipped (`uv run pytest`, no network) |
 | Interface tests | ✅ | 41 Vitest tests in 4 files; 3 Playwright tests against a real Host with a throw-away database |
 | The real Host starts | ✅ | `check` → `OK`; started for real: `/health` → `{"status":"Healthy","mode":"Paper","checks":{"database":"Healthy"}}` |
@@ -67,7 +68,7 @@ read in the code.
 | Returns of a period | ✅ tests only | time-weighted, money-weighted and the gain in money, in dollars and shekels; agrees with the Python reference calculation on 23 synthetic cases; through the real Host on PostgreSQL. No real flows yet. 59 deliberate breakages caught |
 | Comparison with the index | ✅ tests only | the same contributions put into the index fund (VT) at each day's close, its dividends put back after withholding; a portfolio that holds only the index matches it; a split of the index is no fall. 60 deliberate breakages caught. No real flows yet |
 | Dividends and splits of the funds | ✅ | 2,538 events of 28 funds in the working database (2,524 dividends, 14 splits; one dividend the vendor lacks comes from the recorded corrections); with them one share reproduces the vendor's total-return series within 0.005% a year over up to 33 years |
-| Reconciliation with the broker | ❌ not built | phase 3: P3.4.03, waits for the first statement |
+| Reconciliation with the broker | ✅ | `reconcile` on the working database (17 October): the real account's statement, cash 100 ILS ledger = IBKR at both ends, splits agree. Tests: every figure with both numbers; a synthetic difference (206 VT at IBKR, 103 in the ledger) found and nothing changed; a reversed entry, lines the ledger lacks, entries the statement does not state, unread rows, a split the prices know and the ledger lacks, another account, a paper statement, an unmigrated database. 22 deliberate breakages caught; `accounting-reviewer` two rounds |
 | Screens with data | ❌ not built | the shell and sign-in exist; six menu entries are placeholders until phase 6 |
 | Taxes, broker adapter, purchases | ❌ not built | phases 4, 5, 6 |
 | Scheduled backups | ❌ | manual until phase 7 — the owner's decision |
@@ -160,6 +161,17 @@ more after withholding; the result is measured by the same two returns. The fund
 index is a setting (VT). The comparison flatters the index - no commission, dividends put back on the
 ex-date - and says so.
 
+### 19. Reconciliation shows both numbers, looks both ways and repairs nothing (17 October)
+`reconcile` holds the ledger as it is now against the imported statement that reaches furthest: the
+figures the import checks, each with the ledger's number and IBKR's; the statement's lines the ledger
+lacks or holds otherwise; and the ledger's live entries on the statement's days that IBKR does not
+state - two such entries that cancel would leave both ends whole and pass unseen otherwise. IBKR's total
+of all currencies (a day without rows per currency) is shown as that, never as one currency's cash. The
+split days of the stored prices are held against the ledger's splits up to today, because the prices run
+ahead of the statement - the card's case of 2 × 146.60 shown as the whole value. It records, migrates and
+repairs nothing: a difference is closed by an import or by the owner's reversal. Not compared: IBKR's NAV
+and accruals, `StmtFunds` line by line, positions' prices and costs.
+
 ### 18. A deposit IBKR booked after its date counts from the day of the booking (17 October)
 The owner's first deposit (100 ILS) is dated and settles 13 October and was booked by IBKR on the 14th.
 The ledger takes the 14th, as IBKR's own cash of each day does (`EquitySummaryByReportDateInBase`,
@@ -223,15 +235,16 @@ Ordered roughly by how much they would hurt.
     data pipeline by itself. `check` shows the age of the prices and who is behind.
 12. **A stored session cannot be withdrawn.** If the calendar library calls a day of an unscheduled
     closure a session, every fund reads "missing" for that day, and once the library is corrected
-    the imports are refused until a migration deals with it.
+    the imports are refused until a migration deals with it. A fund event the vendor drops stays too.
+    Both: P3.4.05.
 13. **An export made from an older data folder passes as new** (it gets a fresh date); it can put
     back up to 20 price corrections of at most 2% each.
 14. **The currency of a price comes from the catalogue, not from the vendor.** Every fund is in
     dollars; the first one that is not needs the quote currency at ingest.
-15. **A split that is in the prices and not yet in the ledger halves a value without a word**
-    (the statement lags a day), and a purchase after a split the prices have not seen is valued at
-    the old price, marked only as provisional. The valuation cannot see either; the reconciliation
-    has to (card of P3.4.03).
+15. **A split that is in the prices and not yet in the ledger halves a value**, and the valuation
+    itself does not say so: `reconcile` does (decision 19), only when it is run. A purchase after a
+    split the prices have not seen is valued at the old price, marked only as provisional. Whether
+    IBKR books a split on the vendor's day is not known until the first real split.
 16. **The value of a past date is not remembered**: it is worked out again from the ledger, the
     prices and the rates as they are now.
 17. **One fund (EWC) has no price after 6 October**: the pipeline takes a fetch whole or not at
@@ -258,7 +271,8 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P3.4.03** (reconciliation with the broker) → **P3.G.01** (gate check).
+1. **P3.G.01** (gate check of phase 3); **P3.4.05** (withdrawing a fund event or a session) is not a
+   condition of the gate and can follow.
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner

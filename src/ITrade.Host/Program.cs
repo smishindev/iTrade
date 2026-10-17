@@ -41,6 +41,16 @@ if (args is [ImportStatementCommand.Name, ..])
     return await ImportStatementCommand.RunAsync(cli, statement, Console.Out);
 }
 
+if (args is [ReconcileCommand.Name, .. var reconcileArgs])
+{
+    // An optional file comes first; what starts with a dash belongs to the host.
+    var (reconcileFile, reconcileHostArgs) = reconcileArgs is [string given, .. var afterFile] && !given.StartsWith('-')
+        ? (given, afterFile)
+        : ((string?)null, reconcileArgs);
+    await using var cli = ITradeHost.Build(reconcileHostArgs);
+    return await ReconcileCommand.RunAsync(cli, reconcileFile, Console.Out);
+}
+
 if (args is [ReverseEntryCommand.Name, ..])
 {
     if (args is not [_, var entry, var reason, .. var reverseArgs] || entry.StartsWith('-') || reason.StartsWith('-'))

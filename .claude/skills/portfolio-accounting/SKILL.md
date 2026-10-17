@@ -9,7 +9,7 @@ description: How iTrade keeps the owner's books — the append-only ledger of tr
 current: when a task of phase 3 lands, move its rule from "what comes next" to "what exists".
 C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: the `israeli-tax` skill.
 
-## What exists (P3.1.01 – P3.1.03, P3.2.02, P3.3.01, P3.3.02, P3.4.01, P3.4.02, P3.4.04)
+## What exists (P3.1.01 – P3.1.03, P3.2.02, P3.3.01, P3.3.02, P3.4.01 – P3.4.04)
 | Thing | Domain / Application | Table |
 |---|---|---|
 | What can be held | `Instrument`, `Ticker`, `Isin`; `InstrumentCatalogue` (repeatable import, renames) | `instruments`, `instrument_former_tickers` |
@@ -22,6 +22,7 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 | What is held | `PortfolioBooks.From(ledger, asOf)` → `Position`, `Lot`, `Disposal`, `CashBalance`; `PortfolioBooksReader` | none — computed from the ledger every time |
 | What it is worth | `PortfolioValue.Of(books, prices, rate)` → `PositionValue`, `PortfolioTotal`; `PortfolioValuation.AsOfAsync(date)` | none — worked out every time |
 | What it earned | `PeriodReturns.Of(points)`, `OwnerFlow.Of(ledger, first, last)`; `PortfolioPerformance.OverAsync(first, last)`; oracle `python/src/itrade/accounting/returns.py` | none |
+| Whether the books are IBKR's | `FlexImport.ReconcileAsync` → `FlexReconciliation`, `FlexComparison`; `SplitCheck.Of`, `SplitReconciliation`; command `reconcile` | none — reads only |
 | What the index would have earned | `IndexPortfolio.Following(points, events, closes, dividendKept)`; `PerformanceReport.Index` | none |
 
 ## The ledger
@@ -143,7 +144,7 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   repository are anonymised with `python -I tools/anonymise_flex.py <statement> <fixture> <days>` (`U0000000`,
   no name, e-mail, country; it writes the committed fixture byte for byte).
 - **Not read**: MTD/YTD fields (they are of the day of the download), `twr` (in percent), accruals, `StmtFunds`
-  and the positions' prices and costs (they are for the reconciliation, P3.4.03).
+  and the positions' prices and costs (the reconciliation does not compare them either).
 
 ## The books (`PortfolioBooks`, P3.1.03)
 - **Derived, not stored as truth.** Lots, positions and cash are computed from the ledger by a pure
@@ -282,8 +283,8 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
 - **Refused**: a price of another date or instrument than asked, a rate of another date, a price in
   another currency than the position was bought in.
 - **Known limit:** if the vendor's prices already reflect a split that the ledger does not hold yet (the
-  statement import lags), old shares × new price shows half the value and nothing here can see it — the
-  reconciliation (P3.4.03) has to compare the split days of the price export with the ledger.
+  statement import lags), old shares × new price shows half the value and nothing here can see it — `reconcile`
+  does (`SplitCheck`), the valuation itself still does not.
 
 ## Returns (`PeriodReturns`, P3.4.02)
 - **A contribution is not a gain, a withdrawal is not a loss.** `PeriodReturns.Gain` is the money earned:
@@ -357,15 +358,44 @@ C# style, money types and layers: the `dotnet-conventions` skill. Tax amounts: t
   source: TLT, EWG, EWY, INDA); a special distribution (capital gains, return of capital) is counted as a
   dividend; a spin-off the vendor encodes as a split (XLF 2016-09-19, 1.231) is stored as a split; an
   event cannot be withdrawn; once the real portfolio was emptied at more than the index portfolio held,
-  no comparison is given for any period with that day in it; the split days stored here are not yet
-  compared with the ledger (P3.4.03).
+  no comparison is given for any period with that day in it; the split days stored here are compared with the
+  ledger by `reconcile` (P3.4.03).
 
-## Rules for what comes next (reconciliation)
+## Reconciliation (`reconcile`, P3.4.03)
+- **The ledger as it is now against IBKR's statement** — of the imported ones the one that **reaches furthest**
+  (the latest last day of the `statement.imported` events, not the last import: an older statement imported again
+  would hide the days after its own), or a file given: `FlexImport.ReconcileAsync`. The same figures the import
+  checks — cash per currency on the evening before the first day, cash per currency and shares per contract after
+  the last day — each shown with **both numbers** (`FlexComparison`), and in words: a line of the statement the
+  ledger lacks (`PlanAsync` would add it: never imported, or a restated line after a reversal), a line it holds
+  otherwise (`NotRecorded`), what the statement holds that the import cannot read, and **the other way** — a live
+  entry of the ledger on a day of the statement that the statement does not state (typed by hand, a line IBKR no
+  longer states; two such entries that cancel leave both ends whole). A paper statement, another account's, or one
+  before any import is not reconciled. Books are as of the statement's days: later entries are not compared, and
+  the report says so.
+- **IBKR's total of all currencies is not a currency's cash.** A day without rows per currency has only
+  `BASE_SUMMARY` (every currency told in the base): shown as such (`AllCurrencies`), and the agreement says how many
+  figures are such totals — they cannot tell a missing currency from one translated into the total.
+- **The split days of the prices against the ledger** (`SplitCheck`, `SplitReconciliation`), up to today in New
+  York — the prices can be ahead of the last statement: a split in `fund_events` on a day the place held the fund
+  the evening before, with no split in the ledger that day (the card's case: 2 × 146.60 shown as the whole value
+  instead of 586.40) or with another change than held × (ratio − 1) beyond the precision of the stored ratio (six
+  places: 1 for 3 is 0.333333, `RatioPrecision`); a split of the ledger the prices do not show although they reach
+  its day. The days must match exactly; whether IBKR books a split on the vendor's day is not known until the
+  first real one. A spin-off the vendor encodes as a split (XLF 2016-09-19) reads as a split the ledger lacks —
+  correctly a thing to look at, since the import refuses spin-offs.
+- **Reconciliation never repairs.** A difference is shown with both numbers; it is closed by an import or by a
+  reversal with a reason (`reverse-entry`, the owner's step). `reconcile` records nothing and migrates nothing (it
+  refuses a database this build has not migrated); exit 1 on a difference. The statement and the prices are judged
+  in separate sentences: a split the prices know is not IBKR's difference.
+- **Not compared**: IBKR's NAV and accrued interest (the platform values with its own prices and rates, and counts
+  interest when paid), `StmtFunds` lines one by one, the positions' prices and costs.
+
+## Rules for what comes next
 - **No rounding inside a calculation**; round once, where a figure is shown, with a named rule.
-- **Reconciliation never repairs.** A difference between the ledger and the broker's statement is shown
-  to the owner with both numbers; it is closed by an import or by a reversal with a reason.
 - **Broker statements carry the real account number**: the original file stays in the data folder,
   fixtures in the repository are anonymised (`U0000000`), and logs never print it.
+- **Withdrawing a fund event or a session** (a version marked withdrawn, by the owner's code) is P3.4.05.
 
 ## Tests
 - Hand-worked examples from the task card, to the last digit, in each currency.

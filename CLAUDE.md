@@ -51,7 +51,8 @@ ingest, statistics. **Python never trades.**
   `--accept-changes <code>` again is the owner's) · `-- fetch-statement` downloads the IBKR Flex statement into
   `<data>/flex` (token and query id in user-secrets, typed in by the owner) · `-- import-statement "<file>"` records it
   in the ledger (repeatable; refuses a paper account, anything not seen on a real statement yet, and a day whose cash
-  differs from IBKR's Cash Report — and then records nothing) · `-- reverse-entry <id> "<why>"` cancels a ledger entry
+  differs from IBKR's Cash Report — and then records nothing) · `-- reconcile ["<file>"]` holds the ledger against the
+  statement imported last and the prices' split days (changes nothing) · `-- reverse-entry <id> "<why>"` cancels a ledger entry
   by its exact opposite (the owner's step when IBKR restated a line — never run it for the owner) ·
   `-- retry-job <job> <yyyy-MM-dd>` releases a daily job that `check` shows as blocked.
 - Database (PowerShell, repo root): `.\deploy\backup.ps1` (dump to `<DataDir>\backups`, read-only) ·

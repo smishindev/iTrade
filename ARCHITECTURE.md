@@ -126,8 +126,8 @@ Every changing request needs the antiforgery header `X-XSRF-TOKEN`. Five failure
 
 **Commands** of the same executable (`dotnet run --project src/ITrade.Host -- <command>`):
 `check [--offline]`, `set-password`, `import-instruments <file>`, `update-fx-rates`,
-`import-prices [file]`, `fetch-statement`, `import-statement <file>`, `reverse-entry <id> "<why>"`,
-`retry-job <job> <date>`. A command
+`import-prices [file]`, `fetch-statement`, `import-statement <file>`, `reconcile [file]`,
+`reverse-entry <id> "<why>"`, `retry-job <job> <date>`. A command
 builds the Host but does not start it.
 
 **Tests run the Host in-process as "Testing".** That hid two broken real launches in phase 2, so
@@ -187,6 +187,10 @@ FlexStatementFile.Read ──► FlexLedgerEntries.From ──► FlexImport.Pre
                             refuses what it has not      before the first day = IBKR's; ledger + new
                             seen; a day's cash = IBKR's)  entries after the last day = IBKR's cash and positions)
                                                │
+reconcile ──► FlexImport.ReconcileAsync (the ledger now against the statement imported last: every figure with
+              both numbers; its lines the ledger lacks or holds otherwise) + SplitReconciliation (fund_events'
+              split days against the ledger's splits, SplitCheck) ──► differences named, nothing changed
+
 statement / manual entry ──► TransactionLedger.RecordAsync ──► transactions (append-only)
                                       ▲ ReverseAsync                 │
                                                                      ▼

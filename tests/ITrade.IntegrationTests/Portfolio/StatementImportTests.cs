@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
 using ITrade.Application.Portfolio;
+using ITrade.Application.Prices;
 using ITrade.Broker.IBKR.Flex;
 using ITrade.Domain;
 using ITrade.Host;
@@ -405,6 +406,211 @@ public sealed class StatementImportTests(PostgresFixture pg)
         Assert.Contains("! 2026-10-13: cash transaction 43408377031 (Deposits/Withdrawals) is dated 2026-10-13, booked on 2026-10-14 and settles on 2026-10-13; a row whose dates differ has not been seen yet and is not guessed.", output);
         await using var db = DbSetup.Create(world.Database);
         Assert.Equal(0, await db.Transactions.CountAsync());
+    }
+
+    private static async Task<(int Code, string[] Output)> ReconcileAsync(World world, string? file = null)
+    {
+        await using var app = ITradeHost.Build(
+            RunningHost.Args(world.Database, world.DataDir), services => services.AddSingleton<IClock>(new FakeClock(Now)));
+        using var output = new StringWriter();
+        var code = await ReconcileCommand.RunAsync(app, file, output);
+        return (code, output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Fact]
+    public async Task TheLedgerIsReconciledWithTheStatementImportedLastFigureByFigure()
+    {
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+
+        var (code, output) = await ReconcileAsync(world);
+
+        Assert.Equal(0, code);
+        var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(Fixture)));
+        Assert.Equal(
+            [
+                $"The ledger against IBKR's statement of U…000, 2026-10-07 to 2026-10-15 (4 day(s)), 20261015-{sha[..12]}.xml; what the ledger holds after 2026-10-15 is not compared:",
+                // 7 October has only IBKR's total in the base currency: shown as that, not as the dollars alone.
+                "  the evening of 2026-10-06, cash of all currencies told in USD (IBKR gave no row per currency): ledger 0, IBKR 0",
+                "  the end of 2026-10-15, cash ILS: ledger 309.94, IBKR 309.94",
+                "  the end of 2026-10-15, cash USD: ledger 983654.099691, IBKR 983654.099691",
+                "  the end of 2026-10-15, shares of VT: ledger 103, IBKR 103",
+                "The ledger agrees with IBKR's statement; 1 figure(s) are IBKR's total of all currencies, which cannot tell the currencies apart - a statement with rows per currency checks them fully.",
+                "The ledger's splits agree with the split days of the stored prices.",
+            ],
+            output);
+    }
+
+    [Fact]
+    public async Task ADatabaseThisBuildHasNotMigratedIsNotTouched()
+    {
+        var world = new World(await pg.NewEmptyDatabaseAsync(), RunningHost.NewDataDir());
+
+        var (code, output) = await ReconcileAsync(world);
+
+        Assert.Equal(1, code);
+        Assert.StartsWith("The database lacks ", output[0], StringComparison.Ordinal);
+        await using var db = DbSetup.Create(world.Database);
+        Assert.NotEmpty(await db.Database.GetPendingMigrationsAsync());
+    }
+
+    [Fact]
+    public async Task WithoutAFileTheStatementThatReachesFurthestIsTaken()
+    {
+        // An older statement imported again afterwards must not hide the days after its own.
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        Assert.Equal(0, (await ImportAsync(world, Variant(world, "early.xml", Only("20261007", "20261008")))).Code);
+
+        var (code, output) = await ReconcileAsync(world);
+
+        Assert.Equal(0, code);
+        Assert.StartsWith("The ledger against IBKR's statement of U…000, 2026-10-07 to 2026-10-15 (4 day(s)), 20261015-", output[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WhatTheLedgerHoldsOnTheStatementsDaysAndTheStatementDoesNotIsADifference()
+    {
+        // Typed in by hand: 500 in on 8 October and out on 14 October - both ends still agree.
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        await using (var app = ITradeHost.Build(RunningHost.Args(world.Database, world.DataDir)))
+        {
+            await using var scope = app.Services.CreateAsyncScope();
+            var place = (await scope.ServiceProvider.GetRequiredService<IHoldingPlaceStore>().FindByNameAsync(FlexImport.HoldingPlaceName, CancellationToken.None))!.Id;
+            Transaction Manual(TransactionKind kind, int day, decimal cash) =>
+                new(TransactionId.New(), place, kind, new LocalDate(2026, 10, day), new LocalDate(2026, 10, day), Money.Usd(cash), TransactionSource.Manual, Now);
+            var ledger = scope.ServiceProvider.GetRequiredService<TransactionLedger>();
+            var undone = Manual(TransactionKind.Deposit, 15, 70m);
+            await ledger.RecordAsync([Manual(TransactionKind.Deposit, 8, 500m), Manual(TransactionKind.Withdrawal, 14, -500m), undone], CancellationToken.None);
+            await ledger.ReverseAsync(undone.Id, "typed twice", CancellationToken.None); // reversed: no longer in the books
+        }
+
+        var (code, output) = await ReconcileAsync(world);
+
+        Assert.Equal(1, code);
+        Assert.Equal(2, output.Count(l => l.StartsWith("! The ledger holds a ", StringComparison.Ordinal)));
+        Assert.Contains("  the end of 2026-10-15, cash USD: ledger 983654.099691, IBKR 983654.099691", output);
+        Assert.Contains(output, l => l.StartsWith("! The ledger holds a Deposit of 2026-10-08, 500 USD (Manual; entry ", StringComparison.Ordinal) && l.EndsWith("), that IBKR's statement does not state: if it is a mistake, it goes out with a reversal (the owner's step).", StringComparison.Ordinal));
+        Assert.Contains(output, l => l.StartsWith("! The ledger holds a Withdrawal of 2026-10-14, -500 USD (Manual; entry ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ASyntheticDifferenceIsFoundAndNothingIsChanged()
+    {
+        // IBKR's statement says 206 VT - a split in a section the query does not show - while the ledger holds 103.
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        var split = Variant(world, "split.xml", d => d.Descendants("OpenPosition").Last().SetAttributeValue("position", "206"));
+
+        var (code, output) = await ReconcileAsync(world, split);
+
+        Assert.Equal(1, code);
+        Assert.Contains("! the end of 2026-10-15, shares of VT: ledger 103, IBKR 206", output);
+        Assert.Contains("! At the end of 2026-10-15 IBKR holds 206 of VT and the ledger 103: shares moved without cash (a split, a transfer) or a trade is missing.", output);
+        Assert.StartsWith("The ledger and IBKR's statement differ; nothing was changed.", output[^2], StringComparison.Ordinal);
+        await using var db = DbSetup.Create(world.Database);
+        Assert.Equal(46, await db.Transactions.CountAsync());
+    }
+
+    [Fact]
+    public async Task AnEntryReversedSinceTheImportIsADifference()
+    {
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        string fee;
+        await using (var db = DbSetup.Create(world.Database))
+        {
+            fee = (await db.Transactions.SingleAsync(t => t.ExternalId == "11006946599/commission")).Id.Value.ToString();
+        }
+
+        await using (var app = ITradeHost.Build(RunningHost.Args(world.Database, world.DataDir)))
+        {
+            using var said = new StringWriter();
+            Assert.Equal(0, await ReverseEntryCommand.RunAsync(app, fee, "a test", said));
+        }
+
+        var (code, output) = await ReconcileAsync(world);
+
+        Assert.Equal(1, code);
+        Assert.Contains("! the end of 2026-10-15, cash USD: ledger 983655.099706, IBKR 983654.099691", output);
+        Assert.Contains(output, l => l.StartsWith("! The ledger does not hold IBKR's line as stated: Flex 11006946599/commission", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ASplitThePricesShowAndTheLedgerLacksIsFound()
+    {
+        // The prices already know a 2:1 split of VT on 16 October; the statement that brings it is not imported yet.
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        await using (var db = DbSetup.Create(world.Database))
+        {
+            var vt = await db.Instruments.SingleAsync(i => i.IbkrConId == 52197301);
+            var day = new LocalDate(2026, 10, 16);
+            await new ClosingPriceStore(db).AddAsync(
+                new PricesToStore([], [], ClosingPrices.Calendar, [day], [new FundEvent(vt.Id, day, FundEventKind.Split, 2m, "yfinance")], []),
+                Now, new PricesNote("test", PricesNote.Imported, "{}"), new ImportedExport(Now, new string('a', 64)), CancellationToken.None);
+        }
+
+        var (code, output) = await ReconcileAsync(world);
+
+        Assert.Equal(1, code);
+        Assert.Contains(output, l => l.StartsWith("! VT: the prices show a split of 2 for 1 on 2026-10-16, and the ledger holds 103 shares the evening before and no split that day", StringComparison.Ordinal));
+        Assert.Contains("  the end of 2026-10-15, shares of VT: ledger 103, IBKR 103", output);
+        // IBKR's statement is not to blame: the ledger and the prices differ.
+        Assert.StartsWith("The ledger agrees with IBKR's statement", output[^2], StringComparison.Ordinal);
+        Assert.Equal("The ledger and the stored prices differ about a split; nothing was changed. Until the ledger holds the split, the value of that fund is wrong.", output[^1]);
+    }
+
+    [Fact]
+    public async Task WithoutAnImportOrWithAPaperStatementThereIsNothingToReconcile()
+    {
+        var world = await NewAsync();
+
+        var none = await ReconcileAsync(world);
+        var given = await ReconcileAsync(world, Fixture);
+        Assert.Equal((1, "! No statement of IBKR has been imported: there are no books of IBKR to hold this one against. Import it first."), (given.Code, given.Output[1]));
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        var paper = await ReconcileAsync(world, Variant(world, "paper.xml", d => Account(d, "DU0000000")));
+
+        Assert.Equal((1, "No statement of IBKR has been imported, so there is nothing to reconcile: import one first (import-statement <file>)."), (none.Code, none.Output[0]));
+        Assert.Equal(1, paper.Code);
+        Assert.Contains("! D…000 is a paper (demo) account; the ledger keeps the real account's books. Reconcile with a statement of the real account.", paper.Output);
+        var other = await ReconcileAsync(world, Variant(world, "other.xml", d => Account(d, "F0000000")));
+        Assert.Equal(1, other.Code);
+        Assert.Contains("! The ledger keeps the books of U…000; this statement is of F…000.", other.Output);
+    }
+
+    [Fact]
+    public async Task WhatTheStatementHoldsAndTheImportCannotReadIsADifference()
+    {
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Fixture)).Code);
+        var cancelled = Variant(world, "cancelled.xml", d => d.Descendants("Trade").Last().SetAttributeValue("transactionType", "TradeCancel"));
+
+        var (code, output) = await ReconcileAsync(world, cancelled);
+
+        Assert.Equal(1, code);
+        Assert.Contains(output, l => l.StartsWith("! The statement holds what the import does not read, so the ledger cannot hold it: 2026-10-15: trade 11013041293 (USD.ILS) is a 'TradeCancel'", StringComparison.Ordinal));
+        // The conversion IBKR now calls cancelled: the ledger's legs are named, without saying IBKR is silent on them.
+        Assert.Contains(output, l => l.StartsWith("! The ledger holds a FxConversion of 2026-10-15, -100 USD (Flex 11013041293; entry ", StringComparison.Ordinal) && l.Contains("does not state in a form the import reads", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LinesOfTheStatementTheLedgerDoesNotHoldAreNamed()
+    {
+        // Only 7 and 8 October were imported; the whole statement says what the ledger lacks.
+        var world = await NewAsync();
+        Assert.Equal(0, (await ImportAsync(world, Variant(world, "early.xml", Only("20261007", "20261008")))).Code);
+
+        var (code, output) = await ReconcileAsync(world, Fixture);
+
+        Assert.Equal(1, code);
+        Assert.Contains("! IBKR's line 11006946599 (Buy of 2026-10-14, -788.35 USD) is not in the ledger: the statement was not imported, or its recording was reversed - import the statement.", output);
+        Assert.Equal(45, output.Count(l => l.StartsWith("! IBKR's line ", StringComparison.Ordinal)));
+        Assert.Contains("! the end of 2026-10-15, shares of VT: ledger 0, IBKR 103", output);
+        await using var db = DbSetup.Create(world.Database);
+        Assert.Equal(1, await db.Transactions.CountAsync());
     }
 
     /// <summary>Answers SendRequest, then the statement: the Flex Web Service when all goes well.</summary>

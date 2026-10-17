@@ -34,6 +34,7 @@ dotnet run --project src/ITrade.Host -- import-prices        # after: uv run --d
 dotnet run --project src/ITrade.Host -- fetch-statement      # IBKR's Flex statement into <data>/flex (token in user-secrets)
 dotnet run --project src/ITrade.Host -- import-statement "D:\ITradeData\flex\flex-20261016-101638.xml"   # record it; again adds nothing
 dotnet run --project src/ITrade.Host -- reverse-entry <entry id> "<why>"   # the owner's step: cancel an entry IBKR restated, then import again
+dotnet run --project src/ITrade.Host -- reconcile          # the ledger now against the statement imported last (or: reconcile "<file>") and the prices' split days; changes nothing
 dotnet run --project src/ITrade.Host -- retry-job fx-rates 2026-10-12
 
 # interface (in web/, Node 24)
@@ -197,6 +198,8 @@ reported and left alone; a ticker change is a rename with its date.
 | `import-statement` / `fetch-statement`: "(1 period(s), not broken out by day)", "checked only as a whole" | The Flex query has no Breakout by Day: IBKR sends the 30 days as one period, and no single day's cash can be held against IBKR's. Turn on Breakout by Day in the query (Delivery Configuration). Nothing is wrong with what was recorded |
 | `import-statement`: a deposit "is dated ..., booked on ...; a row whose dates differ" | IBKR booked it later than its date. A deposit booked 1–4 days later inside the period is recorded on the day of the booking; anything else (a withdrawal, a longer gap, a row listed in the period of its dated day) is refused until such a row has been seen |
 | `import-statement`: "has no row per currency ... Download the statement again" | IBKR left the per-currency rows out of the Cash Report of the first or last day (it varies from download to download) while the account holds more than one currency |
+| `reconcile`: "IBKR's line ... is not in the ledger" / "does not hold IBKR's line as stated" | The ledger lacks a line of the statement (never imported, or reversed since) or holds it otherwise. Nothing was changed: import the statement; a line held otherwise goes out with `reverse-entry` (the owner's step), then import again |
+| `reconcile`: "the prices show a split ... and the ledger holds ... no split that day" | The prices already know a split the ledger does not (the statement lags a day): until the statement brings it, the value of that fund is wrong. Import the next statement; if it shows no split, the data may be wrong (a spin-off can come as a split) |
 | `import-statement` refuses a 'TradeCancel', a corporate action, a kind of cash transaction | Never seen on a real statement, so not guessed. The first real one is how the import learns it: keep the file, write a test from it (anonymised), then extend `FlexLedgerEntries` |
 | Flex times look 7 hours off | Flex writes New York time without a zone (`dateTime="20261015;154021"` was 22:40 in Israel) |
 | IBKR's `twr` in `ChangeInNAV` is 100 times the platform's | It is in percent; the platform's returns are fractions |

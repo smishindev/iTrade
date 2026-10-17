@@ -157,11 +157,12 @@ internal static class ImportStatementCommand
     }
 
     /// <summary>The account of the latest statement imported, or null before the first one.</summary>
-    private static async Task<FlexAccount?> KnownAccountAsync(ITradeDbContext db)
+    internal static async Task<FlexAccount?> KnownAccountAsync(ITradeDbContext db)
     {
         var last = await db.AuditEvents.AsNoTracking()
             .Where(e => e.Kind == AuditKind)
             .OrderByDescending(e => e.OccurredAt)
+            .ThenByDescending(e => e.Id)
             .Select(e => e.Payload)
             .FirstOrDefaultAsync();
         if (last is null)
@@ -175,6 +176,36 @@ internal static class ImportStatementCommand
             ? new FlexAccount(key.GetString()!, label.GetString()!)
             : throw new InvalidOperationException(
                 "The latest statement.imported event names no account key; the account of the earlier statements cannot be told.");
+    }
+
+    /// <summary>
+    /// The name of the kept copy of the imported statement that reaches furthest (the latest last day; of two, the
+    /// one imported later), or null before the first import. Not simply the last import: an older statement imported
+    /// again afterwards would hide every day after its own.
+    /// </summary>
+    internal static async Task<string?> LatestKeptAsync(ITradeDbContext db)
+    {
+        var payloads = await db.AuditEvents.AsNoTracking()
+            .Where(e => e.Kind == AuditKind)
+            .OrderByDescending(e => e.OccurredAt)
+            .ThenByDescending(e => e.Id) // a v7 id grows with time: of two at the same instant, the later one
+            .Select(e => e.Payload)
+            .ToListAsync();
+        string? latest = null;
+        var reaches = "";
+        foreach (var text in payloads)
+        {
+            using var payload = JsonDocument.Parse(text);
+            var root = payload.RootElement;
+            // Dates as yyyy-MM-dd compare as text; the first of equal ones is the later import.
+            if (root.TryGetProperty("kept", out var kept) && root.TryGetProperty("to", out var to)
+                && string.CompareOrdinal(to.GetString(), reaches) > 0)
+            {
+                (latest, reaches) = (kept.GetString(), to.GetString()!);
+            }
+        }
+
+        return latest;
     }
 
     private static string Invariant(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);
