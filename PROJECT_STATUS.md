@@ -8,7 +8,7 @@ picking the project back up. Task-level detail — every card with its dated not
 **Phase:** 4 of 7 — taxes (`config/project.toml`; the owner moved it on 17 October after gate G3).
 **Roadmap:** phases 0–2: all 106 tasks;
 phase 3: all 13 (one more was dropped by the owner); gate G3 passed on 17 October;
-phase 4: 0 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
+phase 4: 1 of 11 (re-planned on 17 October without waiting for the accountant, decision 21).
 **State:** phase 3 is finished and gate G3 passed (17 October); the move to phase 4 (taxes) is the
 owner's. The books exist — an append-only ledger,
 lots and positions derived from it, official exchange rates since 2005, closing prices of the 29
@@ -237,8 +237,10 @@ Ordered roughly by how much they would hurt.
    not been seen: the import refuses each of them until it has (cards of P3.2.01 and P3.2.02). The
    first such statement stops the imports until the import is taught from it.
 2. **Every tax number is an unverified assumption** — the 25% rate, FIFO, which date's exchange rate
-   applies to a trade. The formula for the real gain on a dollar security is not chosen yet; the
-   first-hand sources are task P4.0.01. No accountant checks them before P4.3.01 (decision 21).
+   applies to a trade. The first-hand sources are now in `docs/tax-sources.md` (P4.0.01: rules R1–R12,
+   open questions O1–O8, among them exchange-rate differences on dollar cash and what a US ETF's
+   distribution consists of); no tax code uses them yet, and no accountant checks them before P4.3.01
+   (decision 21).
 3. **The session calendar of the daily jobs has no holidays** (`WeekdayCalendar`). Harmless for the
    rates job; not good enough for settlement dates or anything that decides about money. The real
    sessions are in `market_sessions` now, but only as far as the last import of prices.
@@ -293,8 +295,8 @@ Ordered roughly by how much they would hurt.
 
 Small steps, one task at a time (`/next-task`):
 
-1. **P4.0.01** (first-hand sources of the tax rules) → P4.0.02 (where to hold the index: a comparison)
-   and P4.1.01 (tax parameters with sources) → the calculations of phase 4.
+1. **P4.0.02** (where to hold the index: a comparison) and **P4.1.01** (tax parameters with sources,
+   from `docs/tax-sources.md`) → the calculations of phase 4.
 2. After the owner's next purchase: `fetch-statement` / `import-statement` - the first real trade.
 
 ## Waiting on the owner
